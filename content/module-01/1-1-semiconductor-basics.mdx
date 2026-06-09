@@ -1,0 +1,111 @@
+---
+title: "Topic 1.1 — Semiconductor Basics"
+module: "01"
+moduleTitle: "Semiconductor & Digital Foundations"
+lesson: "1-1"
+slug: "1-1-semiconductor-basics"
+summary: "How silicon becomes a transistor — from doped crystals and PN junctions to the MOSFET that switches every computation in every AI chip."
+prerequisites: []
+---
+
+## Before You Begin: The Big Picture
+
+Every time you run a neural network — whether it's GPT-4 generating text, Stable Diffusion drawing an image, or a ResNet-50 classifying a photo — the computation ultimately reduces to one thing happening billions of times per second inside a chip:
+
+```
+result = result + (input × weight)
+```
+
+This is the **Multiply-Accumulate (MAC) operation**. Everything else in this course — quantization, inference engines, FPGA accelerators, agentic systems — is about doing this operation faster, cheaper, and more efficiently.
+
+This module answers the question: **at the most fundamental physical level, how does a computer actually do this?**
+
+The answer starts with a silicon atom.
+
+---
+
+## What Is a Semiconductor?
+
+Materials in our universe fall into three broad categories based on how well they conduct electricity:
+
+**Conductors** (copper, gold, aluminium): electrons flow freely. Resistance is low.
+
+**Insulators** (rubber, glass, pure silicon dioxide): electrons are tightly bound. Almost no current flows.
+
+**Semiconductors** (silicon, germanium, gallium arsenide): their conductivity sits between conductors and insulators — and crucially, their conductivity can be *controlled* by adding tiny amounts of impurities or applying electric fields.
+
+This controllability is everything. It is what makes transistors possible, and transistors are what make computers possible.
+
+### Why Silicon?
+
+Silicon (Si) is element 14. Its outer shell has exactly 4 electrons — it wants 4 more to be stable. In a crystal of pure silicon, each atom shares its 4 outer electrons with 4 neighbouring atoms, forming a rigid **crystal lattice**. At absolute zero, all electrons are locked in bonds — pure silicon is a perfect insulator.
+
+### Doping: Engineering Conductivity
+
+When we intentionally add specific impurities — a process called **doping** — we can dramatically change silicon's conductivity.
+
+**N-type silicon:** Add phosphorus (element 15, 5 outer electrons). Four electrons bond with neighbouring silicon atoms; the fifth is loosely held and easily freed. Result: extra free electrons available to carry current. Free electrons are the majority charge carriers.
+
+**P-type silicon:** Add boron (element 5, 3 outer electrons). Boron creates a *hole* — a position in the lattice that "wants" an electron. A nearby electron can hop into this hole, creating a new hole where it came from. Holes are the majority charge carriers.
+
+---
+
+## MOSFET: The Transistor That Runs the World
+
+Modern digital chips use **MOSFETs** (Metal-Oxide-Semiconductor Field-Effect Transistors). Every processor, GPU, and AI chip is built from billions of them.
+
+The MOSFET has three terminals:
+
+- **Gate (G):** The control terminal. Voltage here controls whether current flows.
+- **Source (S):** Where carriers originate.
+- **Drain (D):** Where carriers go.
+
+Between the gate metal and the semiconductor channel is a thin layer of silicon dioxide (SiO₂) — the oxide insulator. The gate is **electrically isolated** from the channel; it controls current through an electric field (hence "field-effect").
+
+### N-channel MOSFET (NMOS)
+
+**With gate voltage = 0:** The P-type channel between the two N-type regions forms two back-to-back PN junctions. No current flows. The MOSFET is **OFF**.
+
+**With gate voltage ≥ threshold (Vth, typically 0.3–0.7 V):** The positive gate voltage attracts electrons to the surface of the P-type channel, forming a thin layer of N-type material — the **inversion layer**. Now there is a continuous N-type path from source to drain. Current flows. The MOSFET is **ON**.
+
+In digital circuits: NMOS is ON when gate is HIGH (logic 1), OFF when gate is LOW (logic 0).
+
+---
+
+## Try It: The MOSFET Switch
+
+Drag the gate voltage slider below and watch the inversion layer form. Notice that:
+- Below threshold (~0.5 V): no channel, no current
+- Above threshold: channel forms, electrons drift source→drain
+
+<TransistorSwitch />
+
+---
+
+## Self-Check
+
+<QuizBlock questions={[
+  {
+    "q": "What controls whether current flows between source and drain in a MOSFET?",
+    "options": ["Source voltage", "Drain voltage", "Gate voltage", "Body voltage"],
+    "answer": 2,
+    "explanation": "The gate voltage controls the electric field through the oxide layer, which determines whether an inversion layer (channel) forms between source and drain. The gate is the control terminal."
+  },
+  {
+    "q": "In N-type silicon, what are the majority charge carriers?",
+    "options": ["Holes", "Protons", "Free electrons", "Photons"],
+    "answer": 2,
+    "explanation": "Doping with phosphorus (5 outer electrons) donates free electrons. These extra free electrons are the majority charge carriers in N-type silicon."
+  },
+  {
+    "q": "Why does CMOS draw almost no static power?",
+    "options": [
+      "Both transistors are always ON",
+      "In steady state, one of the two complementary transistors is always OFF",
+      "It uses superconducting materials",
+      "The supply voltage is zero"
+    ],
+    "answer": 1,
+    "explanation": "CMOS pairs PMOS and NMOS transistors so that in any stable logic state, one is ON and one is OFF. There is no direct path from VDD to GND in steady state, so almost no static power is consumed."
+  }
+]} />

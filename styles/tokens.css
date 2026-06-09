@@ -1,0 +1,40 @@
+:root {
+  /* ── Backgrounds ── */
+  --bg-base: #ffffff;
+  --bg-subtle: #f0fdf9;
+  --bg-muted: #dcfff4;
+
+  /* ── Vivid peacock green-teal accent ── */
+  --accent: #00c9a7;
+  --accent-hover: #00a88b;
+  --accent-light: #00e5c0;
+  --accent-subtle: #e6fff9;
+
+  /* ── Interactive semantic colors (same across ALL interactives) ── */
+  --color-electron: #00f5d4;
+  --color-on: #00e676;
+  --color-off: #94a3b8;
+  --color-gate: #f59e0b;
+
+  /* ── Text ── */
+  --text-primary: #0d1b2a;
+  --text-secondary: #3d5a6e;
+  --text-muted: #7a9bad;
+
+  /* ── Borders ── */
+  --border: #b2efe0;
+  --border-strong: #5ddebe;
+
+  /* ── Sidebar ── */
+  --sidebar-bg: #f0fdf9;
+  --sidebar-width: 260px;
+
+  /* ── Typography (DM Sans everywhere) ── */
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'DM Sans', system-ui, sans-serif;
+
+  /* ── Radii ── */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}

@@ -1,0 +1,43 @@
+---
+title: "Topic 1.2 — Logic Gates & Boolean Algebra"
+module: "01"
+moduleTitle: "Semiconductor & Digital Foundations"
+lesson: "1-2"
+slug: "1-2-logic-gates"
+summary: "The seven fundamental gates that every digital circuit is built from, and the Boolean algebra that lets you reason about and simplify them."
+prerequisites: ["1-1-semiconductor-basics"]
+---
+
+## The Seven Fundamental Gates
+
+Every digital circuit — from a simple timer to a 100-billion-parameter LLM inference chip — is built from combinations of these seven fundamental logic gates.
+
+The gates you will learn: **NOT, AND, OR, NAND, NOR, XOR, XNOR**.
+
+NAND is the most important for hardware: any Boolean function can be implemented using only NAND gates. A chip foundry only needs to characterise, optimise, and manufacture one type of gate to build any digital circuit.
+
+---
+
+## Coming Soon
+
+This lesson's interactive — live truth tables that fill in as you toggle inputs — is under construction.
+
+Check back after Topic 1.1 to continue your journey from logic gates → adders → MAC units.
+
+---
+
+## Self-Check
+
+<QuizBlock questions={[
+  {
+    "q": "Why is NAND called a 'universal gate'?",
+    "options": [
+      "It uses the fewest transistors",
+      "Any Boolean function can be built from NAND gates alone",
+      "It is the fastest gate in CMOS",
+      "It can handle more inputs than other gates"
+    ],
+    "answer": 1,
+    "explanation": "NAND is universal because NOT, AND, and OR can all be implemented using only NAND gates (e.g., NOT A = NAND(A,A)). Since NOT+AND+OR are functionally complete, NAND alone is sufficient for any logic function."
+  }
+]} />

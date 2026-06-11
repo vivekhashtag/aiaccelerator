@@ -114,7 +114,7 @@ Every lesson is an MDX file with this shape, and the framework must support it c
 1. **Frontmatter:** `title`, `module`, `lesson`, `slug`, `summary`, optional `prerequisites`.
 2. **Prose sections** explaining the concept (sourced/adapted from the curriculum PDFs).
 3. **One or more embedded interactive components** placed inline where they illuminate the text.
-4. **A self-check quiz** at the bottom (the curriculum already contains these per module).
+4. ~~A self-check quiz at the bottom.~~ **Removed 2026-06-11** (see §10) — lessons end on the recap. `QuizBlock` may return in a later phase with real scoring/persistence.
 
 The framework provides:
 - `LessonLayout` — wraps prose + interactives + quiz with consistent styling and the reading pane.
@@ -165,6 +165,15 @@ In rough teaching order:
 
 ## 10. Current Status
 
-- Phase 0, not yet started in this repo.
-- Reference interactive (transistor lesson) exists as a standalone HTML prototype and needs porting into a React/TSX component under `/components/interactives`.
-- Next concrete step: scaffold the Phase 0 framework (§4) and port the transistor lesson in as the first real lesson.
+- **Phase 0 framework complete.** Next.js + MDX lesson shell, dark "engineering instrument" design system, sidebar/nav, and all 7 Module 1 lessons (1.1–1.7) written.
+- **DECISION (2026-06-11) — direction change: image-rich static lessons, not interactives.**
+  The user reviewed the live lessons and chose to drop the canvas/animation interactives in
+  favour of **hand-authored SVG diagrams** — "the right image" for each concept, rendered in
+  code so they always load, never 404, carry no licensing risk, and are guaranteed to match the
+  prose. This supersedes the "every lesson must be interactive" framing in §1–§2 and the §8
+  interactive backlog for now. The reference `TransistorSwitch` interactive was removed.
+  - Diagram library: `components/lesson/Diagrams.tsx` (24 SVG components, registered in `lib/mdx.ts`).
+    Shared `DiagramFrame` + a fixed semantic palette mirroring `styles/tokens.css`.
+  - **Self-check quizzes removed** from all lessons (see §6). `QuizBlock` is unregistered (file kept).
+- Next concrete steps: deploy to Vercel (point root at `aiaccelerator/`, drop the stray outer
+  lockfile), then continue the same SVG-diagram treatment into Modules 2–10.

@@ -1,0 +1,176 @@
+---
+title: "Combinational Logic Circuits"
+module: "01"
+moduleTitle: "Semiconductor & Digital Foundations"
+lesson: "1.3"
+slug: "1-3-combinational-logic"
+summary: "Wiring gates into circuits that compute — half adders, full adders, the ripple-carry adder, multiplexers (the heart of FPGAs), decoders, and the propagation delay that caps every chip's clock speed."
+prerequisites: ["1.2 Logic Gates & Boolean Algebra"]
+---
+
+## Circuits That Compute
+
+A **combinational** circuit has no memory: its output depends *only* on its current inputs. Change the inputs and, after a tiny propagation delay, the output reflects the new value. (Next topic adds memory.) Out of the seven gates, we now build the circuits that do real arithmetic — the ones that live inside every MAC unit.
+
+---
+
+## Half Adder: Adding Two Bits
+
+A **half adder** adds two 1-bit numbers and produces a 2-bit result: a **Sum** and a **Carry**.
+
+<Formula label="Half adder" caption="Sum is XOR; Carry is AND.">Sum = A ⊕ B          Carry = A · B</Formula>
+
+| A | B | Sum | Carry |
+|---|---|-----|-------|
+| 0 | 0 | 0 | 0 |
+| 0 | 1 | 1 | 0 |
+| 1 | 0 | 1 | 0 |
+| 1 | 1 | **0** | **1** |
+
+<HalfAdderDiagram caption="A half adder is just two gates: an XOR for the Sum bit and an AND for the Carry bit." />
+
+That last row is the key: `1 + 1 = 2`, which in binary is `10` — sum bit 0, carry bit 1. It's called "half" because it can't accept a carry *coming in* from a previous stage. For that we need the full adder.
+
+---
+
+## Full Adder: The Core of All Arithmetic
+
+A **full adder** adds *three* bits — two data bits plus a **carry-in** — and produces a Sum and a **carry-out**.
+
+<Formula label="Full adder" caption="Two half-adds chained, with the carries OR'd together.">Sum = A ⊕ B ⊕ Cin          Cout = A·B + Cin·(A ⊕ B)</Formula>
+
+| A | B | Cin | Sum | Cout |
+|---|---|-----|-----|------|
+| 0 | 0 | 0 | 0 | 0 |
+| 0 | 0 | 1 | 1 | 0 |
+| 0 | 1 | 0 | 1 | 0 |
+| 0 | 1 | 1 | 0 | 1 |
+| 1 | 0 | 0 | 1 | 0 |
+| 1 | 0 | 1 | 0 | 1 |
+| 1 | 1 | 0 | 0 | 1 |
+| 1 | 1 | 1 | 1 | 1 |
+
+<FullAdderDiagram caption="A full adder is two half adders chained together, with their carry outputs OR'd — giving it the carry-in that lets adders be stacked into any width." />
+
+<Callout type="insight" title="The full adder is the atom of arithmetic">
+
+Every integer addition, every multiplication, every multiply-accumulate in every AI chip bottoms out in full adders. Master this one circuit and you understand the arithmetic core of all computing.
+
+</Callout>
+
+---
+
+## Ripple-Carry Adder: N-Bit Addition
+
+To add two N-bit numbers, chain N full adders. Each stage's carry-out feeds the next stage's carry-in — the carry **ripples** down the line.
+
+<RippleCarryDiagram caption="Four full adders chained. Each stage's carry-out feeds the next — so the carry must ripple all the way from bit 0 to bit 3 before the answer settles." />
+
+<Callout type="pitfall" title="The carry chain is the speed limit">
+
+Every full adder must wait for the carry from the stage below before *its* output settles. A 64-bit ripple-carry adder has a critical path 64 stages long — far too slow for a 3–5 GHz CPU. Real processors use **carry-lookahead** adders that compute all carries in parallel, shrinking the critical path from O(N) to O(log N). The adder topology a chip picks — ripple-carry (small/slow), Kogge-Stone (fast), Brent-Kung (balanced) — directly sets its TFLOPS.
+
+</Callout>
+
+---
+
+## Carry-Lookahead: Beating the Ripple
+
+The ripple-carry adder is slow because each stage *waits* for the carry below it. The **carry-lookahead adder (CLA)** breaks that dependency by computing every carry directly from the inputs, in parallel. The trick is two per-bit signals:
+
+- **Generate** `Gᵢ = Aᵢ · Bᵢ` — this bit makes a carry on its own (both inputs are 1).
+- **Propagate** `Pᵢ = Aᵢ ⊕ Bᵢ` — this bit will pass along an incoming carry.
+
+Every carry is then `Cᵢ₊₁ = Gᵢ + Pᵢ·Cᵢ`, expanded so it depends only on the inputs — so all carries resolve in roughly the same (small) time instead of rippling one by one.
+
+<CarryLookaheadDiagram caption="Ripple carry walks the carry through every stage (O(N)). A lookahead unit computes G and P for each bit and produces all carries at once — far shorter critical path, more adder logic." />
+
+<Callout type="insight" title="The classic area-vs-speed trade">
+
+Lookahead buys speed with **transistors**: the carry logic grows fast with width, so real 64-bit adders use *hybrid* designs (lookahead within 4-bit blocks, blocks chained) like Kogge-Stone or Brent-Kung. This area-vs-speed dial is exactly the kind of choice an accelerator architect makes when sizing the adders inside thousands of MAC units.
+
+</Callout>
+
+---
+
+## Multiplexer: The Selector (and the Soul of FPGAs)
+
+A **multiplexer (MUX)** routes one of several inputs to the output, chosen by a select signal.
+
+<Formula label="2-to-1 multiplexer" caption="S picks D0 or D1.">Y = (D0 · S̄) + (D1 · S)</Formula>
+
+<Mux2to1Diagram caption="A multiplexer is a selector: the select line S routes one of the data inputs through to the output." />
+
+If `S = 0`, `Y = D0`; if `S = 1`, `Y = D1`. Simple — but it is the reason FPGAs can become *any* circuit.
+
+<Callout type="why" title="A LUT is just a MUX with a memory">
+
+An FPGA's basic building block is a **Look-Up Table (LUT)**. An N-input LUT is a big multiplexer whose data inputs are *programmable bits* holding a truth table, and whose select lines are the logic inputs. A 6-input LUT is a 64-entry memory (a 64-to-1 MUX) with 64 configurable bits — so it can implement **any** Boolean function of 6 variables. Thousands of these programmable truth tables are why an FPGA can be reshaped into any digital circuit, including an AI accelerator (Module 8).
+
+</Callout>
+
+### Demultiplexer: the MUX in reverse
+
+A **demultiplexer (DEMUX)** does the opposite job: it takes **one** input and routes it to **one of many** outputs, again chosen by a select signal. A MUX is many-to-one; a DEMUX is one-to-many.
+
+<DemuxDiagram caption="A DEMUX steers a single input to exactly one output line. MUX (select an input) and DEMUX (select a destination) are the routing primitives behind buses, memories, and on-chip networks." />
+
+Together, MUX + DEMUX are how a chip *routes* data — selecting which register feeds the ALU, or which memory bank a write lands in.
+
+---
+
+## Decoder: Address to Selection
+
+A **decoder** takes an N-bit binary input and activates exactly one of its 2ᴺ outputs.
+
+| A1 | A0 | Y3 | Y2 | Y1 | Y0 |
+|----|----|----|----|----|----|
+| 0 | 0 | 0 | 0 | 0 | **1** |
+| 0 | 1 | 0 | 0 | **1** | 0 |
+| 1 | 0 | 0 | **1** | 0 | 0 |
+| 1 | 1 | **1** | 0 | 0 | 0 |
+
+Decoders run memory addressing: a 10-bit address decoder selects exactly one of 1024 memory rows. Every time you read RAM, a decoder is lighting up the right row of cells.
+
+### Encoder: the decoder in reverse
+
+An **encoder** does the inverse: given 2ᴺ input lines with exactly one active, it outputs the **N-bit binary index** of that line. A 4-to-2 encoder turns a one-hot input back into a 2-bit number.
+
+| Active input | Y1 | Y0 |
+|----|----|----|
+| I0 | 0 | 0 |
+| I1 | 0 | **1** |
+| I2 | **1** | 0 |
+| I3 | **1** | **1** |
+
+A **priority encoder** (the practical version) breaks ties by picking the highest-numbered active input — exactly what an interrupt controller does when several devices request service at once.
+
+---
+
+## Comparator: Are Two Numbers Equal?
+
+A **comparator** checks how two binary numbers relate. The simplest is an *equality* comparator: two numbers are equal only if **every** bit-pair matches — and "bits match" is exactly what an **XNOR** gate reports (XNOR = 1 when its inputs are equal).
+
+<ComparatorDiagram caption="XNOR each bit-pair, then AND all the results: the output is 1 only when every single bit matches. Magnitude comparators (greater/less) extend this with a little more logic." />
+
+Comparators are everywhere a chip makes a decision: branch conditions in a CPU (`if a == b`), address-match in a cache, or the `argmax` that picks the winning class at the end of a neural network.
+
+---
+
+## Propagation Delay & the Critical Path
+
+Every gate takes a little time — its **propagation delay** — to settle after its inputs change. Typical modern CMOS:
+
+<StatGrid items={[
+  { value: "10–50 ps", label: "Inverter" },
+  { value: "15–60 ps", label: "NAND / NOR" },
+  { value: "30–100 ps", label: "XOR" }
+]} caption="Picoseconds per gate (1 ps = one-trillionth of a second)." />
+
+The **critical path** is the longest chain of gate delays from any input to any output. It sets the minimum clock period — and therefore the maximum clock frequency — of the whole circuit.
+
+<Callout type="insight" title="Delay sets the clock">
+
+A 16-bit ripple-carry adder at ~100 ps per carry stage has a critical path of roughly 16 × 100 ps = 1.6 ns → a ceiling near **625 MHz**. Swap in a carry-lookahead adder (~4 stages regardless of width, ~400 ps) and the same addition tops out near **2.5 GHz**. The circuit topology, not the transistor, decides the speed.
+
+</Callout>

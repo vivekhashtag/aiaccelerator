@@ -1,43 +1,159 @@
 ---
-title: "Topic 1.2 — Logic Gates & Boolean Algebra"
+title: "Logic Gates & Boolean Algebra"
 module: "01"
 moduleTitle: "Semiconductor & Digital Foundations"
-lesson: "1-2"
+lesson: "1.2"
 slug: "1-2-logic-gates"
-summary: "The seven fundamental gates that every digital circuit is built from, and the Boolean algebra that lets you reason about and simplify them."
-prerequisites: ["1-1-semiconductor-basics"]
+summary: "The seven gates every digital circuit is built from, the Boolean algebra that lets you simplify them, and the surprising fact that a single gate — NAND — is enough to build any chip ever made."
+prerequisites: ["1.1 Semiconductor Basics"]
+---
+
+## From Transistors to Logic
+
+In Topic 1.1 you built a NAND gate out of four transistors. Now we zoom out one level: we stop thinking about electrons and channels, and start thinking about **1s and 0s**. A gate becomes a black box that takes binary inputs and produces a binary output according to a fixed rule.
+
+Every digital circuit — a kitchen timer, a RISC-V CPU, a 100-billion-parameter LLM inference chip — is built from combinations of just **seven** fundamental gates.
+
 ---
 
 ## The Seven Fundamental Gates
 
-Every digital circuit — from a simple timer to a 100-billion-parameter LLM inference chip — is built from combinations of these seven fundamental logic gates.
+<LogicGateSymbols caption="The seven gates and their standard symbols. A bubble on the output means 'inverted' — that's the only difference between AND and NAND, OR and NOR, XOR and XNOR." />
 
-The gates you will learn: **NOT, AND, OR, NAND, NOR, XOR, XNOR**.
+#### NOT (Inverter)
 
-NAND is the most important for hardware: any Boolean function can be implemented using only NAND gates. A chip foundry only needs to characterise, optimise, and manufacture one type of gate to build any digital circuit.
+The simplest gate — it flips its input. Built from 1 PMOS + 1 NMOS (the basic CMOS inverter).
+
+| A | Y |
+|---|---|
+| 0 | 1 |
+| 1 | 0 |
+
+#### AND / NAND
+
+**AND** outputs 1 only when *both* inputs are 1. **NAND** is its inverse.
+
+| A | B | AND | NAND |
+|---|---|-----|------|
+| 0 | 0 | 0 | 1 |
+| 0 | 1 | 0 | 1 |
+| 1 | 0 | 0 | 1 |
+| 1 | 1 | 1 | 0 |
+
+<Callout type="insight" title="Why NAND, not AND, is the real primitive">
+
+In CMOS, **NAND is cheaper than AND**. A NAND is 4 transistors; an AND is a NAND *followed by* an inverter — 6 transistors. CMOS gates are naturally *inverting*, so the negated forms (NAND, NOR) come for free and the non-negated forms cost extra. Hardware is built around NAND and NOR.
+
+</Callout>
+
+#### OR / NOR
+
+**OR** outputs 1 when *at least one* input is 1. **NOR** is its inverse.
+
+| A | B | OR | NOR |
+|---|---|----|-----|
+| 0 | 0 | 0 | 1 |
+| 0 | 1 | 1 | 0 |
+| 1 | 0 | 1 | 0 |
+| 1 | 1 | 1 | 0 |
+
+NOR is also 4 transistors — but with the *opposite* topology to NAND: 2 PMOS in series (pull-up), 2 NMOS in parallel (pull-down).
+
+#### XOR / XNOR
+
+**XOR** ("exclusive-OR") outputs 1 when the inputs *differ*. **XNOR** outputs 1 when they're *equal*.
+
+| A | B | XOR | XNOR |
+|---|---|-----|------|
+| 0 | 0 | 0 | 1 |
+| 0 | 1 | 1 | 0 |
+| 1 | 0 | 1 | 0 |
+| 1 | 1 | 0 | 1 |
+
+<Callout type="why">
+
+**XOR is the heart of binary addition** — in the half adder you'll build next topic, the sum bit is literally `A XOR B`. **XNOR is the heart of comparison** — two numbers are equal only if every bit-pair XNORs to 1. These two gates cost more (8–12 transistors), which is exactly why adders and comparators are more expensive than plain logic.
+
+</Callout>
 
 ---
 
-## Coming Soon
+## Boolean Algebra: The Mathematics of Logic
 
-This lesson's interactive — live truth tables that fill in as you toggle inputs — is under construction.
+Boolean algebra is the toolkit for manipulating logic expressions. Every rule has a direct hardware payoff: **simpler expression = fewer gates = smaller chip = less power.**
 
-Check back after Topic 1.1 to continue your journey from logic gates → adders → MAC units.
+| Law | AND form | OR form |
+|---|---|---|
+| Identity | A · 1 = A | A + 0 = A |
+| Null | A · 0 = 0 | A + 1 = 1 |
+| Idempotent | A · A = A | A + A = A |
+| Complement | A · Ā = 0 | A + Ā = 1 |
+| Commutative | A · B = B · A | A + B = B + A |
+| Associative | (A·B)·C = A·(B·C) | (A+B)+C = A+(B+C) |
+| Distributive | A·(B+C) = A·B + A·C | A + B·C = (A+B)·(A+C) |
+| Absorption | A·(A+B) = A | A + A·B = A |
+
+(Here `·` is AND, `+` is OR, and an overbar `Ā` is NOT.)
+
+### De Morgan's Theorem — the most useful rule
+
+<Formula label="De Morgan's Theorem" caption="A NOT pushed through a gate flips AND ↔ OR and negates every input.">NOT(A · B) = Ā + B̄     and     NOT(A + B) = Ā · B̄</Formula>
+
+This is the rule that lets you rewrite *any* expression using only NAND gates or only NOR gates — which matters enormously because those are the gates the foundry actually builds cheaply.
+
+<Callout type="insight" title="De Morgan saves real transistors">
+
+Suppose you need `Y = A·B + C·D`. The literal build is two ANDs + one OR = 6 + 6 + 6 = **18 transistors**. Apply double-negation and De Morgan:
+
+`Y = NOT(NOT(A·B + C·D)) = NOT( NAND(A,B) · NAND(C,D) )` is itself a NAND.
+
+So `Y = NAND( NAND(A,B), NAND(C,D) )` — three NAND gates × 4 transistors = **12 transistors**. Same logic, **33% fewer transistors**, just by rearranging the algebra.
+
+</Callout>
 
 ---
 
-## Self-Check
+## NAND: The One Gate to Rule Them All
 
-<QuizBlock questions={[
-  {
-    "q": "Why is NAND called a 'universal gate'?",
-    "options": [
-      "It uses the fewest transistors",
-      "Any Boolean function can be built from NAND gates alone",
-      "It is the fastest gate in CMOS",
-      "It can handle more inputs than other gates"
-    ],
-    "answer": 1,
-    "explanation": "NAND is universal because NOT, AND, and OR can all be implemented using only NAND gates (e.g., NOT A = NAND(A,A)). Since NOT+AND+OR are functionally complete, NAND alone is sufficient for any logic function."
-  }
-]} />
+NAND is a **universal gate** — every Boolean function can be built from NAND alone. The proof is constructive:
+
+<NandUniversality caption="NOT, AND, and OR — each built from nothing but NAND gates. Since those three are functionally complete, NAND alone can build any logic circuit on Earth." />
+
+Since NOT, AND and OR together can express *any* Boolean function, and all three can be made from NAND, **NAND alone is functionally complete.**
+
+<Callout type="key">
+
+This is a profound manufacturing simplification: a foundry only has to perfect, characterise, and yield **one** gate — NAND — and it can build any digital circuit on Earth. (NOR is equally universal; some process libraries standardise on it instead.)
+
+</Callout>
+
+---
+
+## Karnaugh Maps: Minimising Logic by Eye
+
+A **Karnaugh map (K-map)** is a visual way to find the simplest Sum-of-Products expression from a truth table. You arrange the cells in **Gray-code order** (adjacent cells differ by exactly one variable), then circle groups of 1s.
+
+<KMapDiagram caption="Cells sit in Gray-code order, so neighbours differ by one variable. Group the 1s into power-of-two rectangles — groups may wrap around the edges — and each group collapses to one simpler term." />
+
+The rules in brief:
+
+- Group 1s into rectangles of size 1, 2, 4, 8, … (powers of two only).
+- Groups may **wrap around** the edges of the map.
+- Larger groups eliminate more variables → fewer terms → simpler circuit.
+- **"Don't care"** cells (input combinations that can never occur) are marked `X` and may be treated as 0 or 1 — whichever allows a bigger group.
+
+<Callout type="why">
+
+You will rarely draw a K-map by hand in industry — logic synthesizers (Yosys, Synopsys Design Compiler) minimise *thousands* of variables automatically. But understanding K-maps teaches you what the tool is doing, and why a sloppy Boolean expression silently costs you area and power on the die.
+
+</Callout>
+
+---
+
+## Recap
+
+<Callout type="key" title="Gates → algebra → one primitive">
+
+Seven gates (NOT, AND, OR, NAND, NOR, XOR, XNOR) express any logic. Boolean algebra — especially **De Morgan** — lets you reshape expressions to use fewer, cheaper gates. And **NAND is universal**, so the entire digital world reduces to one repeated building block. Next topic: wire these gates into circuits that actually *compute* — adders, multiplexers, decoders.
+
+</Callout>

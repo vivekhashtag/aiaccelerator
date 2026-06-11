@@ -12,11 +12,17 @@ html {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg-subtle); }
-::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+/* Scrollbar — dark */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* Text selection */
+::selection {
+  background: var(--accent-glow);
+  color: #fff;
+}
 
 /* Focus ring */
 :focus-visible {
@@ -27,4 +33,26 @@ html {
 /* Sidebar transition */
 .sidebar-enter {
   transition: width 250ms ease, opacity 250ms ease;
+}
+
+/* Subtle entrance for interactives / cards */
+@keyframes lift-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Slow accent pulse for "live" glow accents */
+@keyframes accent-pulse {
+  0%, 100% { opacity: 0.85; }
+  50%      { opacity: 0.4; }
+}
+
+/* Prev/next cards lift toward the accent on hover */
+.lesson-nav-card:hover {
+  border-color: var(--accent) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+.lesson-nav-card:hover span:last-child {
+  color: var(--accent-light) !important;
 }

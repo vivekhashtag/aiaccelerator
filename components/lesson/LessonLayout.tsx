@@ -21,24 +21,26 @@ export default function LessonLayout({
 }: LessonLayoutProps) {
   const color = getModuleColor(meta.module);
 
+  // Per-module accent, painted on the shared dark base.
   const colorVars = {
-    "--accent":       color.primary,
-    "--accent-hover": color.dark,
-    "--accent-light": color.light,
-    "--accent-subtle":color.subtle,
-    "--border":       color.border,
-    "--border-strong":color.primary,
-    "--bg-subtle":    color.bgSubtle,
-    "--bg-muted":     color.bgMuted,
-    "--sidebar-bg":   color.sidebarBg,
+    "--accent":        color.primary,
+    "--accent-hover":  color.dark,
+    "--accent-light":  color.light,
+    "--accent-subtle": `${color.primary}1f`, // ~12% alpha
+    "--accent-glow":   `${color.primary}59`, // ~35% alpha
+    "--border-strong": "rgba(255,255,255,0.16)",
   } as CSSProperties;
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#ffffff", ...colorVars }}>
+    <div
+      className="min-h-screen"
+      style={{ backgroundColor: "var(--bg-base)", ...colorVars }}
+    >
       <LessonSidebar
         modules={modules}
         currentModule={meta.module}
         currentLesson={meta.slug}
+        accent={color.primary}
       />
 
       <main
@@ -47,34 +49,44 @@ export default function LessonLayout({
           minHeight: "100vh",
         }}
       >
-        {/* Top bar */}
+        {/* Top bar — translucent navy, matches the home nav */}
         <header
           className="sticky top-0 z-30 flex items-center justify-between px-10 h-14"
           style={{
-            backgroundColor: color.primary,
-            borderBottom: `1px solid ${color.dark}`,
+            background: "rgba(6,13,26,0.72)",
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
+            borderBottom: "1px solid var(--border)",
           }}
         >
           <div className="flex items-center gap-3">
             <span
+              className="w-2 h-2 rounded-full"
+              style={{
+                backgroundColor: "var(--accent)",
+                boxShadow: "0 0 10px var(--accent-glow)",
+              }}
+            />
+            <span
               className="text-xs font-semibold uppercase tracking-widest"
-              style={{ color: "rgba(255,255,255,0.7)" }}
+              style={{ color: "var(--accent)" }}
             >
               Module {meta.module}
             </span>
-            <span style={{ color: "rgba(255,255,255,0.4)" }}>·</span>
+            <span style={{ color: "var(--text-muted)" }}>·</span>
             <span
               className="text-xs font-medium"
-              style={{ color: "rgba(255,255,255,0.85)" }}
+              style={{ color: "var(--text-secondary)" }}
             >
               {meta.moduleTitle}
             </span>
           </div>
           <div
-            className="text-xs font-semibold px-2 py-1 rounded"
+            className="text-xs font-semibold px-2.5 py-1 rounded font-mono"
             style={{
-              backgroundColor: "rgba(255,255,255,0.15)",
-              color: "#fff",
+              backgroundColor: "var(--accent-subtle)",
+              border: "1px solid var(--border)",
+              color: "var(--accent-light)",
             }}
           >
             Topic {meta.lesson}
@@ -82,43 +94,74 @@ export default function LessonLayout({
         </header>
 
         {/* Lesson body */}
-        <article className="mx-auto px-10 pb-20" style={{ maxWidth: "800px" }}>
+        <article className="mx-auto px-10 pb-24" style={{ maxWidth: "760px" }}>
           {/* Lesson title block */}
-          <div className="pt-10 pb-8" style={{ borderBottom: `1px solid ${color.border}` }}>
-            {/* Color chip */}
+          <div className="pt-14 pb-9" style={{ borderBottom: "1px solid var(--border)" }}>
+            {/* Accent eyebrow */}
             <div
-              className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full mb-4"
+              className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-widest px-3 py-1.5 rounded-full mb-6"
               style={{
-                backgroundColor: color.subtle,
-                color: color.dark,
-                border: `1px solid ${color.border}`,
+                backgroundColor: "var(--accent-subtle)",
+                color: "var(--accent-light)",
+                border: "1px solid var(--border)",
               }}
             >
               <span
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: color.primary }}
+                className="w-1.5 h-1.5 rounded-full"
+                style={{
+                  backgroundColor: "var(--accent)",
+                  boxShadow: "0 0 8px var(--accent-glow)",
+                }}
               />
-              {color.label}
+              Topic {meta.lesson}
             </div>
 
             <h1
-              className="text-3xl font-bold leading-tight mb-3"
-              style={{ color: "var(--text-primary)", fontFamily: "var(--font-sans)" }}
+              className="text-4xl font-extrabold leading-[1.12] mb-4"
+              style={{ color: "var(--text-primary)", letterSpacing: "-0.02em" }}
             >
               {meta.title}
             </h1>
+
             {meta.summary && (
               <p
-                className="text-base leading-relaxed"
+                className="text-lg leading-relaxed"
                 style={{ color: "var(--text-secondary)" }}
               >
                 {meta.summary}
               </p>
             )}
+
+            {meta.prerequisites && meta.prerequisites.length > 0 && (
+              <div className="flex items-center gap-2 mt-6 flex-wrap">
+                <span
+                  className="text-xs font-semibold uppercase tracking-wider"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Prerequisites
+                </span>
+                {meta.prerequisites.map((p) => (
+                  <span
+                    key={p}
+                    className="text-xs px-2.5 py-1 rounded-full"
+                    style={{
+                      backgroundColor: "var(--bg-surface)",
+                      border: "1px solid var(--border)",
+                      color: "var(--text-secondary)",
+                    }}
+                  >
+                    {p}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* MDX content */}
-          <div className="prose prose-sm md:prose-base mt-8" style={{ maxWidth: "none" }}>
+          <div
+            className="prose prose-invert prose-base mt-10"
+            style={{ maxWidth: "none" }}
+          >
             {children}
           </div>
 

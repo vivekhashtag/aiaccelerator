@@ -39,15 +39,19 @@ export default function QuizBlock({ questions = [] }: QuizBlockProps) {
   }
 
   return (
-    <div className="my-10 space-y-6">
-      <div
-        className="text-xs font-mono tracking-widest uppercase pb-2"
-        style={{
-          color: "var(--accent)",
-          borderBottom: "1px solid var(--border)",
-        }}
-      >
-        Self-Check
+    <div className="my-12 space-y-5">
+      {/* Section heading */}
+      <div className="flex items-center gap-3 mb-2">
+        <span
+          className="text-xs font-mono tracking-widest uppercase"
+          style={{ color: "var(--accent-light)" }}
+        >
+          ✓ Self-Check
+        </span>
+        <span className="flex-1 h-px" style={{ backgroundColor: "var(--border)" }} />
+        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+          {questions.length} question{questions.length !== 1 ? "s" : ""}
+        </span>
       </div>
 
       {questions.map((q, qi) => {
@@ -57,17 +61,21 @@ export default function QuizBlock({ questions = [] }: QuizBlockProps) {
         return (
           <div
             key={qi}
-            className="rounded-lg p-5"
+            className="rounded-xl p-5"
             style={{
               border: "1px solid var(--border)",
-              backgroundColor: "var(--bg-subtle)",
+              backgroundColor: "var(--bg-surface)",
+              boxShadow: "0 6px 20px rgba(0,0,0,0.25)",
             }}
           >
             <p
-              className="font-medium mb-4"
+              className="font-semibold mb-4 flex gap-2.5"
               style={{ color: "var(--text-primary)", fontSize: "0.975rem" }}
             >
-              {qi + 1}. {q.q}
+              <span className="font-mono" style={{ color: "var(--accent)" }}>
+                {String(qi + 1).padStart(2, "0")}
+              </span>
+              <span>{q.q}</span>
             </p>
 
             <div className="space-y-2">
@@ -83,29 +91,28 @@ export default function QuizBlock({ questions = [] }: QuizBlockProps) {
                   if (isCorrect) {
                     bg = "var(--accent-subtle)";
                     borderColor = "var(--accent)";
-                    textColor = "var(--accent-hover)";
+                    textColor = "var(--accent-light)";
                   } else if (isChosen && !isCorrect) {
-                    bg = "#fff5f5";
-                    borderColor = "#f87171";
-                    textColor = "#b91c1c";
+                    bg = "rgba(251,113,133,0.1)";
+                    borderColor = "var(--color-danger)";
+                    textColor = "var(--color-danger)";
                   }
                 } else if (isChosen) {
-                  borderColor = "var(--accent-light)";
+                  borderColor = "var(--accent)";
                   bg = "var(--accent-subtle)";
-                  textColor = "var(--accent)";
+                  textColor = "var(--accent-light)";
                 }
 
                 return (
                   <button
                     key={oi}
                     onClick={() => choose(qi, oi)}
-                    className="w-full text-left rounded px-4 py-2.5 text-sm transition-colors"
+                    className="w-full text-left rounded-lg px-4 py-2.5 text-sm transition-colors"
                     style={{
                       border: `1px solid ${borderColor}`,
                       backgroundColor: bg,
                       color: textColor,
                       cursor: isRevealed ? "default" : "pointer",
-                      fontFamily: "var(--font-sans)",
                     }}
                   >
                     <span
@@ -116,7 +123,7 @@ export default function QuizBlock({ questions = [] }: QuizBlockProps) {
                     </span>
                     {opt}
                     {isRevealed && isCorrect && (
-                      <span className="ml-2 text-xs" style={{ color: "var(--color-on)" }}>
+                      <span className="ml-2 text-xs font-semibold" style={{ color: "var(--color-on)" }}>
                         ✓ correct
                       </span>
                     )}
@@ -128,20 +135,14 @@ export default function QuizBlock({ questions = [] }: QuizBlockProps) {
             {!isRevealed && (
               <button
                 onClick={() => reveal(qi)}
-                className="mt-4 text-sm font-medium px-4 py-1.5 rounded transition-colors"
+                className="mt-4 text-sm font-semibold px-4 py-1.5 rounded-lg transition-transform"
                 style={{
-                  backgroundColor: "var(--accent)",
-                  color: "#fff",
+                  background: "linear-gradient(135deg, var(--accent), var(--accent-hover))",
+                  color: "#04121f",
                   border: "none",
                   cursor: "pointer",
-                  fontFamily: "var(--font-sans)",
+                  boxShadow: "0 0 18px var(--accent-glow)",
                 }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.backgroundColor = "var(--accent-hover)")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.backgroundColor = "var(--accent)")
-                }
               >
                 Reveal Answer
               </button>
@@ -149,15 +150,15 @@ export default function QuizBlock({ questions = [] }: QuizBlockProps) {
 
             {isRevealed && q.explanation && (
               <div
-                className="mt-4 text-sm rounded px-4 py-3"
+                className="mt-4 text-sm rounded-lg px-4 py-3"
                 style={{
-                  backgroundColor: "var(--bg-muted)",
+                  backgroundColor: "var(--accent-subtle)",
                   borderLeft: "3px solid var(--accent)",
                   color: "var(--text-secondary)",
                 }}
               >
-                <span className="font-semibold" style={{ color: "var(--text-primary)" }}>
-                  Explanation:{" "}
+                <span className="font-semibold" style={{ color: "var(--accent-light)" }}>
+                  Why:{" "}
                 </span>
                 {q.explanation}
               </div>

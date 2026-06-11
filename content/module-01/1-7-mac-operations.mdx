@@ -1,0 +1,89 @@
+---
+title: "Multiply-Accumulate (MAC) Operations"
+module: "01"
+moduleTitle: "Semiconductor & Digital Foundations"
+lesson: "1.7"
+slug: "1-7-mac-operations"
+summary: "The payoff. Every transistor, gate, adder, register, and number format in this module exists to serve one operation — multiply-accumulate — and the systolic arrays and Tensor Cores that perform trillions of them per second are what make modern AI possible."
+prerequisites: ["1.6 Number Systems & Data Representation"]
+---
+
+## One Operation to Rule Them All
+
+We opened this module with a claim. Now we can prove it. A **Multiply-Accumulate (MAC)** computes:
+
+<Formula label="The MAC operation" caption="Multiply two numbers, add to a running total. This is the atom of deep learning.">accumulator = accumulator + (A × B)</Formula>
+
+Almost every computation in deep learning is *built from* this single step:
+
+- **Dot product** — `Σ A[i] × B[i]` over all i is exactly N MACs. It's how a single neuron computes a weighted sum of its inputs.
+- **Fully-connected layer** — input dim M, output dim N → **M × N MACs** per input vector.
+- **Convolution** — a K×K filter over C_in→C_out channels and an H×W output map → **K · K · C_in · C_out · H · W** MACs.
+- **Attention** — one head with sequence length N and dimension d_k → **2 · N² · d_k** MACs.
+
+<StatGrid items={[
+  { value: "1.18 B", label: "MACs", sub: "ResNet-50 first conv layer" },
+  { value: "137 B", label: "MACs", sub: "one Llama-3-8B attention layer" },
+  { value: "4.4 T", label: "MACs", sub: "all attention, all 32 layers" }
+]} caption="A single forward pass is measured in billions to trillions of MACs — which is why chips are optimised for this one operation above all else." />
+
+---
+
+## Building a MAC Unit in Hardware
+
+A hardware MAC stitches together everything from the previous topics:
+
+1. **Multiplier** — takes two N-bit inputs, produces a 2N-bit product (an 8×8 multiplier → 16-bit result). The classic design generates shifted partial products and sums them in a **Wallace tree** of carry-save adders, giving O(log N) delay.
+2. **Adder** — adds the product to the running accumulator (your Topic 1.3 adder).
+3. **Accumulator register** — D flip-flops (Topic 1.4) holding the running sum, made *wider* than the product (e.g. a 32-bit accumulator for 16-bit products) so thousands of values can pile up without overflow.
+4. **Control FSM** — sequences load → multiply → add → store (Topic 1.4).
+
+<MacUnitDiagram caption="Every block you built earlier, assembled: a multiplier feeds an adder, whose output lands in a wide accumulator register — which feeds straight back into the adder for the next cycle." />
+
+<Callout type="insight" title="Pipelining: latency vs throughput">
+
+In a **pipelined** MAC, the load, multiply, and add stages overlap — while one product is being added, the next pair is already being multiplied. After the pipeline fills (a one-time latency cost), it produces **one MAC result every clock cycle**. For matrix multiply, where we need millions of MACs, throughput is everything: fill the pipeline once, then run flat-out.
+
+</Callout>
+
+---
+
+## Systolic Arrays: MACs That Talk to Each Other
+
+Here's the problem at scale. A naive matrix multiply re-fetches weights from memory for *every* MAC — and memory bandwidth, not compute, becomes the bottleneck. The **systolic array** is the hardware insight that breaks it: arrange MAC units in a 2D grid and pass data **directly between neighbours** — no memory access in between.
+
+<SystolicArrayDiagram caption="A grid of MAC cells passing data directly to their neighbours: activations flow left→right, partial sums accumulate top→bottom. Each weight is loaded once and reused across its whole row — that's how the memory bottleneck is broken." />
+
+<Callout type="key" title="The idea that let Google train LLMs in 2016">
+
+The **Google TPU v1 (2016)** was a 256×256 systolic array — **65,536 MACs** on one chip. At 700 MHz that's 65,536 × 2 × 700 MHz ≈ **92 TOPS**. Each weight, loaded once, is reused 256 times as data streams through — eliminating the memory re-fetch that throttles naive designs. This predates NVIDIA's Tensor Cores and is the direct ancestor of every modern matrix engine.
+
+</Callout>
+
+**NVIDIA Tensor Cores** (from Volta, 2017) apply the same idea as an instruction: `D = A × B + C` on 4×4 matrices — 64 MACs per core per cycle. The leap from scalar CUDA cores to matrix-native Tensor Cores is what separates a graphics GPU from an AI supercomputer.
+
+---
+
+## TOPS: Measuring AI Performance
+
+A chip with M MAC units at frequency f delivers:
+
+<Formula label="Throughput" caption="The ×2 counts each MAC as two operations: one multiply + one add.">TOPS = M × 2 × f / 10¹²</Formula>
+
+<Callout type="pitfall" title="The TOPS lie">
+
+Published TOPS are *peak* numbers — maximum sparsity, zero memory stalls, 100% utilisation. Real LLM inference often hits only **30–60%** of theoretical TOPS, because for small batch sizes the workload is **memory-bandwidth bound**: the compute units sit idle waiting for weights to arrive from VRAM. This is the **roofline model**, and we explore it deeply in Module 2. The lesson: a chip's spec sheet is a ceiling, not a promise.
+
+</Callout>
+
+---
+
+## Module 1, Complete: From Atoms to AI
+
+<Callout type="key" title="The whole journey, in one breath">
+
+A **silicon atom**, doped into N-type and P-type, forms a **PN junction**, which arranges into a **MOSFET** switch. Pair them as **CMOS**, wire four into a **NAND gate** — universal, so it builds **every** logic circuit. Gates become **adders, MUXes, decoders**; add **flip-flops** and you get **registers and FSMs** that remember and sequence. Numbers live as **two's-complement integers** and **IEEE 754 / BF16 / INT8** floats. The **full adder → multiplier → MAC → systolic array** is the compute engine of every AI chip — and its **TOPS** is bounded by the power budget **α·C·V²·f**, which is exactly why lower precision means more intelligence per watt.
+
+Every one of the remaining nine modules is built on this foundation.
+
+</Callout>

@@ -1,0 +1,97 @@
+---
+title: "Clocking, Timing & Power"
+module: "01"
+moduleTitle: "Semiconductor & Digital Foundations"
+lesson: "1.5"
+slug: "1-5-timing-and-power"
+summary: "The clock that paces every chip, the setup/hold timing that limits its frequency, and the power equation P = α·C·V²·f that explains why an H100 burns 700 watts — and why low voltage and low precision are the levers that tame it."
+prerequisites: ["1.4 Sequential Logic & State Machines"]
+---
+
+## The Clock: A Chip's Heartbeat
+
+The **clock** is a periodic square wave that paces every synchronous system, oscillating between 0 and 1 at a fixed frequency. Its key parameters:
+
+- **Period (T)** — time for one full cycle, in nanoseconds.
+- **Frequency (f = 1/T)** — cycles per second, in GHz (1 GHz → T = 1 ns).
+- **Duty cycle** — fraction of the period spent HIGH (usually 50%).
+- **Rise / fall time** — how fast it transitions (must be far shorter than T).
+
+<StatGrid items={[
+  { value: "5.8 GHz", label: "Core i9-13900K", sub: "T = 172 ps" },
+  { value: "4.4 GHz", label: "Apple M4", sub: "T = 227 ps" },
+  { value: "1.98 GHz", label: "NVIDIA H100", sub: "T = 505 ps" },
+  { value: "~220 MHz", label: "PYNQ-Z2 FPGA", sub: "T = 4.5 ns" }
+]} caption="Clock periods across modern chips. Note the GPU runs slower than a CPU — it wins on parallelism, not clock speed." />
+
+---
+
+## Setup, Hold, and Timing Violations
+
+For a D flip-flop to latch correctly, the data input must be stable in a window *around* the clock edge:
+
+- **Setup time (t_su)** — D must be stable for at least t_su *before* the edge.
+- **Hold time (t_h)** — D must stay stable for at least t_h *after* the edge.
+- **Clock-to-Q delay (t_cq)** — time from the edge until Q settles to its new value.
+
+<ClockTimingDiagram caption="Around every active clock edge there's a no-fly zone: D must be steady for t_su before and t_h after, or the flip-flop can latch garbage. After the edge, Q updates one t_cq later." />
+
+For combinational logic sitting between two flip-flops, correct operation requires the clock period to be long enough for the signal to make the trip:
+
+<Formula label="The critical-path timing constraint" caption="The slowest logic path between two registers sets the maximum frequency.">T ≥ t_cq + t_logic + t_su          ⟹          f_max = 1 / (t_cq + t_logic + t_su)</Formula>
+
+<Callout type="pitfall" title="Push the clock too fast and the chip computes garbage">
+
+If the period is too short, the combinational logic hasn't settled before the setup window closes. The flip-flop then latches a wrong value — or worse, enters **metastability**, an unstable in-between voltage that resolves to 0 or 1 only after an unpredictable delay. Designers fight this with careful timing analysis and double-flip-flop synchronizers. It is a real, shipped-silicon failure mode, not a theoretical one.
+
+</Callout>
+
+---
+
+## Dynamic Power: The Cost of Switching
+
+Every time a gate switches, it charges or discharges the capacitance on its output wire — and that costs energy from the supply. Summed over a whole chip:
+
+<Formula label="Dynamic power" caption="α = activity factor, C = load capacitance, V = supply voltage, f = clock frequency.">P_dynamic = α · C · V² · f</Formula>
+
+- **α (activity factor)** — fraction of cycles a node actually switches (0 to 1).
+- **C (load capacitance)** — wire + input capacitance of driven gates (fF to pF per node).
+- **V (supply voltage)** — today 0.6–1.0 V (it was 5 V in the 1980s).
+- **f (frequency)** — switching events per second.
+
+<Callout type="insight" title="The V² term is the most important lever in chip design">
+
+Because power scales with the *square* of voltage, dropping V from 1.0 V to 0.7 V cuts dynamic power to (0.7)² = **0.49 — a 51% reduction from just a 30% voltage cut.** This is why **voltage scaling** is the single most powerful knob for energy efficiency, and why every efficiency push (mobile, data-center, AI) chases lower operating voltage.
+
+</Callout>
+
+<VoltageScalingChart caption="Dynamic power versus supply voltage. Because of the V² term, modest voltage cuts pay off disproportionately — this is the lever every efficiency push pulls first." />
+
+---
+
+## Static Power: Leakage
+
+Even when nothing switches, transistors aren't perfect off-switches. A small **subthreshold leakage** current trickles from drain to source, and as gate oxides thin out, electrons **quantum-tunnel** straight through them. At 5 nm and below, static (leakage) power can rival dynamic power — a major reason advanced nodes are so hard to cool.
+
+---
+
+## Why This Matters: AI Is Power-Bound
+
+<Callout type="why" title="Power, not transistors, is the real constraint">
+
+AI workloads are extraordinarily power-hungry. An NVIDIA H100 has a **700 W** TDP; a rack of eight dissipates **5,600 W** — more than a household electric heater. Modern accelerators aren't limited by how many transistors you can print, but by how much heat you can pull out. That single fact drives the whole field toward lower voltage, lower precision (INT8/INT4 — Topic 1.6), and smarter power management.
+
+</Callout>
+
+The standard techniques, in increasing aggressiveness:
+
+- **Clock gating** — when a block is idle, switch off its clock. No clock → no switching → no dynamic power (α = 0). Cheap and effective; can cut dynamic power 20–40%.
+- **Power gating** — cut the supply to an idle block entirely, killing dynamic *and* static power. Downside: state is lost and wake-up costs time and retention circuitry.
+- **DVFS (Dynamic Voltage & Frequency Scaling)** — match voltage and frequency to the workload. Thanks to the V² law, running at half voltage and half frequency yields 0.5² × 0.5 = **0.125 — an 87.5% power cut.** Used in every modern CPU, GPU, and phone SoC.
+
+<StatGrid items={[
+  { value: "700 W", label: "NVIDIA H100", sub: "training" },
+  { value: "750 W", label: "AMD MI300X", sub: "training" },
+  { value: "~170 W", label: "Google TPU v4", sub: "custom ASIC" },
+  { value: "72 W", label: "NVIDIA L4", sub: "inference" }
+]} caption="Thermal Design Power (TDP) — the sustained heat the cooling system must remove." />

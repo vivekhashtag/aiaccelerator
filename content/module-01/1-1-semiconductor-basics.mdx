@@ -1,111 +1,221 @@
 ---
-title: "Topic 1.1 — Semiconductor Basics"
+title: "Semiconductor Basics"
 module: "01"
 moduleTitle: "Semiconductor & Digital Foundations"
-lesson: "1-1"
+lesson: "1.1"
 slug: "1-1-semiconductor-basics"
-summary: "How silicon becomes a transistor — from doped crystals and PN junctions to the MOSFET that switches every computation in every AI chip."
-prerequisites: []
+summary: "How a grain of sand becomes a transistor — from doped silicon crystals and PN junctions to the MOSFET switch, the CMOS pair, and the NAND gate that every AI chip is ultimately built from."
+prerequisites: ["Curiosity", "High-school physics"]
 ---
 
 ## Before You Begin: The Big Picture
 
-Every time you run a neural network — whether it's GPT-4 generating text, Stable Diffusion drawing an image, or a ResNet-50 classifying a photo — the computation ultimately reduces to one thing happening billions of times per second inside a chip:
+Every time you run a neural network — GPT-4 generating text, Stable Diffusion painting an image, a ResNet-50 recognising a cat — the computation ultimately collapses into *one* tiny operation, happening billions of times per second inside a chip:
 
-```
-result = result + (input × weight)
-```
+<Formula label="The operation that runs all of AI" caption="Multiply one number, add it to a running total. Repeat a few trillion times.">result = result + (input × weight)</Formula>
 
-This is the **Multiply-Accumulate (MAC) operation**. Everything else in this course — quantization, inference engines, FPGA accelerators, agentic systems — is about doing this operation faster, cheaper, and more efficiently.
+This is the **Multiply-Accumulate (MAC)** operation. Quantization, inference engines, FPGA accelerators, agentic systems — *everything* in this course is, underneath, about doing this one operation faster, cheaper, and with less energy.
 
-This module answers the question: **at the most fundamental physical level, how does a computer actually do this?**
+<Callout type="why">
 
-The answer starts with a silicon atom.
+This module answers the most fundamental question in the entire stack: **at the level of physics, how does a computer actually perform a multiply-and-add?** The answer starts with a single atom of silicon — the second most abundant element in the Earth's crust, the main ingredient in sand.
+
+</Callout>
 
 ---
 
 ## What Is a Semiconductor?
 
-Materials in our universe fall into three broad categories based on how well they conduct electricity:
+Every material sits somewhere on a spectrum of how easily it lets electric current flow:
 
-**Conductors** (copper, gold, aluminium): electrons flow freely. Resistance is low.
+- **Conductors** (copper, gold, aluminium) — electrons roam freely. Touch a battery across them and current pours through. Very low resistance.
+- **Insulators** (rubber, glass, pure quartz) — electrons are locked tight in their bonds. Almost no current flows, no matter the voltage.
+- **Semiconductors** (silicon, germanium, gallium arsenide) — conductivity sits *between* the two extremes, and — this is the magic — it can be **controlled**, either by mixing in trace impurities or by applying an electric field.
 
-**Insulators** (rubber, glass, pure silicon dioxide): electrons are tightly bound. Almost no current flows.
+<ConductivitySpectrum caption="Conductivity is a spectrum. Metals always conduct, insulators never do — only semiconductors let us *dial* it." />
 
-**Semiconductors** (silicon, germanium, gallium arsenide): their conductivity sits between conductors and insulators — and crucially, their conductivity can be *controlled* by adding tiny amounts of impurities or applying electric fields.
+<Callout type="insight" title="This is the whole game">
 
-This controllability is everything. It is what makes transistors possible, and transistors are what make computers possible.
+That one word — **controllable** — is why transistors exist, and transistors are why computers exist. A material whose conductivity *we* decide is a material we can use to switch, to compute, to remember.
+
+</Callout>
 
 ### Why Silicon?
 
-Silicon (Si) is element 14. Its outer shell has exactly 4 electrons — it wants 4 more to be stable. In a crystal of pure silicon, each atom shares its 4 outer electrons with 4 neighbouring atoms, forming a rigid **crystal lattice**. At absolute zero, all electrons are locked in bonds — pure silicon is a perfect insulator.
+Silicon (Si) is element 14. Its outer shell holds exactly **4 electrons**, and it "wants" 4 more to feel complete (a full shell of 8). So in a pure silicon crystal, every atom shares its 4 outer electrons with 4 neighbours, locking the whole structure into a rigid **crystal lattice** of covalent bonds.
 
-### Doping: Engineering Conductivity
+<SiliconLattice caption="Each silicon atom shares an electron pair with all four neighbours. Every outer electron is spoken for — which is exactly why pure silicon barely conducts." />
 
-When we intentionally add specific impurities — a process called **doping** — we can dramatically change silicon's conductivity.
+That perfectly-balanced sharing is the key: with all four bonds satisfied, there are no spare carriers free to move, so current has nothing to flow with. At absolute zero, every electron is trapped in a bond and pure silicon is a perfect insulator. At room temperature, the odd electron gets jostled free by heat, leaving behind a **hole** — a vacancy with a net positive charge. This faint, accidental conductivity is the seed of everything. Now we engineer it on purpose.
 
-**N-type silicon:** Add phosphorus (element 15, 5 outer electrons). Four electrons bond with neighbouring silicon atoms; the fifth is loosely held and easily freed. Result: extra free electrons available to carry current. Free electrons are the majority charge carriers.
+---
 
-**P-type silicon:** Add boron (element 5, 3 outer electrons). Boron creates a *hole* — a position in the lattice that "wants" an electron. A nearby electron can hop into this hole, creating a new hole where it came from. Holes are the majority charge carriers.
+## Doping: Engineering Conductivity
+
+**Doping** means deliberately adding a trace of a different element to the silicon lattice to flood it with one kind of charge carrier.
+
+#### N-type — a surplus of electrons
+
+Add a pinch of **phosphorus** (element 15, *5* outer electrons). Four of its electrons bond with neighbouring silicon atoms; the fifth has no partner, is loosely held, and breaks free to wander the crystal. Result: a sea of spare **free electrons** — the *majority carriers*. Phosphorus atoms are called **donors**.
+
+#### P-type — a surplus of holes
+
+Add a pinch of **boron** (element 5, *3* outer electrons) — one short of filling its four bonds. That missing electron is a **hole**. A neighbouring electron can hop in to fill it, but that just moves the hole elsewhere. The holes drift through the crystal as though they were positive charges. Boron atoms are called **acceptors**.
+
+<DopingDiagram caption="Swap one silicon atom for a 5-electron donor (phosphorus) and you get a spare electron; swap in a 3-electron acceptor (boron) and you get a hole. One impurity atom, one mobile carrier." />
+
+<Callout type="warning" title="Doped silicon is still electrically neutral">
+
+Adding phosphorus does **not** give the material a negative charge. Each phosphorus nucleus still has 15 protons balancing its 15 electrons. We haven't added charge — we've added *mobile carriers*. The crystal is neutral overall, but now current has something to move with.
+
+</Callout>
+
+---
+
+## The PN Junction: Where Devices Are Born
+
+Press N-type and P-type silicon together and something remarkable happens right at the seam — the **PN junction**.
+
+Free electrons from the N-side rush across to fill holes on the P-side; holes drift the other way. Right at the boundary the carriers cancel out, leaving a thin **depletion region** with no free carriers. The atoms left behind are now charged (positive donors on the N-side, negative acceptors on the P-side), so an internal electric field builds up — a **built-in voltage** of about **0.6–0.7 V** for silicon — that eventually halts further diffusion.
+
+<PNJunctionDiagram caption="Forward bias shrinks the depletion region until current pours through; reverse bias widens it and chokes the current off. One-way conduction — that's a diode." />
+
+- **Forward bias** — push with more than the built-in voltage and the depletion region collapses; current flows freely.
+- **Reverse bias** — pull the other way and the depletion region grows wider; only a tiny leakage current gets through.
+
+<Callout type="key">
+
+A PN junction is a **diode**: it conducts in one direction and blocks the other. Stack these junctions cleverly and you get the device that runs the modern world — the transistor.
+
+</Callout>
+
+---
+
+## The BJT: The First Transistor
+
+Before the MOSFET took over, the **Bipolar Junction Transistor (BJT)** ran the world of electronics — it's the device that came out of Bell Labs in 1947 and launched the semiconductor age. A BJT is a sandwich of three doped regions (**NPN** or **PNP**) giving three terminals: **collector**, **base**, and **emitter**.
+
+The key difference from a MOSFET is *what controls it*: a BJT is **current-controlled**. A small current into the base lets a much larger current flow from collector to emitter — the ratio (β, often 100+) is the transistor's gain. That makes BJTs excellent *amplifiers*, and they're still everywhere in analog and high-power circuits.
+
+<BJTStructure caption="An NPN BJT. A small base current I_B controls a large collector current I_C. The emitter arrow pointing outward is the mark of an NPN." />
+
+<Callout type="why" title="Why digital chose the MOSFET instead">
+
+A BJT needs *continuous base current* to stay on — and current means power, multiplied across billions of devices. A MOSFET's gate is insulated, so it's **voltage-controlled and draws almost no steady current**. For dense digital logic — where you want billions of switches sipping as little power as possible — that decided it. BJTs amplify; MOSFETs switch. The rest of this course lives in MOSFET territory.
+
+</Callout>
 
 ---
 
 ## MOSFET: The Transistor That Runs the World
 
-Modern digital chips use **MOSFETs** (Metal-Oxide-Semiconductor Field-Effect Transistors). Every processor, GPU, and AI chip is built from billions of them.
+Modern digital chips are built from **MOSFETs** — Metal-Oxide-Semiconductor Field-Effect Transistors. Your phone has billions; an H100 GPU has ~80 billion. Each one is a voltage-controlled switch with three terminals:
 
-The MOSFET has three terminals:
+- **Gate (G)** — the control knob. The voltage here decides whether the switch is open or closed.
+- **Source (S)** — where the charge carriers come from.
+- **Drain (D)** — where they go.
 
-- **Gate (G):** The control terminal. Voltage here controls whether current flows.
-- **Source (S):** Where carriers originate.
-- **Drain (D):** Where carriers go.
+Crucially, the gate is separated from the channel by a wafer-thin layer of silicon dioxide (SiO₂) — an insulator. So the gate carries **almost no current**; it steers the channel purely with its electric *field*. That is the "field-effect" in the name.
 
-Between the gate metal and the semiconductor channel is a thin layer of silicon dioxide (SiO₂) — the oxide insulator. The gate is **electrically isolated** from the channel; it controls current through an electric field (hence "field-effect").
+### NMOS: switch ON when the gate goes HIGH
 
-### N-channel MOSFET (NMOS)
+An N-channel MOSFET is a P-type body with two N-type islands (source and drain), gate on top.
 
-**With gate voltage = 0:** The P-type channel between the two N-type regions forms two back-to-back PN junctions. No current flows. The MOSFET is **OFF**.
+- **Gate voltage = 0** → the P-type region between the islands forms two back-to-back PN junctions. No path. The switch is **OFF**.
+- **Gate voltage ≥ threshold (Vth ≈ 0.3–0.7 V)** → the positive gate pulls electrons up to the surface, forming a thin N-type bridge — the **inversion layer**. Source and drain are now connected. The switch is **ON**.
 
-**With gate voltage ≥ threshold (Vth, typically 0.3–0.7 V):** The positive gate voltage attracts electrons to the surface of the P-type channel, forming a thin layer of N-type material — the **inversion layer**. Now there is a continuous N-type path from source to drain. Current flows. The MOSFET is **ON**.
+<Callout type="analogy" title="The gate is a drawbridge">
 
-In digital circuits: NMOS is ON when gate is HIGH (logic 1), OFF when gate is LOW (logic 0).
+Below threshold, the bridge is up and electrons can't cross the channel. Raise the gate voltage past Vth and the bridge drops — a conductive lane snaps into place and electrons stream from source to drain. Drop it back and the lane vanishes instantly. That snap is a logic switch, and it happens in picoseconds, trillions of times per second.
+
+</Callout>
+
+So in digital terms: **NMOS is ON when its gate is HIGH (logic 1)**, OFF when LOW. The PMOS (its mirror image — P-channel in an N-type body) does the exact opposite: **ON when its gate is LOW**. That complementary pairing is about to become very important.
+
+### The Two States, Side by Side
+
+A MOSFET only ever does one of two things — and the gate voltage is the only thing that decides which:
+
+- **Below threshold (Vth)** — no channel exists. The two N-type islands are isolated by the P-type body, and no current can cross. The switch is **OFF**.
+- **Above threshold** — the gate's field pulls a thin layer of electrons up to the oxide surface, forming the **inversion layer** that bridges source and drain. Current flows. The switch is **ON**.
+
+<MosfetCrossSection caption="Same device, two gate voltages. Left: no channel, current blocked. Right: the gate's positive charge pulls an inversion layer into place and electrons stream source → drain." />
 
 ---
 
-## Try It: The MOSFET Switch
+## CMOS: Why Modern Chips Sip Power
 
-Drag the gate voltage slider below and watch the inversion layer form. Notice that:
-- Below threshold (~0.5 V): no channel, no current
-- Above threshold: channel forms, electrons drift source→drain
+**CMOS** (Complementary MOS) pairs an NMOS and a PMOS to build any logic function. The payoff is one beautiful property:
 
-<TransistorSwitch />
+<Callout type="insight" title="One transistor is always off">
+
+In any *steady* logic state, exactly one of the complementary pair is OFF — so there is **no direct path from the power supply to ground**. No path means no current means **almost zero static power**. A CMOS gate only burns meaningful energy in the *instant* it switches.
+
+</Callout>
+
+This is why CMOS has dominated chip design since the 1980s, and why everything from a $0.50 microcontroller to an A100 GPU is built from it. We'll quantify that switching energy — the famous *P = α·C·V²·f* — in Topic 1.5.
 
 ---
 
-## Self-Check
+## Your First Real Circuit: The CMOS NAND Gate
 
-<QuizBlock questions={[
-  {
-    "q": "What controls whether current flows between source and drain in a MOSFET?",
-    "options": ["Source voltage", "Drain voltage", "Gate voltage", "Body voltage"],
-    "answer": 2,
-    "explanation": "The gate voltage controls the electric field through the oxide layer, which determines whether an inversion layer (channel) forms between source and drain. The gate is the control terminal."
-  },
-  {
-    "q": "In N-type silicon, what are the majority charge carriers?",
-    "options": ["Holes", "Protons", "Free electrons", "Photons"],
-    "answer": 2,
-    "explanation": "Doping with phosphorus (5 outer electrons) donates free electrons. These extra free electrons are the majority charge carriers in N-type silicon."
-  },
-  {
-    "q": "Why does CMOS draw almost no static power?",
-    "options": [
-      "Both transistors are always ON",
-      "In steady state, one of the two complementary transistors is always OFF",
-      "It uses superconducting materials",
-      "The supply voltage is zero"
-    ],
-    "answer": 1,
-    "explanation": "CMOS pairs PMOS and NMOS transistors so that in any stable logic state, one is ON and one is OFF. There is no direct path from VDD to GND in steady state, so almost no static power is consumed."
-  }
-]} />
+Let's build the single most important circuit in digital design. A **NAND** gate takes two inputs and outputs `Y = NOT(A AND B)`:
+
+| A | B | Y |
+|---|---|---|
+| 0 | 0 | **1** |
+| 0 | 1 | **1** |
+| 1 | 0 | **1** |
+| 1 | 1 | **0** |
+
+It outputs 0 in exactly one case — when both inputs are HIGH. Here is how four transistors make that happen:
+
+<CmosNandSchematic caption="Two PMOS in parallel (pull-up) above the output, two NMOS in series (pull-down) below it. The bubble on a gate marks a PMOS — ON when its input is LOW." />
+
+Walk the logic and it falls right out of the on/off rules you just learned:
+
+- **A=1, B=1** → both PMOS OFF (no pull-up), both NMOS ON (series path to GND complete). Output is yanked **LOW → 0**. This is the only "0" row.
+- **Any other combination** → at least one PMOS is ON (pulling the output up) *and* the NMOS series chain is broken. Output stays **HIGH → 1**.
+
+<Callout type="key">
+
+A 2-input CMOS NAND uses **2 PMOS in parallel + 2 NMOS in series = 4 transistors**. In general an N-input NAND needs **2N transistors**. Understand this circuit completely — in Topic 1.2 you'll discover that NAND alone is *universal*: every other gate, and therefore every digital chip ever made, can be built from nothing but NANDs.
+
+</Callout>
+
+---
+
+## Moore's Law and Its Limits
+
+In 1965 Gordon Moore noticed transistor counts were doubling roughly every two years. That observation held for over half a century:
+
+<StatGrid items={[
+  { value: "2,300", label: "Intel 4004", sub: "1971 · 10 µm" },
+  { value: "3.1 M", label: "Pentium", sub: "1993 · 800 nm" },
+  { value: "731 M", label: "Core i7", sub: "2008 · 45 nm" },
+  { value: "16 B", label: "Apple M1", sub: "2020 · 5 nm" },
+  { value: "28 B", label: "Apple M4", sub: "2024 · 3 nm" }
+]} caption="From thousands to tens of billions of transistors in five decades." />
+
+But we're now bumping into atoms. Silicon atoms sit ~0.2 nm apart, and today's "2 nm" processes already have physical gate lengths of only ~8–12 nm. Squeeze further and physics fights back:
+
+- **Quantum tunnelling** — electrons leak straight through the gate oxide even when the transistor is "off."
+- **Short-channel effects** — the gate loses authority over a channel that's grown too short.
+- **Heat density** — more transistors per mm² means more heat per mm² than any cooler can remove.
+- **Manufacturing variability** — at this scale, a few atoms out of place change how a transistor behaves.
+
+<Callout type="why" title="This is *why* AI chips exist">
+
+The end of easy transistor scaling is the reason the industry pivoted. We can no longer just make a CPU twice as fast every two years. Instead we go **3D** (stacking dies, chiplets) and — most importantly for this course — we build **specialised accelerators** (GPUs, TPUs, FPGAs) that spend the transistors we *do* have far more efficiently on the one operation AI actually needs: the MAC.
+
+</Callout>
+
+---
+
+## Recap: The Path So Far
+
+<Callout type="key" title="From sand to a switch">
+
+Silicon crystal → **dope** it into N-type and P-type → join them into a **PN junction** (a diode) → arrange junctions into a **MOSFET** (a voltage-controlled switch) → pair NMOS + PMOS into **CMOS** (near-zero static power) → wire four of them into a **NAND gate** (a universal logic primitive). Next, in Topic 1.2, we turn that one gate into all of Boolean algebra.
+
+</Callout>

@@ -25,6 +25,22 @@ export default function LessonSidebar({
   useEffect(() => {
     const stored = localStorage.getItem("sidebar-open");
     if (stored !== null) setOpen(stored === "true");
+    // First visit on a small screen: start collapsed so the reading
+    // column isn't covered. Desktop keeps the default-open behaviour.
+    else if (typeof window !== "undefined" && window.innerWidth <= 1024) {
+      setOpen(false);
+    }
+  }, []);
+
+  // Mark the body when collapsed so the main reading column reclaims the
+  // full width (CSS: body.sidebar-collapsed .lesson-main { padding-left: 0 }).
+  useEffect(() => {
+    document.body.classList.toggle("sidebar-collapsed", !open);
+  }, [open]);
+
+  // Clean up the flag when leaving a lesson (e.g. back to the home page).
+  useEffect(() => {
+    return () => document.body.classList.remove("sidebar-collapsed");
   }, []);
 
   function toggleSidebar() {
@@ -32,6 +48,15 @@ export default function LessonSidebar({
       localStorage.setItem("sidebar-open", String(!prev));
       return !prev;
     });
+  }
+
+  // On phone/tablet the sidebar is an overlay — collapse it after the
+  // learner picks a lesson or taps the backdrop (without overwriting the
+  // persisted desktop preference).
+  function closeOnMobile() {
+    if (typeof window !== "undefined" && window.innerWidth <= 1024) {
+      setOpen(false);
+    }
   }
 
   function toggleModule(mod: string) {
@@ -45,21 +70,30 @@ export default function LessonSidebar({
 
   return (
     <>
-      {/* Toggle button — always visible */}
+      {/* Fixed hamburger — stays pinned top-left in every state and toggles
+          the sidebar in place (open ↔ closed). */}
       <button
         onClick={toggleSidebar}
-        aria-label={open ? "Collapse sidebar" : "Expand sidebar"}
-        className="fixed top-3.5 z-50 flex items-center justify-center w-8 h-8 rounded-md transition-colors"
+        aria-label={open ? "Close menu" : "Open menu"}
+        aria-expanded={open}
+        className="fixed top-3 left-3 z-50 flex items-center justify-center w-9 h-9 rounded-md transition-colors"
         style={{
-          left: open ? "calc(var(--sidebar-width) - 40px)" : "12px",
           backgroundColor: "var(--bg-surface)",
           border: "1px solid var(--border-strong)",
           color: "var(--text-secondary)",
-          transition: "left 250ms ease",
         }}
       >
-        <span style={{ fontSize: "1rem", lineHeight: 1 }}>{open ? "←" : "≡"}</span>
+        <span style={{ fontSize: "1.1rem", lineHeight: 1 }}>≡</span>
       </button>
+
+      {/* Tap-to-close backdrop — overlay only (hidden on desktop via CSS) */}
+      {open && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setOpen(false)}
+          aria-hidden="true"
+        />
+      )}
 
       {/* Sidebar panel */}
       <aside
@@ -80,9 +114,10 @@ export default function LessonSidebar({
             pointerEvents: open ? "auto" : "none",
           }}
         >
-          {/* Logo / course title — mirrors the home nav */}
+          {/* Logo / course title — mirrors the home nav.
+              Left-padded so it clears the fixed hamburger pinned at top-left. */}
           <div
-            className="px-5 py-4 sticky top-0 z-10"
+            className="pl-14 pr-5 py-4 sticky top-0 z-10"
             style={{
               backgroundColor: "var(--sidebar-bg)",
               borderBottom: "1px solid var(--border)",
@@ -175,6 +210,7 @@ export default function LessonSidebar({
                           <Link
                             key={lesson.lessonPath}
                             href={`/modules/${lesson.meta.module}/${lesson.lessonPath}`}
+                            onClick={closeOnMobile}
                             className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] transition-colors"
                             style={{
                               backgroundColor: isActive ? "var(--accent-subtle)" : "transparent",

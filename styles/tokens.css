@@ -1,46 +1,47 @@
 :root {
   /* ──────────────────────────────────────────────────────────
-     DARK "ENGINEERING INSTRUMENT" THEME
-     Matches the home page (app/page.tsx) hero/author palette.
-     The lesson surfaces are var-driven, so these values theme
-     the sidebar, prose, quiz, nav and interactives at once.
-     The home page itself uses hardcoded hex and is unaffected.
+     LIGHT READING THEME (experiment, 2026-06-12)
+     White module-content surfaces with dark text. The lesson
+     surfaces are var-driven, so these values theme the sidebar,
+     top bar, prose, nav and figures at once. The HOME PAGE uses
+     hardcoded hex and is intentionally unaffected (stays dark).
+     To revert to the dark theme, restore the previous values.
      ────────────────────────────────────────────────────────── */
 
-  /* ── Backgrounds (deep navy gradient family from the hero) ── */
-  --bg-deep:      #060d1a;   /* deepest — sidebar, footer, page edge */
-  --bg-base:      #0a1628;   /* main reading surface */
-  --bg-surface:   #0f2138;   /* raised cards: quiz, code, figures */
-  --bg-surface-2: #15294a;   /* hover / elevated */
-  --bg-subtle:    #0f2138;   /* legacy alias → surface */
-  --bg-muted:     #15294a;   /* legacy alias → elevated (code bg) */
+  /* ── Backgrounds (light) ── */
+  --bg-deep:      #eef2f7;   /* page edge */
+  --bg-base:      #ffffff;   /* main reading surface — white */
+  --bg-surface:   #f8fafc;   /* raised cards: code, figures, nav */
+  --bg-surface-2: #eef2f7;   /* hover / elevated */
+  --bg-subtle:    #f8fafc;   /* legacy alias → surface */
+  --bg-muted:     #eef2f7;   /* legacy alias → elevated (code bg) */
 
   /* ── Accent (per-module; defaults to Module 1 teal). ──
-     LessonLayout overrides --accent* per module on this same dark base. */
-  --accent:        #00c9a7;
-  --accent-hover:  #00a88b;
-  --accent-light:  #00f5d4;
+     LessonLayout overrides --accent* per module on this light base. */
+  --accent:        #00a88b;
+  --accent-hover:  #00897230;
+  --accent-light:  #00a88b;
   --accent-subtle: rgba(0, 201, 167, 0.12);
-  --accent-glow:   rgba(0, 201, 167, 0.35);
+  --accent-glow:   rgba(0, 201, 167, 0.30);
 
   /* ── Interactive semantic colors (identical across ALL interactives) ── */
-  --color-electron: #00f5d4;
-  --color-on:       #00e676;
+  --color-electron: #0ea5a0;
+  --color-on:       #059669;
   --color-off:      #64748b;
-  --color-gate:     #f59e0b;
-  --color-danger:   #fb7185;
+  --color-gate:     #d97706;
+  --color-danger:   #e11d48;
 
-  /* ── Text (light on dark) ── */
-  --text-primary:   #f1f5f9;
-  --text-secondary: rgba(255, 255, 255, 0.72);
-  --text-muted:     rgba(255, 255, 255, 0.45);
+  /* ── Text (dark on light) ── */
+  --text-primary:   #0f172a;
+  --text-secondary: #334155;
+  --text-muted:     #64748b;
 
-  /* ── Borders (hairlines on dark) ── */
-  --border:        rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.16);
+  /* ── Borders (hairlines on light) ── */
+  --border:        rgba(15, 23, 42, 0.10);
+  --border-strong: rgba(15, 23, 42, 0.18);
 
   /* ── Sidebar ── */
-  --sidebar-bg:    #060d1a;
+  --sidebar-bg:    #f1f5f9;
   --sidebar-width: 272px;
 
   /* ── Typography ── */

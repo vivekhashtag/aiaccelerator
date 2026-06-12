@@ -128,11 +128,11 @@ export default function HomePage() {
       >
         {/* Nav */}
         <nav
+          className="home-nav"
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "0 48px",
             height: "64px",
             borderBottom: "1px solid rgba(255,255,255,0.06)",
           }}
@@ -153,8 +153,8 @@ export default function HomePage() {
             <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>AI Inference &amp; Accelerator</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-            <span style={{ color: "rgba(255,255,255,0.45)", fontSize: 13 }}>10 Modules</span>
-            <span style={{ color: "rgba(255,255,255,0.45)", fontSize: 13 }}>42+ Labs</span>
+            <span className="home-nav-stat" style={{ color: "rgba(255,255,255,0.45)", fontSize: 13 }}>10 Modules</span>
+            <span className="home-nav-stat" style={{ color: "rgba(255,255,255,0.45)", fontSize: 13 }}>42+ Labs</span>
             <Link
               href="#author"
               style={{
@@ -171,13 +171,10 @@ export default function HomePage() {
         </nav>
 
         {/* Hero content */}
-        <div style={{
+        <div className="hero-grid hero-pad" style={{
           flex: 1,
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 48,
           alignItems: "center",
-          padding: "64px 48px",
           maxWidth: 1280,
           margin: "0 auto",
           width: "100%",
@@ -259,7 +256,7 @@ export default function HomePage() {
             </div>
 
             {/* Stats */}
-            <div style={{ display: "flex", gap: 32 }}>
+            <div className="hero-stats" style={{ display: "flex", flexWrap: "wrap" }}>
               {[
                 { value: "10", label: "Modules" },
                 { value: "42+", label: "Labs" },
@@ -297,7 +294,7 @@ export default function HomePage() {
       </section>
 
       {/* ─────────────────────── MODULE GRID ─────────────────────── */}
-      <section id="modules" style={{ padding: "80px 48px", background: "#f9fafb" }}>
+      <section id="modules" className="home-section" style={{ background: "#f9fafb" }}>
         <div style={{ maxWidth: 1280, margin: "0 auto" }}>
           <div style={{ marginBottom: 48 }}>
             <p style={{ color: "#00C9A7", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>
@@ -404,7 +401,7 @@ export default function HomePage() {
       </section>
 
       {/* ─────────────────────── HOW IT WORKS ─────────────────────── */}
-      <section style={{ padding: "80px 48px", backgroundColor: "#fff" }}>
+      <section className="home-section" style={{ backgroundColor: "#fff" }}>
         <div style={{ maxWidth: 1280, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: 52 }}>
             <p style={{ color: "#00C9A7", fontWeight: 700, fontSize: 12, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 }}>
@@ -414,9 +411,9 @@ export default function HomePage() {
               Three steps. Every lesson. Every module.
             </h2>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 0, position: "relative" }}>
+          <div className="steps-grid" style={{ display: "grid", position: "relative" }}>
             {/* connector line */}
-            <div style={{
+            <div className="steps-connector" style={{
               position: "absolute", top: 36, left: "calc(33.33% - 0px)", right: "calc(33.33% - 0px)",
               height: 2, background: "linear-gradient(90deg, #00C9A7, #3B82F6)",
               zIndex: 0,
@@ -488,9 +485,8 @@ export default function HomePage() {
       </section>
 
       {/* ─────────────────────── AUTHOR ─────────────────────── */}
-      <section id="author" style={{
+      <section id="author" className="home-section" style={{
         background: "linear-gradient(135deg, #060d1a 0%, #0a1628 60%, #0d1f3c 100%)",
-        padding: "80px 48px",
       }}>
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
 
@@ -499,7 +495,7 @@ export default function HomePage() {
             About the Instructor
           </p>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 64, alignItems: "start" }}>
+          <div className="author-grid" style={{ display: "grid", alignItems: "start" }}>
 
             {/* Left — identity + bio */}
             <div>
@@ -621,12 +617,13 @@ export default function HomePage() {
       </section>
 
       {/* ─────────────────────── FOOTER ─────────────────────── */}
-      <footer style={{
+      <footer className="home-footer" style={{
         borderTop: "1px solid rgba(255,255,255,0.07)",
-        padding: "24px 48px",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
+        gap: 12,
+        flexWrap: "wrap",
         background: "#060d1a",
       }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: "rgba(255,255,255,0.5)" }}>AI Inference &amp; Accelerator Engineering</span>

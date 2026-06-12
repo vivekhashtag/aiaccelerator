@@ -21,14 +21,15 @@ export default function LessonLayout({
 }: LessonLayoutProps) {
   const color = getModuleColor(meta.module);
 
-  // Per-module accent, painted on the shared dark base.
+  // Per-module accent, painted on the light base. On white, emphasis text
+  // uses the DARKER accent shade (color.dark) so it stays readable.
   const colorVars = {
     "--accent":        color.primary,
     "--accent-hover":  color.dark,
-    "--accent-light":  color.light,
+    "--accent-light":  color.dark,
     "--accent-subtle": `${color.primary}1f`, // ~12% alpha
-    "--accent-glow":   `${color.primary}59`, // ~35% alpha
-    "--border-strong": "rgba(255,255,255,0.16)",
+    "--accent-glow":   `${color.primary}40`, // ~25% alpha
+    "--border-strong": "rgba(15,23,42,0.18)",
   } as CSSProperties;
 
   return (
@@ -44,16 +45,16 @@ export default function LessonLayout({
       />
 
       <main
+        className="lesson-main"
         style={{
-          paddingLeft: "var(--sidebar-width)",
           minHeight: "100vh",
         }}
       >
         {/* Top bar — translucent navy, matches the home nav */}
         <header
-          className="sticky top-0 z-30 flex items-center justify-between px-10 h-14"
+          className="lesson-header sticky top-0 z-30 flex items-center justify-between h-14"
           style={{
-            background: "rgba(6,13,26,0.72)",
+            background: "rgba(255,255,255,0.78)",
             backdropFilter: "blur(10px)",
             WebkitBackdropFilter: "blur(10px)",
             borderBottom: "1px solid var(--border)",
@@ -73,9 +74,9 @@ export default function LessonLayout({
             >
               Module {meta.module}
             </span>
-            <span style={{ color: "var(--text-muted)" }}>·</span>
+            <span className="hide-sm" style={{ color: "var(--text-muted)" }}>·</span>
             <span
-              className="text-xs font-medium"
+              className="hide-sm text-xs font-medium"
               style={{ color: "var(--text-secondary)" }}
             >
               {meta.moduleTitle}
@@ -94,7 +95,7 @@ export default function LessonLayout({
         </header>
 
         {/* Lesson body */}
-        <article className="mx-auto px-10 pb-24" style={{ maxWidth: "760px" }}>
+        <article className="lesson-article mx-auto pb-24" style={{ maxWidth: "760px" }}>
           {/* Lesson title block */}
           <div className="pt-14 pb-9" style={{ borderBottom: "1px solid var(--border)" }}>
             {/* Accent eyebrow */}
@@ -117,7 +118,7 @@ export default function LessonLayout({
             </div>
 
             <h1
-              className="text-4xl font-extrabold leading-[1.12] mb-4"
+              className="lesson-title text-4xl font-extrabold leading-[1.12] mb-4"
               style={{ color: "var(--text-primary)", letterSpacing: "-0.02em" }}
             >
               {meta.title}
@@ -159,7 +160,7 @@ export default function LessonLayout({
 
           {/* MDX content */}
           <div
-            className="prose prose-invert prose-base mt-10"
+            className="prose prose-base mt-10"
             style={{ maxWidth: "none" }}
           >
             {children}

@@ -1,0 +1,109 @@
+---
+title: "The Roofline Model"
+module: "02"
+moduleTitle: "Computer Architecture & Accelerators"
+lesson: "2.5"
+slug: "2-5-roofline-model"
+summary: "The one tool that tells you whether a workload is limited by compute or by memory bandwidth — arithmetic intensity, the roofline plot, the ridge point, where real AI operations land, and why batch=1 LLM inference is always memory-bound."
+prerequisites: ["2.4 Memory Hierarchy"]
+---
+
+## The Question Every Hardware Engineer Must Answer
+
+The last two lessons kept circling one question: *is my workload limited by compute, or by memory bandwidth?* It matters because the fix is the opposite in each case:
+
+- **Compute-bound** → buy more TOPS (a faster GPU, more Tensor Cores).
+- **Memory-bound** → buy more bandwidth (HBM over GDDR, bigger caches) or move less data (quantization, caching).
+
+Throw TOPS at a memory-bound problem and you waste money; add bandwidth to a compute-bound one and you waste money. The **Roofline model** is the simple visual tool that tells you which one you're in.
+
+---
+
+## Arithmetic Intensity: The Key Metric
+
+Everything hinges on one ratio:
+
+<Formula label="Arithmetic intensity" caption="How much computation you do per byte of data moved.">AI = FLOPs performed / bytes transferred   [FLOP/byte]</Formula>
+
+The intuition: at **1 FLOP/byte** you barely compute relative to the data you haul — bandwidth limits you. At **1,000 FLOP/byte** you compute enormously per byte — peak compute limits you. Let's compute it for real operations.
+
+**Vector addition** (`C = A + B`): read A, read B, write C = 12N bytes for N additions → **AI = 0.083**. Hopelessly memory-bound; a Tensor Core is useless here.
+
+**Matrix multiply** (square, n×n): 2n³ FLOPs over 12n² bytes:
+
+<Formula label="Matmul arithmetic intensity" caption="AI grows linearly with matrix size — small matrices are memory-bound, large ones compute-bound.">AI = 2n³ / 12n² = n / 6   FLOP/byte</Formula>
+
+For n = 4096 (a Llama-3 weight matrix), AI = **683** — deeply compute-bound. *This is the whole reason GPUs are built for matrix multiply.*
+
+<Callout type="insight" title="Size changes the regime">
+
+The same operation — matrix multiply — is memory-bound when small and compute-bound when large, because intensity scales with n. This is why batching (which enlarges the effective matrices) moves an LLM from memory-bound toward compute-bound, and why tiny operations should be **fused** rather than launched alone.
+
+</Callout>
+
+---
+
+## Drawing the Roofline
+
+Plot achieved performance (TFLOPS) against arithmetic intensity (FLOP/byte), both on log scales. The hardware imposes two ceilings.
+
+<RooflineDiagram caption="The memory roof (P = bandwidth × AI) rises with a slope of 1; the compute roof (P = peak TFLOPS) is flat. They meet at the ridge point. Left of it you're memory-bound; right of it, compute-bound." />
+
+- **Memory roof:** `Performance = Bandwidth × AI` — a slope-1 line. Below the ridge, bandwidth is your limit.
+- **Compute roof:** `Performance = Peak TFLOPS` — a flat ceiling. Above the ridge, compute is your limit.
+- **Ridge point:** where they cross — the arithmetic intensity at which a workload *just* saturates both.
+
+<Formula label="Ridge point" caption="The arithmetic intensity that separates the two regimes for a given device.">AI_ridge = Peak TFLOPS / Bandwidth</Formula>
+
+<StatGrid items={[
+  { value: "295", label: "H100 ridge", sub: "989 TFLOPS / 3.35 TB/s" },
+  { value: "156", label: "A100 ridge", sub: "312 TFLOPS / 2.0 TB/s" },
+  { value: "588", label: "Jetson Orin", sub: "40 TOPS / 0.068 TB/s" }
+]} caption="The ridge point in FLOP/byte. A workload must exceed this intensity to be compute-bound on that device — and faster compute pushes the ridge to the right." />
+
+---
+
+## Where Real AI Workloads Land
+
+Plot common operations by their intensity and the picture snaps into focus:
+
+<ArithmeticIntensitySpectrum caption="From vector copy (0.04) to a large matmul (683). Everything left of an H100's ridge (~295) is memory-bound; only large matmuls and big-batch forward passes clear it." />
+
+| Operation | AI (FLOP/byte) | Regime on H100 |
+|---|---|---|
+| Vector copy | 0.04 | Deeply memory-bound |
+| GELU activation | 0.5 | Memory-bound → fuse it |
+| Self-attention (N=128) | 12 | Memory-bound |
+| Self-attention (N=4096) | 60 | Memory-bound → Flash Attention |
+| Medium matmul (n=1024) | 171 | Near the ridge |
+| Large matmul (n=4096) | 683 | Compute-bound |
+| LLM forward pass, **batch=1** | ~10 | **Memory-bound** |
+| LLM forward pass, batch=128 | ~600 | Compute-bound |
+
+<Callout type="key" title="Batch=1 LLM inference is always memory-bound">
+
+A single-request forward pass sits around AI ≈ 10–20 — far below the H100's ridge of 295. That one fact explains the three biggest inference levers: **quantization** cuts bytes → raises AI → slides toward the compute roof; **continuous batching** merges requests → bigger matrices → higher AI → real Tensor-Core use; **KV-cache compression** shrinks attention's data movement → keeps you off the memory floor. Lessons 2.2 and 2.4 hinted at all three; the roofline is *why* they work.
+
+</Callout>
+
+---
+
+## Theoretical vs Empirical
+
+The roofline above uses datasheet peaks. Real silicon never reaches them: DRAM sustains ~85–90% of peak bandwidth (refresh, bank conflicts) and compute units ~70–85% (pipeline stalls, instruction overhead). So the **empirical** roofline sits below the theoretical one, and the real ridge shifts slightly left. You measure it directly — a few lines of PyTorch timing a big `copy_` for bandwidth and a big `torch.mm` for TFLOPS — which is exactly what you'll build in **Lab 2-A, the Roofline plotter.**
+
+<Callout type="why" title="The roofline is the through-line of Modules 5–10">
+
+Every later optimisation decision traces back to this plot: whether to quantize or batch (Modules 5–6), whether attention needs Flash Attention (Module 6), whether to reach for a GPU, FPGA, or CPU for a given intensity (Modules 5–8), and why low-concurrency serving has high cost-per-token (Module 10). Learn to place a workload on the roofline and you can predict its bottleneck before writing a line of kernel code.
+
+</Callout>
+
+---
+
+## Recap
+
+- **Arithmetic intensity** (FLOP/byte) measures compute done per byte moved — the one number that classifies a workload.
+- The **roofline** has a sloped **memory roof** (`BW × AI`) and a flat **compute roof** (`peak TFLOPS`) meeting at the **ridge point** (`peak / bandwidth`).
+- **Left of the ridge → memory-bound** (buy bandwidth / move less data); **right → compute-bound** (buy TOPS).
+- Matmul intensity scales as **n/6**, so size decides the regime — and **batch=1 LLM inference (AI ≈ 10) is always memory-bound**.
+- **Quantization, batching, and KV-cache compression** all work by raising arithmetic intensity toward the compute roof — the model behind nearly every optimisation in Modules 5–10.

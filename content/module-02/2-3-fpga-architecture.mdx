@@ -1,0 +1,101 @@
+---
+title: "FPGA Architecture"
+module: "02"
+moduleTitle: "Computer Architecture & Accelerators"
+lesson: "2.3"
+slug: "2-3-fpga-architecture"
+summary: "Programming the hardware itself instead of running software on it — LUTs as programmable truth tables, flip-flops, DSP multiply-accumulate blocks, BRAM, the routing fabric, the Zynq ARM+FPGA SoC, and when an FPGA beats a GPU or ASIC."
+prerequisites: ["2.2 GPU Architecture"]
+---
+
+## You Program the Hardware, Not the Software
+
+A CPU and a GPU both **execute software**: you write code, the silicon runs it. An **FPGA (Field-Programmable Gate Array)** is different at the most fundamental level — you configure the *hardware itself* into the exact circuit you want.
+
+To "program" an FPGA you write a hardware description, synthesise it into a netlist of gates, place-and-route it onto the chip's physical resources, and generate a **bitstream** that sets every configurable switch. Load the bitstream and the FPGA *becomes* your circuit. The result isn't a program running on hardware — it **is** the hardware, executing fully in parallel with no instruction fetch/decode overhead at all.
+
+<Callout type="insight" title="No instructions means no Von Neumann bottleneck">
+
+Recall Lesson 2.1: the CPU's defining constraint is fetching instructions one at a time over a shared bus. An FPGA has no instruction stream — the computation is wired directly into silicon. That is why a 220 MHz FPGA can beat a 4 GHz CPU on the right task: it does in *one* clock, in parallel, what the CPU spends thousands of sequential cycles fetching and decoding.
+
+</Callout>
+
+---
+
+## The LUT: A Programmable Truth Table
+
+In Module 1 you learned that a **multiplexer can implement any Boolean function** (a LUT is a MUX with a memory). The FPGA's basic logic element is exactly that. A **6-input LUT** is a 64-entry SRAM holding a truth table, addressed by a 64-to-1 MUX whose select lines are the six logic inputs.
+
+<LutDiagram caption="A 6-input LUT: 64 SRAM bits store a complete truth table; the six inputs drive a 64-to-1 MUX that selects the right output bit. Program the 64 bits and the LUT becomes any Boolean function of 6 variables." />
+
+Set those 64 bits however you like and the LUT computes **any** function of 6 variables. The PYNQ-Z2 board (our Module 8 target, a Zynq-7020) has **53,200 LUTs** — meaning tens of thousands of independent programmable functions, or one very large circuit wired from many LUTs together.
+
+---
+
+## The Other Building Blocks
+
+A LUT computes; real designs also need to *remember*, *multiply*, and *store* — so the fabric mixes in dedicated hard blocks.
+
+**Flip-flops (FF).** Each LUT is paired with **2 D flip-flops** — the same sequential element from Module 1, but now with programmable connections. They serve as pipeline registers, FSM state, and I/O buffers. The PYNQ-Z2 has 106,400 FFs.
+
+**DSP blocks** — hard-coded multiply-accumulators. LUTs *can* build a multiplier, but it costs ~100 LUTs for 18 bits; a DSP block does fixed-point multiply-accumulate in dedicated silicon at up to 740 MHz.
+
+<DspBlock caption="A DSP48 block: a pre-adder feeds a 27×18 multiplier, whose product feeds an accumulator with a feedback register — multiply-accumulate in one cycle, exactly the MAC unit from Module 1, hardened into silicon." />
+
+<StatGrid items={[
+  { value: "53,200", label: "LUTs" },
+  { value: "220", label: "DSP blocks" },
+  { value: "140", label: "BRAMs", sub: "560 KB on-chip" },
+  { value: "163 GOPS", label: "from a ₹14K board" }
+]} caption="The PYNQ-Z2 (Zynq-7020). 220 DSPs × 740 MHz ≈ 163 GOPS — comparable to a CPU SIMD unit, from a board the size of a coaster." />
+
+**BRAM (Block RAM)** — dedicated on-chip SRAM, 36 Kb (4 KB) per block, true dual-port, 1–2 cycle latency. For AI inference this is where neural-network weights live: a small network that fits in 560 KB runs **entirely on-chip**, with no DRAM access and latency in nanoseconds. Bigger networks stream weights from DDR — and then DDR bandwidth becomes the bottleneck.
+
+**Routing fabric** — the programmable mesh of wires and SRAM-controlled switches that connects everything. It consumes **60–70% of the chip area**, and all those switches are why an FPGA burns 10–50× more power than the equivalent fixed ASIC.
+
+<FpgaFabric caption="The FPGA is a sea of configurable logic blocks (LUT+FF) interleaved with columns of DSP multiply-accumulate blocks and BRAM memory, all stitched together by the programmable routing fabric." />
+
+---
+
+## Zynq: ARM and FPGA on One Chip
+
+The PYNQ-Z2 isn't a pure FPGA — it's a **Zynq SoC** that fuses a real CPU with programmable logic on one die:
+
+<ZynqSoC caption="The Zynq SoC pairs an ARM Cortex-A9 dual-core Processing System (PS) with the FPGA Programmable Logic (PL), joined by high-speed AXI buses. The ARM runs Python; the fabric is the accelerator." />
+
+- **PS (Processing System)** — an ARM Cortex-A9 dual-core CPU with its own caches, DDR controller, Ethernet, USB. It runs ordinary software (Python, in our case).
+- **PL (Programmable Logic)** — the FPGA fabric (LUTs, DSPs, BRAM).
+- **AXI interconnect** — the buses between them. The ARM streams data to the fabric via DMA, maps FPGA registers into its address space, and gets an interrupt when the accelerator finishes.
+
+This is exactly the Module 8 setup: **ARM runs Python that controls the FPGA**, sends an image to a neural-net accelerator built in the fabric, and reads back the classification. **HLS (High-Level Synthesis)** is what makes this approachable — it compiles C++ (with pragmas) into hardware automatically, inserting pipeline registers and unrolling loops, so you don't need deep RTL expertise.
+
+---
+
+## FPGA vs GPU vs ASIC
+
+Each engine wins a different battle. The decision comes down to volume, flexibility, latency, and power.
+
+| | FPGA | ASIC | GPU |
+|---|---|---|---|
+| **NRE cost** | Low (just the board) | $1M–$100M+ (mask set) | Low (just the card) |
+| **Flexibility** | Fully reprogrammable | Fixed forever | Software-programmable |
+| **Power** | Good (5–50 W) | Best (lowest) | Poor (72–700 W) |
+| **Latency** | Sub-µs, deterministic | Sub-µs, deterministic | Millisecond, with jitter |
+| **Dev time** | Weeks–months | 1–3 years | Hours (CUDA) |
+| **Best at** | Low-volume, latency-critical | High-volume edge inference | Training, large-batch inference |
+
+<Callout type="key" title="The FPGA's killer feature is determinism">
+
+A GPU shares the OS scheduler — it can be interrupted, context-switched, queued, giving millisecond latency *with jitter*. An FPGA accelerator has a **fixed pipeline depth**: the answer is always ready in exactly N clock cycles, every time. For autonomous driving, medical imaging, and financial trading, that **deterministic sub-millisecond latency** is worth more than raw throughput. Add power-constrained edge (5 W vs a 700 W cloud GPU) and the FPGA's niche is clear.
+
+</Callout>
+
+---
+
+## Recap
+
+- An FPGA is **configured into hardware**, not programmed with software — no instruction stream, so no Von Neumann bottleneck and full spatial parallelism.
+- The **LUT** is a MUX-plus-SRAM that becomes any 6-variable Boolean function; tens of thousands of them, plus **flip-flops**, form the logic fabric.
+- **DSP blocks** harden the Module 1 MAC into silicon (740 MHz), **BRAM** holds weights on-chip for nanosecond access, and the **routing fabric** — 60–70% of the area — wires it all up at a steep power cost.
+- **Zynq** puts an ARM CPU and the FPGA fabric on one chip, joined by **AXI**; the CPU runs Python while the fabric is the accelerator (Module 8), with **HLS** compiling C++ into hardware.
+- Against GPUs and ASICs, the FPGA wins on **deterministic low latency** and **power** for low-to-mid volume — not on peak throughput.

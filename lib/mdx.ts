@@ -38,6 +38,34 @@ import {
   DemuxDiagram,
   ComparatorDiagram,
   RippleCounterDiagram,
+  // 2.1 CPU
+  VonNeumannDiagram,
+  FetchExecuteCycle,
+  PipelineOverlap,
+  ForwardingDiagram,
+  SimdLanes,
+  // 2.2 GPU
+  CpuVsGpuCores,
+  SimtWarp,
+  GpuHierarchy,
+  TensorCoreTile,
+  WarpLatencyHiding,
+  // 2.3 FPGA
+  LutDiagram,
+  FpgaFabric,
+  DspBlock,
+  ZynqSoC,
+  // 2.4 Memory
+  MemoryPyramid,
+  MemoryWall,
+  CoalescingDiagram,
+  // 2.5 Roofline
+  RooflineDiagram,
+  ArithmeticIntensitySpectrum,
+  // 2.6 Parallelism
+  AmdahlCurve,
+  ParallelismTypes,
+  MicroBatchPipeline,
 } from "@/components/lesson/Diagrams";
 
 const components = {
@@ -75,6 +103,29 @@ const components = {
   DemuxDiagram,
   ComparatorDiagram,
   RippleCounterDiagram,
+  // Module 2
+  VonNeumannDiagram,
+  FetchExecuteCycle,
+  PipelineOverlap,
+  ForwardingDiagram,
+  SimdLanes,
+  CpuVsGpuCores,
+  SimtWarp,
+  GpuHierarchy,
+  TensorCoreTile,
+  WarpLatencyHiding,
+  LutDiagram,
+  FpgaFabric,
+  DspBlock,
+  ZynqSoC,
+  MemoryPyramid,
+  MemoryWall,
+  CoalescingDiagram,
+  RooflineDiagram,
+  ArithmeticIntensitySpectrum,
+  AmdahlCurve,
+  ParallelismTypes,
+  MicroBatchPipeline,
 };
 
 export async function renderMDX(source: string) {

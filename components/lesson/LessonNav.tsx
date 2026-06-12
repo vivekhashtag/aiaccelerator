@@ -45,7 +45,7 @@ function NavCard({
 export default function LessonNav({ prev, next }: LessonNavProps) {
   return (
     <nav
-      className="mt-16 pt-8 flex items-stretch justify-between gap-4"
+      className="lesson-nav mt-16 pt-8 flex items-stretch justify-between gap-4"
       style={{ borderTop: "1px solid var(--border)" }}
     >
       {prev ? <NavCard lesson={prev} direction="prev" /> : <div />}

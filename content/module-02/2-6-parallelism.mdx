@@ -1,0 +1,113 @@
+---
+title: "Parallelism & Pipelining in AI Systems"
+module: "02"
+moduleTitle: "Computer Architecture & Accelerators"
+lesson: "2.6"
+slug: "2-6-parallelism"
+summary: "Why parallelism is the only path forward after Dennard scaling ended — Amdahl's and Gustafson's laws, data/tensor/pipeline/expert parallelism, micro-batching, and the software pipelining (continuous batching, disaggregation, speculative decoding) that keeps modern inference fast."
+prerequisites: ["2.5 The Roofline Model"]
+---
+
+## Why Parallelism Is the Only Way Up
+
+Around 2005, **Dennard scaling** ended: shrinking transistors stopped getting proportionally more power-efficient. Moore's Law kept doubling transistor *count*, but you could no longer run them all at full speed without melting the chip — so part of every chip must stay powered down at any moment (**dark silicon**).
+
+If you can't make one core faster, you build **many** simpler cores and a **domain-specific accelerator** for the hot operation — exactly the CPU→GPU→FPGA progression of this module. But more cores only help if the *work* can be split. Two classic laws bound how much that helps.
+
+---
+
+## Amdahl's Law: The Ceiling
+
+If a fraction **f** of your program is parallelisable and **(1−f)** is stubbornly serial, the speedup from N processors is:
+
+<Formula label="Amdahl's law" caption="The serial fraction sets a hard ceiling no number of processors can break.">Speedup(N) = 1 / ((1 − f) + f/N)     →     1/(1 − f) as N → ∞</Formula>
+
+<AmdahlCurve caption="With 5% serial code (f = 0.95), speedup bends away from the ideal line and saturates near 20× — adding processors past that point buys almost nothing." />
+
+<StatGrid items={[
+  { value: "3.6×", label: "4 cores" },
+  { value: "11.6×", label: "16 cores" },
+  { value: "17.8×", label: "64 cores" },
+  { value: "20×", label: "∞ cores", sub: "the ceiling" }
+]} caption="Speedup for f = 0.95. Even infinite parallelism can't beat 1/(1−f) = 20×." />
+
+<Callout type="pitfall" title="The serial part dominates — so optimise it">
+
+If tokenisation takes 10 ms and GPU inference 50 ms, the serial fraction is 10/60 ≈ 17%, capping GPU speedup at ~6×. This is why **data-pipeline optimisation (Module 10) matters as much as model execution** — a fast GPU starved by serial CPU preprocessing is wasted silicon.
+
+</Callout>
+
+**Gustafson's law** offers the optimistic counterpoint: in practice we don't hold the problem fixed — we use more parallelism to solve *bigger* problems (longer context, larger batches) in the same time. Both laws are true; which applies depends on whether your problem size is fixed or growing.
+
+---
+
+## Parallelism Across GPUs
+
+When one GPU isn't enough — for memory or for speed — work is split across many. There are three foundational patterns, and large models combine all three.
+
+<ParallelismTypes caption="Data parallel replicates the model and splits the data; tensor parallel splits each weight matrix; pipeline parallel splits the layers into an assembly line. Real 70B+ training uses all three at once." />
+
+**Data parallelism** (training) — every GPU holds a *full copy* of the model and processes a different slice of the batch, then all GPUs **AllReduce** their gradients to stay in sync.
+
+<Callout type="why" title="AllReduce is the communication bottleneck">
+
+Each step AllReduces (parameters × bytes) of gradients. For Llama-3-8B in BF16 that's 16 GB. On 8 H100s over NVLink (900 GB/s): ~18 ms. Across 64 GPUs over InfiniBand (200 GB/s): ~80 ms. Communication overhead **grows with cluster scale** — which is exactly why NVLink and NVSwitch bandwidth (Lesson 2.2) determine how many GPUs you can usefully add.
+
+</Callout>
+
+**Tensor parallelism** (Megatron-style) — split *individual weight matrices* across GPUs; each computes part of the output and an AllReduce stitches them together. Splitting Llama-3-70B's d_model of 8192 across 8 GPUs gives 1024 columns each — and divides the activation memory by 8 too.
+
+**Pipeline parallelism** (GPipe-style) — split the *layers* across GPUs, so input flows GPU0 → GPU1 → GPU2 → GPU3 like an assembly line. The hazard is obvious: while GPU0 works, GPUs 1–3 sit idle. The fix is **micro-batching**:
+
+<MicroBatchPipeline caption="Splitting each batch into micro-batches lets the stages overlap: while GPU0 starts micro-batch 2, GPU1 runs micro-batch 1 and GPU2 runs micro-batch 0 — the same overlap idea as the CPU instruction pipeline from Lesson 2.1." />
+
+<Formula label="Pipeline efficiency" caption="More micro-batches shrink the startup/drain bubbles toward zero.">efficiency = M / (M + N − 1)   →   100% as M grows</Formula>
+
+Two more patterns round out the set: **sequence parallelism** splits very long sequences (100K+ tokens) across GPUs since attention is O(N²) in memory; and **expert parallelism** places different Mixture-of-Experts FFNs on different GPUs, routing each token (All-to-All) to the GPUs holding its chosen experts.
+
+---
+
+## Parallelism Within One Chip
+
+Not all parallelism is multi-GPU. A single CPU core, as Lesson 2.1 showed, finds **instruction-level parallelism**: superscalar issue (up to 6/cycle), out-of-order reordering (~400 instructions deep), and **SIMD vectorisation** (compilers auto-vectorise loops to AVX-512 / NEON). This is why **llama.cpp** reaches 10–30 tokens/s for 7B models on a plain CPU.
+
+---
+
+## Software Pipelining: Keeping the Hardware Busy
+
+Beyond hardware, inference *systems* pipeline at the request level to push utilisation up — the through-line into Module 7.
+
+**Continuous batching (vLLM / PagedAttention).** Static serving finishes one request before starting the next, leaving the GPU idle between them. Continuous batching groups in-flight requests of *different* lengths: as short requests finish, new ones join the batch, so the GPU stays busy. Utilisation jumps from 30–50% to 70–90% — a 2–4× throughput win.
+
+**Prefill–decode disaggregation.** Generation has two phases with opposite profiles: **prefill** (process the whole prompt at once) is compute-bound; **decode** (one token at a time) is memory-bound. Disaggregation runs each on hardware tuned for it — exactly the compute-vs-memory split the roofline (Lesson 2.5) predicts.
+
+**Speculative decoding.** A small, cheap *draft* model proposes K tokens; the large model **verifies all K in parallel** (one big matmul, which it's good at). At 80% draft accuracy, throughput rises ~3× for ~20% extra compute.
+
+<Callout type="key" title="Every software trick is an architecture idea in disguise">
+
+Continuous batching raises arithmetic intensity (Lesson 2.5). Disaggregation sorts work by the compute-vs-memory regime (2.4–2.5). Speculative decoding turns slow memory-bound decode into fast compute-bound verification. Micro-batching is the instruction pipeline (2.1) at the request level. You are not learning new tricks in Modules 7–10 — you are reapplying *this module's* architecture to bigger and bigger units of work.
+
+</Callout>
+
+---
+
+## The Module 2 Through-Line
+
+Every concept here feeds a concrete decision later:
+
+- **CPU architecture (2.1)** → why llama.cpp uses SIMD; why tokenisation must be parallelised; why OoO serves concurrent requests well.
+- **GPU architecture (2.2)** → why large batches engage Tensor Cores; why continuous batching and coalescing matter; why quantization doubles effective TOPS.
+- **FPGA architecture (2.3)** → why FPGAs give deterministic sub-ms latency; why DSP count caps neural-net throughput.
+- **Memory hierarchy (2.4)** → why quantization has outsized impact; why KV-cache management and Flash Attention dominate LLM engineering.
+- **Roofline (2.5)** → whether to optimise compute or memory for *any* workload; why batch=1 is always memory-bound.
+- **Parallelism (2.6)** → why Amdahl caps preprocessing speedup; why tensor parallelism is needed for 70B+; why continuous batching and speculative decoding work.
+
+---
+
+## Recap
+
+- After **Dennard scaling** ended, the only path up is **parallelism and specialisation** — many simple cores and domain-specific accelerators.
+- **Amdahl's law** caps speedup at **1/(1−f)**: the serial fraction (often CPU preprocessing) dominates, so optimising it matters as much as the model. **Gustafson** notes we usually grow the problem instead.
+- Multi-GPU work splits as **data** (replicate model, split data, AllReduce), **tensor** (split matrices), and **pipeline** (split layers + micro-batching), plus **sequence** and **expert** parallelism — combined for the largest models.
+- Within a chip, **ILP and SIMD** extract parallelism from one thread.
+- **Continuous batching, prefill-decode disaggregation, and speculative decoding** are software pipelining — each one a direct application of this module's architecture, carried forward into Modules 5–10.

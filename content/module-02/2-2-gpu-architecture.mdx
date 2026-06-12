@@ -1,0 +1,145 @@
+---
+title: "GPU Architecture"
+module: "02"
+moduleTitle: "Computer Architecture & Accelerators"
+lesson: "2.2"
+slug: "2-2-gpu-architecture"
+summary: "Why a GPU with thousands of simple cores crushes a CPU at matrix multiply — the throughput-vs-latency trade, SIMT warps and divergence, the thread/warp/block/grid hierarchy, the Streaming Multiprocessor, Tensor Cores, and latency hiding through massive parallelism."
+prerequisites: ["2.1 CPU Architecture Fundamentals"]
+---
+
+## A Different Question, A Different Machine
+
+The CPU you just studied is a **latency machine**: it does whatever you throw at it as fast as possible, spending most of its transistors on caches, branch predictors, and out-of-order logic to never stall. When NVIDIA built the first GPUs for graphics in the late 1990s, the workload was the opposite — millions of pixels, each needing the *same* operations, with no dependencies between them, and where total **throughput** mattered far more than the latency of any single pixel.
+
+The design response was radical: **throw away everything that helps latency, and maximise throughput instead.**
+
+<CpuVsGpuCores caption="A CPU spends its silicon on a few powerful, latency-optimised cores. A GPU spends the same silicon on thousands of small, in-order cores — trading per-task speed for raw parallel throughput." />
+
+<StatGrid items={[
+  { value: "1–24", label: "CPU cores", sub: "OoO, deep cache" },
+  { value: "16,384", label: "GPU cores", sub: "simple, in-order" },
+  { value: "2–3.5 TB/s", label: "GPU bandwidth", sub: "vs ~100 GB/s DDR5" }
+]} caption="The architectural split: few clever cores vs a sea of simple ones fed by enormous memory bandwidth." />
+
+<Callout type="why" title="This is why a GPU wins at matrix multiply">
+
+Matrix multiply is millions of independent multiply-adds — exactly the pixel-shading pattern. A CPU's cleverness (predicting branches, reordering instructions) buys nothing here; only the number of arithmetic units and the memory bandwidth feeding them matter. The GPU optimises for precisely that.
+
+</Callout>
+
+---
+
+## The Execution Hierarchy
+
+NVIDIA GPUs organise work as a strict nesting. Understanding it is the key to everything else.
+
+<GpuHierarchy caption="Threads are grouped into warps of 32; warps into blocks that share fast memory; blocks into the grid of one kernel launch. Blocks are independent, so more SMs simply run more blocks." />
+
+- **Thread** — the atomic unit. Runs one kernel program, has its own PC and registers, executes **in-order**. Thousands run at once.
+- **Warp** — exactly **32 threads**, scheduled together. This constant is fundamental to every NVIDIA GPU.
+- **Block** — up to **1024 threads** that run on one SM, can synchronise (`__syncthreads()`), and share fast **shared memory**.
+- **Grid** — all the blocks of one kernel launch. Because blocks are **independent**, the GPU schedules them onto whatever SMs are free — add more SMs and more blocks run in parallel. That is why CUDA programs scale across GPU generations without rewriting.
+
+---
+
+## SIMT: One Instruction, 32 Threads
+
+A CPU's SIMD packs 16 values into one *register*. A GPU does something subtly different: **SIMT (Single Instruction, Multiple Threads)**. All 32 threads in a warp execute the *same instruction* at the same time, each on its own data. One fetch and one decode serve all 32.
+
+<SimtWarp caption="A single warp instruction is broadcast to all 32 threads, each operating on its own data element — one fetch/decode amortised across 32 lanes of work." />
+
+This is wonderfully efficient — until the threads disagree.
+
+**Warp divergence.** If an `if/else` sends some threads down path A and others down path B, the warp cannot do both at once. It executes **both paths serially**, masking off the threads that shouldn't run each time. Effective throughput drops to 50% (or worse, for deeper nesting).
+
+<Callout type="pitfall" title="Divergent branches halve your throughput">
+
+Because the whole warp moves in lockstep, a single data-dependent branch inside it forces every path to run for every thread. This is why high-performance AI kernels are written to keep all 32 threads of a warp on the same control path — branch-light code isn't a style preference on a GPU, it's a hardware requirement.
+
+</Callout>
+
+---
+
+## The Streaming Multiprocessor
+
+The **SM** is the GPU's real "core" — the unit that actually contains arithmetic hardware. An A100 has 108 of them. Each SM is enormous compared to a CPU core:
+
+<StatGrid items={[
+  { value: "64", label: "FP32 CUDA cores" },
+  { value: "4", label: "Tensor Cores" },
+  { value: "256 KB", label: "register file", sub: "65,536 × 32-bit" },
+  { value: "192 KB", label: "shared mem / L1" }
+]} caption="One A100 SM. Note the register file: 256 KB — larger than many entire CPUs' L1 cache. That size is not waste; it is the latency-hiding mechanism." />
+
+### Hiding latency with many warps
+
+A CPU hides memory latency by reordering instructions (OoO). A GPU does it by **switching warps**. When a warp stalls waiting on memory (200–800 cycles), the SM's scheduler instantly hops to another **ready** warp — with *zero* overhead, because every warp's registers are already live in that giant register file. Nothing is saved or restored.
+
+<WarpLatencyHiding caption="When one warp stalls on a memory load, the scheduler switches to another ready warp. With enough warps resident, the arithmetic units never go idle — the long memory latency is completely hidden." />
+
+**Occupancy** is the fraction of the maximum warps that are actually resident on an SM. Higher occupancy means more warps to hide latency behind, so it's usually the first lever a CUDA developer pulls. It's capped by **registers per thread** and **shared memory per block** — use too much of either and fewer warps fit.
+
+<Callout type="insight" title="The whole GPU philosophy in one sentence">
+
+A CPU avoids stalls with intelligence (predict, reorder, cache). A GPU embraces stalls and covers them with *quantity* — keep so many warps in flight that there is always one ready to run. Intelligence vs brute parallelism: same problem, opposite answers.
+
+</Callout>
+
+---
+
+## Tensor Cores: The AI Compute Engine
+
+A plain CUDA core does one multiply-add per cycle. A **Tensor Core** does a whole **matrix multiply-accumulate on a tile** in one operation — the exact shape of every neural-network layer.
+
+<TensorCoreTile caption="A Tensor Core computes D = A × B + C on small matrix tiles in a single instruction — the fused multiply-accumulate of matrix math, in hardware." />
+
+<Formula label="Tensor Core operation" caption="A, B, C, D are matrix tiles — FP16 inputs, FP32 accumulation (Volta).">D = A × B + C</Formula>
+
+Each generation widened the formats and the tiles:
+
+<StatGrid items={[
+  { value: "V100", label: "FP16", sub: "4×4×4, 2017" },
+  { value: "A100", label: "+BF16/TF32/INT8", sub: "+ 2:4 sparsity" },
+  { value: "H100", label: "+FP8", sub: "Transformer Engine" },
+  { value: "B200", label: "+FP4", sub: "4.5 PFLOPS" }
+]} caption="Volta → Ampere → Hopper → Blackwell: each generation added a smaller numeric format, roughly doubling throughput. Module 6 explains why lower precision is nearly free for inference." />
+
+---
+
+## Why Bandwidth Beats TOPS for LLMs
+
+Here is the result that drives Modules 5–10. A 7B-parameter model in FP16 is **14 GB** of weights. To generate **one** token at batch size 1, the GPU must read *all* 14 GB from VRAM once.
+
+<Formula label="Memory-bandwidth ceiling" caption="At batch=1, you are limited by how fast you can read the weights — not by compute.">time/token = 14 GB / 3.35 TB/s ≈ 4.2 ms → ~238 tokens/s</Formula>
+
+<Callout type="key" title="At batch=1, an LLM is memory-bound — not compute-bound">
+
+No matter that the H100 can do 989 TFLOPS, a 7B model at batch=1 is capped near 238 tokens/second by **bandwidth alone**. You only reach the compute ceiling at large batch sizes, where the same weights serve many tokens. This single fact is why **quantization** (fewer bytes per weight) and **continuous batching** (more tokens per weight read) are the two biggest inference optimisations — and it's exactly what the Roofline model (Lesson 2.5) formalises.
+
+</Callout>
+
+### Coalesced memory access
+
+The GPU reads global memory in **128-byte transactions**. If the 32 threads of a warp read 32 contiguous 4-byte values, one transaction serves them all. If their reads are scattered, it can take up to 32 separate transactions — wasting 87.5% of the bandwidth.
+
+<CoalescingDiagram caption="Coalesced: adjacent threads read adjacent addresses, so one 128-byte transaction serves the whole warp. Uncoalesced: scattered reads fragment into many transactions, collapsing effective bandwidth." />
+
+This is why PyTorch tensors are **row-major (C-contiguous)** by default, and why a transpose is expensive — it breaks coalescing.
+
+---
+
+## Scaling Past One GPU
+
+A 70B model doesn't fit on one GPU, and training needs many. NVIDIA connects them with **NVLink** (direct GPU-to-GPU links, 900 GB/s on H100 — about 28× faster than PCIe) and **NVSwitch** (a crossbar letting all 8 GPUs in a node talk to each other at full NVLink bandwidth simultaneously). The communication bottleneck for training is **gradient synchronisation (AllReduce)** across all GPUs — and NVLink bandwidth sets how many GPUs you can use before communication dominates. We return to this in Lesson 2.6.
+
+---
+
+## Recap
+
+- A GPU is a **throughput machine**: thousands of simple in-order cores plus huge bandwidth, the mirror image of the CPU's few clever cores.
+- Work nests as **thread → warp (32) → block → grid**; independent blocks are what make CUDA scale across GPU sizes.
+- **SIMT** runs 32 threads on one instruction; **warp divergence** serialises branches, so AI kernels stay branch-light.
+- The **SM** hides memory latency not by reordering but by **switching among many resident warps** — which is why its register file is enormous and **occupancy** is the first tuning knob.
+- **Tensor Cores** do tiled matrix multiply-accumulate in hardware, gaining a smaller numeric format each generation.
+- At **batch=1 an LLM is memory-bound** (~238 tok/s on an H100 for 7B) — bandwidth, **coalescing**, quantization, and batching matter more than peak TOPS. Lesson 2.5 makes this precise.

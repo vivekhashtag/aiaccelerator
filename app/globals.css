@@ -56,3 +56,93 @@ html {
 .lesson-nav-card:hover span:last-child {
   color: var(--accent-light) !important;
 }
+
+/* ════════════════════════════════════════════════════════════
+   RESPONSIVE — phone & tablet
+   Desktop values live here as the class defaults; media queries
+   below override them. (Inline styles can't hold breakpoints, so
+   the structural layout props are driven from these classes.)
+   ════════════════════════════════════════════════════════════ */
+
+/* Home page — marketing surfaces */
+.home-section { padding: 80px 48px; }
+.home-nav     { padding: 0 48px; }
+.home-footer  { padding: 24px 48px; }
+.hero-pad     { padding: 64px 48px; }
+.hero-grid    { grid-template-columns: 1fr 1fr; gap: 48px; }
+.hero-stats   { gap: 32px; }
+.steps-grid   { grid-template-columns: repeat(3, 1fr); }
+.author-grid  { grid-template-columns: 1fr 1fr; gap: 64px; }
+
+/* Lesson — reading surfaces.
+   The reading column follows the sidebar: when the sidebar is collapsed
+   (body gets .sidebar-collapsed from LessonSidebar) the content reclaims
+   the full width instead of leaving a blank gutter. */
+.lesson-main    { padding-left: var(--sidebar-width); transition: padding-left 250ms ease; }
+.lesson-header  { padding: 0 40px; }
+.lesson-article { padding-left: 40px; padding-right: 40px; }
+
+body.sidebar-collapsed .lesson-main { padding-left: 0; }
+/* When collapsed, the top bar shifts right to clear the pinned hamburger. */
+body.sidebar-collapsed .lesson-header { padding-left: 58px; }
+
+/* Sidebar overlay backdrop (only ever visible on tablet/phone) */
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 8, 18, 0.6);
+  z-index: 35;
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+@media (min-width: 1025px) {
+  .sidebar-backdrop { display: none; }
+}
+
+/* Tablet — the sidebar stops pushing content and becomes an overlay */
+@media (max-width: 1024px) {
+  .lesson-main { padding-left: 0; }
+}
+
+/* Stack the wide marketing grids before they get cramped */
+@media (max-width: 880px) {
+  .hero-grid       { grid-template-columns: 1fr; gap: 32px; }
+  .steps-grid      { grid-template-columns: 1fr; gap: 36px; }
+  .steps-connector { display: none; }
+  .author-grid     { grid-template-columns: 1fr; gap: 40px; }
+}
+
+/* Phone — tighten padding, drop secondary chrome, shrink the title */
+@media (max-width: 768px) {
+  .home-section  { padding: 56px 20px; }
+  .home-nav      { padding: 0 18px; }
+  .home-footer   { padding: 20px 18px; }
+  .hero-pad      { padding: 40px 20px 28px; }
+  .home-nav-stat { display: none; }
+  .hide-sm       { display: none; }
+
+  .lesson-header  { padding: 0 16px 0 58px; }
+  .lesson-article { padding-left: 18px; padding-right: 18px; }
+  .lesson-title   { font-size: 1.95rem !important; line-height: 1.15 !important; }
+}
+
+/* Stack the prev/next lesson cards on narrow phones */
+@media (max-width: 600px) {
+  .lesson-nav { flex-direction: column; }
+  .lesson-nav > a {
+    max-width: 100% !important;
+    text-align: left !important;
+    align-items: flex-start !important;
+  }
+}
+
+/* On small screens, MDX tables scroll horizontally instead of blowing out
+   the reading column. Left at their normal full-width rendering on desktop. */
+@media (max-width: 880px) {
+  .prose table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}

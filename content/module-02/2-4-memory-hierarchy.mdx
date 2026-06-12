@@ -1,0 +1,116 @@
+---
+title: "Memory Hierarchy"
+module: "02"
+moduleTitle: "Computer Architecture & Accelerators"
+lesson: "2.4"
+slug: "2-4-memory-hierarchy"
+summary: "Why memory, not compute, is the real bottleneck — the memory wall, the register→L1→L2→L3→DRAM→SSD pyramid, cache lines and locality, miss types, the GPU vs CPU memory split, NUMA, and the bandwidth math that decides LLM inference."
+prerequisites: ["2.3 FPGA Architecture"]
+---
+
+## The Memory Wall
+
+For 25 years CPU clock speeds raced from 5 MHz to ~4 GHz — roughly 800×. DRAM, over a *longer* span, improved only about 640×, and most of that was bandwidth, not latency. The gap between how fast a CPU can compute and how fast memory can deliver data grew to over **200:1**.
+
+<MemoryWall caption="CPU performance climbed steeply while DRAM crawled. The widening gap — the 'memory wall' — means a modern processor spends most of its time waiting for data, not computing." />
+
+<Callout type="why" title="This is the single most important fact in AI hardware">
+
+A CPU rated at 4 TFLOPS often delivers only ~1 TFLOPS on real AI inference — because ~75% of cycles are spent *waiting for memory*, not computing. Every technique in this module — CPU out-of-order execution, GPU warp switching, caches, quantization, KV-cache management — exists to hide or shrink memory traffic. Compute is cheap; moving data is expensive.
+
+</Callout>
+
+The hierarchy is the answer to the wall: a ladder of memories, each level larger, slower, and cheaper than the one above, so that recently or frequently used data stays in the fast levels.
+
+---
+
+## The Pyramid
+
+<MemoryPyramid caption="The memory hierarchy: tiny and instantaneous at the top, vast and slow at the bottom. Each step down is roughly 10× slower but far larger and cheaper per bit." />
+
+- **Registers** (Lesson 2.1) — D flip-flops wired straight into the ALU. ~1 KB, **zero** extra latency, but ~$10,000/MB in silicon area.
+- **L1 cache** — 32–64 KB per core, 4–5 cycles, built from 6-transistor SRAM cells. Target hit rate >95%.
+- **L2 cache** — 256 KB–2 MB per core, 12–15 cycles; catches what spills out of L1.
+- **L3 / LLC** — 8–192 MB **shared** across cores, 40–80 cycles; the last stop before DRAM.
+- **DRAM** — 8 GB–12 TB, 70–100 ns (~300–400 cycles), built from cheap 1-transistor-1-capacitor cells.
+- **SSD / NVMe** — terabytes, ~100 µs — a thousand times slower than DRAM. Where checkpoints and datasets live.
+
+<StatGrid items={[
+  { value: "0 cyc", label: "registers" },
+  { value: "~5 cyc", label: "L1" },
+  { value: "~60 cyc", label: "L3" },
+  { value: "~350 cyc", label: "DRAM" }
+]} caption="Latencies in CPU cycles. A DRAM access costs as much as ~350 register accesses — which is exactly the latency OoO and warp-switching exist to hide." />
+
+---
+
+## Cache Lines and Locality
+
+Caches don't move single bytes — they move **cache lines** of 64 bytes (x86/ARM). Read one byte and the cache fetches the whole surrounding line, betting you'll soon want its neighbours. That bet is **spatial locality**, and it's why laying tensors out contiguously matters so much (the GPU calls the same idea *coalescing*, Lesson 2.2).
+
+Caches are also **set-associative** (typically 8-way): memory maps into sets, and each set holds several lines, reducing the conflicts a simple direct-mapped cache would suffer.
+
+When a needed line isn't present, you take a **miss** — and there are four kinds:
+
+| Miss type | Cause | Fix |
+|---|---|---|
+| **Compulsory** | First-ever access (cold) | Unavoidable; prefetch |
+| **Capacity** | Working set > cache | Bigger cache or smaller working set |
+| **Conflict** | Two hot addresses map to one set | Higher associativity, better layout |
+| **False sharing** | Two cores touch different data in the *same line* | Pad data to separate lines |
+
+<Callout type="pitfall" title="False sharing silently kills multi-threaded inference">
+
+Two threads on different cores writing to different variables that happen to share one 64-byte line will keep invalidating each other's cache — a miss on every write, even though neither thread's data actually changed. In multi-threaded AI serving this can quietly halve throughput; the fix is to pad hot per-thread data onto separate cache lines.
+
+</Callout>
+
+---
+
+## CPU vs GPU Memory: Same Idea, Opposite Tuning
+
+The GPU has its own hierarchy (Lesson 2.2), optimised very differently:
+
+| Level | GPU | CPU |
+|---|---|---|
+| Registers | 256 KB/SM | ~1.5 KB/core |
+| L1 / shared | 32–228 KB/SM, **manually managed** | 32–64 KB/core, automatic |
+| L2 | 40 MB chip-wide | 36–192 MB chip-wide |
+| Main memory | 16–192 GB HBM, **1–3.35 TB/s** | 8 TB–12 TB DDR5, 50–200 GB/s |
+
+The GPU trades **capacity for bandwidth**: far less memory than a server, but 15–30× the bandwidth, plus a giant manually-controlled register file and shared memory. The CPU trades the other way — huge automatically-managed caches over modest bandwidth.
+
+**NUMA (Non-Uniform Memory Access)** adds a twist on multi-socket servers: each CPU has its *own* DRAM. Reaching the *other* socket's memory costs ~2× the latency and 60–80% of the bandwidth. NUMA-unaware data loading can cut effective bandwidth by 40–60% — so GPU preprocessing should run on the CPU socket nearest that GPU's PCIe slot (a Module 10 concern).
+
+---
+
+## The Bandwidth Math That Decides Inference
+
+For LLM inference at batch=1, the relevant number isn't FLOPS — it's how fast you can read the weights:
+
+<Formula label="Weight-loading bandwidth" caption="To emit one token you must read every weight once.">required BW = (parameters × bytes per parameter) / target latency</Formula>
+
+For **Llama-3-8B in INT8** (1 byte/param) at a 100 ms target: `8 × 10⁹ × 1 / 0.1 = 80 GB/s`.
+
+<StatGrid items={[
+  { value: "80 GB/s", label: "needed", sub: "8B INT8, 100ms" },
+  { value: "3,350 GB/s", label: "H100", sub: "wildly over-provisioned" },
+  { value: "68 GB/s", label: "Jetson Orin", sub: "just misses" },
+  { value: "25 GB/s", label: "RPi 4", sub: "can't reach it" }
+]} caption="The same 8B model is trivial for an H100, borderline on a Jetson, and impossible on a Raspberry Pi — and TOPS never entered the calculation." />
+
+<Callout type="key" title="Reducing bytes beats reducing FLOPs">
+
+Because inference is memory-bound, shrinking the *data* moved helps far more than shrinking the *math*. That is the whole reason **quantization** (INT8, INT4) is so effective — it cuts bytes-per-weight without changing the number of operations. It's also why **KV-cache management** is the central engineering challenge of LLM serving (Module 7) and why **Flash Attention** (computing attention in tiles, never materialising the full N×N matrix) matters (Module 6). Lesson 2.5 turns this intuition into a precise model.
+
+</Callout>
+
+---
+
+## Recap
+
+- The **memory wall** — a 200:1 gap between CPU and DRAM speed — makes memory, not compute, the usual bottleneck; most cycles are spent *waiting*.
+- The hierarchy answers it with a pyramid: **registers → L1 → L2 → L3 → DRAM → SSD**, each ~10× slower and far larger than the last.
+- Caches move **64-byte lines** to exploit **spatial locality**; misses come in four flavours, and **false sharing** is the sneaky one for multi-threaded inference.
+- GPU memory trades **capacity for bandwidth** (and manual control); **NUMA** means *where* memory lives matters on multi-socket servers.
+- LLM inference is set by **(parameters × bytes) / latency** — so cutting **bytes** (quantization, KV-cache care) is the highest-leverage optimisation. The **Roofline model** makes this exact next.

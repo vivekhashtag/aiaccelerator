@@ -1,0 +1,173 @@
+---
+title: "CPU Architecture Fundamentals"
+module: "02"
+moduleTitle: "Computer Architecture & Accelerators"
+lesson: "2.1"
+slug: "2-1-cpu-architecture"
+summary: "How a general-purpose CPU turns a MAC unit into a working computer — the Von Neumann model, the fetch-decode-execute cycle, RISC vs CISC, the 5-stage pipeline, hazards and forwarding, out-of-order execution, superscalar, and SIMD."
+prerequisites: ["1.7 MAC Operations"]
+---
+
+## From One MAC Unit to a Whole Computer
+
+In Module 1 you built a **MAC unit** — multiplier, adder, accumulator, all clocked together. That is the *arithmetic* heart of every AI system. But a MAC unit on its own does nothing: something has to feed it instructions and data, decide what to compute next, and store the results. That something is a **processor architecture**.
+
+The central question of this whole module: *given that we know how to build one MAC unit, how do we arrange compute, memory, and communication so the hardware does trillions of operations per second?* The answer is never "make the transistors faster" — clock speeds hit a wall around 2004. The answer is **architecture**. We start with the most general machine: the CPU.
+
+---
+
+## The Von Neumann Architecture
+
+Nearly every general-purpose processor follows the model John von Neumann described in 1945: a single memory holds **both** the program's instructions and its data, reached over **one shared bus**.
+
+<VonNeumannDiagram caption="The CPU's control unit, ALU, and registers all reach a single main memory through one shared bus. Instructions and data live together — which is the model's great strength and its central weakness." />
+
+The genius of this design is the **stored program**: you change what the computer does by changing the *contents* of memory, not by rewiring it. The cost is the **Von Neumann bottleneck** — because instructions and data share one bus, the CPU can fetch only one item per cycle. As processors raced ahead of memory, this became the defining performance constraint of modern computing.
+
+<Callout type="why" title="Every idea in this module fights the bottleneck">
+
+Caches, pipelines, out-of-order execution, the GPU's thousands of cores, the FPGA's on-chip BRAM, the Roofline model — every architectural innovation ahead is, directly or indirectly, an attempt to work around the single-bus bottleneck between compute and memory.
+
+</Callout>
+
+---
+
+## The Fetch–Decode–Execute Cycle
+
+Reduced to its essence, a CPU repeats one loop forever:
+
+<FetchExecuteCycle caption="The Program Counter points at the next instruction; the CPU fetches it, decodes the opcode, executes in the ALU, writes the result back, and increments the PC — then repeats." />
+
+- **Fetch** — the **Program Counter (PC)** holds the address of the next instruction. The CPU sends it over the address bus, receives the instruction, loads it into the **Instruction Register**, and increments the PC.
+- **Decode** — the control unit reads the **opcode**: which operation (ADD, LOAD, BRANCH…), which registers are sources, which is the destination. It raises the control signals that configure the ALU and register file.
+- **Execute** — the ALU computes (arithmetic), or an effective address is formed (memory ops), or a branch condition is evaluated.
+- **Write-back** — the result lands in the destination register, or memory, or the PC.
+
+In the simplest design, one instruction finishes per cycle. In a modern out-of-order core, thousands are in flight at once — but they are all still doing *this*.
+
+### The register file: the CPU's working memory
+
+The **register file** is the CPU's fastest storage — the handful of values it is actively working with. It is built from the same **D flip-flops** you studied in Module 1, with extra read/write ports for simultaneous access.
+
+<StatGrid items={[
+  { value: "32", label: "registers", sub: "RISC-V, x0–x31" },
+  { value: "64-bit", label: "each wide" },
+  { value: "~15K", label: "transistors", sub: "whole register file" }
+]} caption="RISC-V's register file: 32 × 64-bit = 2048 flip-flops, plus decoders and bus drivers. x0 is hardwired to zero." />
+
+---
+
+## ISA: The Hardware–Software Contract
+
+The **Instruction Set Architecture** is the promise a processor makes to software — the exact set of instructions it will execute. Two philosophies have competed for decades.
+
+**CISC (x86-64)** — *complex* instructions that do a lot in one step. Variable length (1–15 bytes), hundreds of variants, instructions that read and write memory directly. Internally, modern x86 chips translate these into simpler **micro-ops** before executing. Strength: decades of compiler optimisation and backward compatibility to 1978. Powers nearly every data-centre server and laptop.
+
+**RISC (ARM, RISC-V)** — a *small* set of simple instructions, each ideally one cycle. **Load-store**: arithmetic touches only registers; memory is reached only by explicit LOAD/STORE. Fixed 32-bit width makes decoding cheap.
+
+<Formula label="Same operation, two philosophies" caption="RISC spells out load → add → store; CISC folds the load into the add.">RISC: ld · ld · add · sd          CISC: mov · add [mem] · mov</Formula>
+
+<Callout type="insight" title="Why RISC is winning on performance-per-watt">
+
+Simpler decode logic leaves more transistor budget for execution units, caches, and out-of-order machinery — which is why Apple's M-series and ARM cores have overtaken x86 on performance-per-watt. The open **RISC-V** ISA carries no licensing fee, so AI-accelerator startups (SiFive, T-Head, and many others) build custom chips around it with their own vector and matrix extensions.
+
+</Callout>
+
+---
+
+## Pipelining: The Assembly Line
+
+The single most important throughput technique is **pipelining** — the same idea as a factory assembly line. The classic RISC pipeline has five stages:
+
+**IF** (fetch) → **ID** (decode + read registers) → **EX** (ALU) → **ME** (memory access) → **WB** (write-back).
+
+Without pipelining each instruction takes all 5 cycles before the next can begin. With pipelining, as soon as instruction 1 leaves IF, instruction 2 enters it:
+
+<PipelineOverlap caption="Five instructions overlapping in the five stages. Once the pipeline is full (cycle 5), one instruction completes every cycle — an ideal CPI (Cycles Per Instruction) of 1.0." />
+
+---
+
+## Pipeline Hazards: When the Line Stalls
+
+Overlap is not free — sometimes an instruction needs something that isn't ready yet.
+
+**Data hazard (RAW — Read After Write).** Instruction 2 needs a value instruction 1 hasn't finished computing. Naively, instruction 2 would read the *old* value from the register file. The fix is **forwarding (bypassing)**: wire the result straight from one stage's output back into the next instruction's EX input, without waiting for write-back.
+
+<ForwardingDiagram caption="Instruction 1's ALU result is forwarded directly from its EX stage into instruction 2's EX stage — eliminating the stall that waiting for write-back would cause." />
+
+**Control hazard (branches).** When the CPU hits a branch, it doesn't yet know which instruction comes next, so it has speculatively fetched the wrong ones. If the branch is taken, those must be flushed — a **branch penalty** of ~2 cycles. The answer is **branch prediction**: guess the outcome and fetch from the predicted target.
+
+<StatGrid items={[
+  { value: "1-bit", label: "remember last", sub: "oscillates on loops" },
+  { value: "2-bit", label: "saturating counter", sub: "ignores one-off misses" },
+  { value: "TAGE", label: "state of the art", sub: ">99% accurate" }
+]} caption="Branch predictors grew from one bit of history to tagged geometric-history-length predictors. Modern CPUs predict >99% of branches correctly." />
+
+**Structural hazard.** Two instructions want the same hardware at once. The fix is duplication — multiple ALUs, split instruction/data caches.
+
+<Callout type="pitfall" title="A mispredicted branch is expensive">
+
+Even at 99% accuracy, the rare misprediction throws away every instruction fetched after the branch — a deep pipeline can lose 15–20 cycles. This is exactly why GPUs avoid data-dependent branching inside a warp (next lesson) and why AI kernels are written to be branch-light.
+
+</Callout>
+
+---
+
+## Out-of-Order Execution
+
+A simple pipeline runs instructions in program order: if instruction 3 is a slow memory load, 4 and 5 wait even if they are independent. **Out-of-order (OoO)** execution lets the processor run independent instructions early, filling the bubbles.
+
+The basis is **Tomasulo's algorithm**. Its key trick is **register renaming**: architectural registers (x0–x31) are mapped onto a much larger pool of *physical* registers (192 in Intel Raptor Lake). This dissolves *false* dependencies — two instructions that merely reuse the name `x10` no longer have to wait for each other. Each execution unit has a **reservation station** where instructions wait until their operands are ready, then issue by **readiness, not program order**.
+
+<Callout type="why" title="OoO is how a CPU hides memory latency">
+
+When a LOAD misses the cache, the CPU doesn't freeze — it executes hundreds of independent instructions while the data is fetched (300–400 cycles away). This latency-hiding is why a CPU sustains more performance than its raw pipeline suggests, and why it can serve many concurrent requests efficiently. The GPU solves the *same* problem a completely different way (next lesson).
+
+</Callout>
+
+---
+
+## Superscalar and SIMD: Two Kinds of Width
+
+**Superscalar** — fetch, decode, and issue *several* instructions per cycle. Intel Raptor Lake is **6-wide**. A **Reorder Buffer (ROB)** tracks every in-flight instruction so results still *commit* in program order, even though they executed out of order. Real code sustains 3–4 instructions per cycle, limited by true dependencies and memory.
+
+**SIMD (Single Instruction, Multiple Data)** — one instruction operates on a whole vector of values at once.
+
+<SimdLanes caption="A scalar add handles one number per instruction; one AVX-512 instruction adds a full vector of lanes in a single step." />
+
+<Formula label="AVX-512 (512-bit registers)" caption="One instruction, many elements — and the lane count doubles as precision halves.">16 × FP32   ·   32 × FP16   ·   64 × INT8</Formula>
+
+<Callout type="key" title="SIMD is what makes CPU inference practical">
+
+PyTorch CPU inference, Intel OpenVINO, ONNX Runtime, and llama.cpp all lean heavily on SIMD — AVX-512 on x86, NEON on ARM — to reach 10–30 tokens/second for 7B models on a CPU with no GPU at all. On edge devices, SIMD is the difference between "usable" and "hopeless."
+
+</Callout>
+
+---
+
+## The CPU Performance Equation
+
+Everything above rolls up into one equation:
+
+<Formula label="CPU performance" caption="Three knobs — and you cannot turn one without disturbing the others.">Time = Instruction Count × CPI × (1 / frequency)</Formula>
+
+- **Instruction Count** — set by the program and the ISA (RISC needs more instructions than CISC).
+- **CPI (Cycles Per Instruction)** — set by the microarchitecture: pipeline depth, OoO, branch-predictor quality, cache behaviour.
+- **Clock period (1/f)** — set by the process technology and the critical-path length (Module 1, Topic 1.5).
+
+<Callout type="insight" title="There is no free lunch">
+
+The three terms fight each other. A deeper pipeline lowers CPI on cache hits but raises the misprediction penalty. CISC cuts instruction count but raises CPI per instruction. A higher clock demands a shorter critical path, which means simpler logic. This is *why* CPU performance plateaued — and why GPUs and FPGAs exist: they make a different set of these trade-offs, tuned for different workloads. We meet the first of them next.
+
+</Callout>
+
+---
+
+## Recap
+
+- The **Von Neumann** model stores instructions and data in one memory on one bus — powerful, but the source of the bottleneck every later idea fights.
+- The CPU repeats **fetch → decode → execute → write-back**, working out of a tiny, blazing-fast **register file** of D flip-flops.
+- **RISC vs CISC** is a decode-complexity trade; RISC's simplicity is winning on performance-per-watt, and open **RISC-V** is fueling custom AI silicon.
+- **Pipelining** overlaps instructions toward CPI ≈ 1; **hazards** (data, control, structural) are tamed by **forwarding**, **branch prediction**, and duplicated units.
+- **Out-of-order**, **superscalar**, and **SIMD** extract parallelism *within* one core — OoO hides latency, superscalar issues wide, SIMD computes wide. SIMD is what makes CPU AI inference real.
+- It all reduces to **Time = IC × CPI × (1/f)** — three coupled knobs, which is exactly why specialised accelerators exist.

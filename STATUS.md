@@ -1,6 +1,24 @@
 # Project Status
 
-**Last updated:** 2026-06-15 — Module 3 DL-depth enrichment done, `Diagrams.tsx` split per-module into `components/lesson/diagrams/`, docs updated, two missing-React-key bugs fixed. **Module 3 + Harvard fix + diagrams reorg committed & pushed (`a5ee03b`) → Vercel auto-deploying.** (Light theme + mobile responsive shipped earlier in `74863d9`.)
+**Last updated:** 2026-06-15 — **Module 4 (Generative AI, 9 lessons + 25 SVG diagrams) built**; Module 3 DL-depth enrichment done; `Diagrams.tsx` split per-module into `components/lesson/diagrams/`. Module 3 + reorg pushed (`a5ee03b`); **Module 4 being committed & pushed this session** → Vercel auto-deploying.
+
+---
+
+## 🤖 Module 4 built (2026-06-15): Generative AI & LLM Fundamentals
+
+**9 lessons** under `content/module-04/`, from the updated `Module 04 Gen AI.pdf` (9 topics — richer than `curriculum.md`'s old 4.1–4.7). Same image-rich pattern, light theme, module accent = **Rose**. `next build` green — **30 lessons total** (7+6+8+9), 33 static pages. **+25 new SVG diagrams** in `diagrams/module-04.tsx` (registered in `lib/mdx.ts` + barrel).
+
+- `4-1-autoencoders` — bottleneck compression, self-supervised, sparse/denoising/contractive/conv variants, anomaly detection, **sparse-AE interpretability**.
+- `4-2-variational-autoencoders` — probabilistic latent, ELBO + KL, **reparameterisation trick**, sampling, blur-vs-sharp.
+- `4-3-gans` — adversarial minimax, alternating loop, **mode collapse** + failure modes, DCGAN/WGAN-GP/StyleGAN.
+- `4-4-transformers-attention` — scaled dot-product (quadratic), multi-head, **causal mask**, **full transformer block (FFN, residual stream, pre-norm, stacking ×N)** ← *depth added per user request*, three families, RMSNorm/RoPE/GQA/SwiGLU, BPE.
+- `4-5-pretraining` — scale & cost, CLM/MLM/span, emergent + in-context learning, scaling hypothesis, continual pretraining.
+- `4-6-fine-tuning` — hierarchy, instruction tuning, full-FT 138 GB, **LoRA**, **QLoRA (NF4)**, RLHF vs DPO.
+- `4-7-unsloth` — fused Triton kernels, manual LoRA backprop, fused RoPE, benchmarks (2.6×), base-model choice, dataset formats.
+- `4-8-rag` — 5-stage pipeline, chunking, embeddings + vector DBs, **hybrid retrieval + rerank**, citation-aware gen, DVC, **RAGAS**.
+- `4-9-prompting` — zero/few-shot, **CoT**, self-consistency, structured/JSON output, system prompts.
+
+> **Module 5 preview:** Inference Systems Fundamentals — take fine-tuned models from notebook to production (next module to build). PDF not yet on disk; check `curriculum.md` Module 5.
 
 ---
 
@@ -151,7 +169,8 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 - [x] DL-depth enrichment to 3.3/3.4/3.5 ✓ 2026-06-15 (see Module 3 section)
 - [x] Reorganized diagrams — split `Diagrams.tsx` (3,176 lines) into `components/lesson/diagrams/` (`_shared` + `module-01/02/03` + `index` barrel) ✓ 2026-06-15
 - [x] Updated `docs/curriculum.md` (8-lesson Module 3) + `CLAUDE.md` (§4 phase marker, §10 status, light theme, diagrams reorg) ✓ 2026-06-15
-- [ ] **▶ NEXT:** March through Modules 4–10 (prose + SVG diagrams, same pattern) — Module 4 source `Module 04 Gen AI.pdf` on disk (9 topics)
+- [x] Module 4 — Generative AI & LLM Fundamentals (9 lessons, 25 SVG diagrams) ✓ built 2026-06-15 (transformer-block depth added per user request)
+- [ ] **▶ NEXT:** March through Modules 5–10 (prose + SVG diagrams, same pattern) — **Module 5 = Inference Systems Fundamentals**; its PDF is not yet on disk (use `curriculum.md` Module 5, or ask the user for the source PDF). Parse PDFs with `pdftotext -layout` (poppler); the built-in PDF reader needs `pdftoppm`, which isn't installed.
 
 > The old "Module 1 interactive backlog" (CMOS NAND, live truth tables, bit-flipper, MAC
 > animation, systolic array, etc.) is **shelved** as of the 2026-06-11 direction change. Each is
@@ -167,7 +186,7 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 | Route | `app/modules/[module]/[lesson]/page.tsx` |
 | Lesson shell | `components/lesson/LessonLayout.tsx` |
 | Sidebar | `components/lesson/LessonSidebar.tsx` |
-| **SVG diagrams** | `components/lesson/diagrams/` (81 figures — 29 Module 1 + 22 Module 2 + 30 Module 3 — the course "images"). Split per module: `_shared.tsx` (palette `C`, light-theme + `DiagramFrame`), `module-01/02/03.tsx`, `index.ts` barrel. |
+| **SVG diagrams** | `components/lesson/diagrams/` (106 figures — 29 M1 + 22 M2 + 30 M3 + 25 M4 — the course "images"). Split per module: `_shared.tsx` (palette `C`, light-theme + `DiagramFrame`), `module-01/02/03/04.tsx`, `index.ts` barrel. |
 | MDX content blocks | `components/lesson/LessonBlocks.tsx` (Callout / Formula / Figure / StatGrid) |
 | Prev/next nav | `components/lesson/LessonNav.tsx` |
 | Quiz (unregistered, kept for later) | `components/lesson/QuizBlock.tsx` |

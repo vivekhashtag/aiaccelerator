@@ -1,0 +1,77 @@
+---
+title: "Pre-training: How Foundation Models Are Built"
+module: "04"
+moduleTitle: "Generative AI & LLM Fundamentals"
+lesson: "4.5"
+slug: "4-5-pretraining"
+summary: "The scale, objectives, and emergent magic of foundation models — what CLM/MLM/span-corruption actually optimise, why pre-training costs millions, the capabilities that emerge unbidden (world knowledge, reasoning, in-context learning), the scaling hypothesis, and continual pre-training as the cheaper middle path."
+prerequisites: ["4.4 Transformer Architecture & Attention"]
+---
+
+## The Scale of Modern Pre-training
+
+Pre-training a frontier model is among the most compute-intensive things humanity does. The numbers explain why almost nobody trains from scratch:
+
+<StatGrid items={[
+  { value: "LLaMA-3-8B", label: "15T tokens", sub: "~1.3×10²⁴ FLOPs · ~$2M" },
+  { value: "LLaMA-3-70B", label: "15T tokens", sub: "~1.1×10²⁵ FLOPs · ~$20M" },
+  { value: "GPT-4 (est.)", label: "~1.8T params", sub: "~2×10²⁵ FLOPs · ~$100M" },
+  { value: "Gemini Ultra", label: "undisclosed", sub: "~$200M+" }
+]} caption="This is why fine-tuning a pretrained model (Lessons 4.6–4.7) — not pre-training one — is the practical path for essentially everyone." />
+
+The takeaway for an engineer is strategic, not just trivia: the base model is a sunk, shared investment of tens of millions of dollars. Your job is to **adapt** it cheaply, which is the entire next two lessons.
+
+---
+
+## The Pre-training Objectives
+
+All three families learn by predicting hidden tokens — they differ in *which* tokens and *what's visible*:
+
+<PretrainingObjectives caption="CLM (decoder): predict the next token, seeing only the past. MLM (encoder): mask 15% and predict them from both sides. Span corruption (T5): blank out whole spans and regenerate them." />
+
+- **Causal LM (CLM)** — decoder-only. Predict the next token from all previous ones; the sequence is shifted by one, so a single forward pass trains on `N−1` predictions at once. Uses **teacher forcing**: the ground-truth token (not the model's own guess) feeds the next step — stable to train, but creates a train/test gap (exposure bias).
+- **Masked LM (MLM)** — encoder-only (BERT). Replace 15% of tokens and predict the originals from *both* directions; loss only on masked positions. BERT's 15% splits 80% `[MASK]` / 10% random / 10% unchanged, so the model can't simply detect mask tokens.
+- **Span corruption** — encoder-decoder (T5). Blank out consecutive spans with sentinel tokens and regenerate them — more efficient than single-token MLM because each mask predicts several tokens.
+
+<Formula label="The CLM objective" caption="Maximum likelihood: maximise the probability the model assigns to each true next token.">L_CLM = − Σ log P(xₜ | x₁ … xₜ₋₁; θ)</Formula>
+
+---
+
+## What Pre-training Actually Learns
+
+Here's the surprising part: a model trained *only* to predict the next token acquires abilities nobody explicitly programmed.
+
+<Callout type="insight" title="Next-token prediction is a Trojan horse for general capability">
+
+To predict the next token well across the whole internet, a model is forced to internalise far more than grammar. It answers "the capital of France is ___" with "Paris" not because it was taught the fact, but because that completion is overwhelmingly likely in its training data — **world knowledge** falls out of compression. The same pressure yields **linguistic structure** (syntax, pragmatics, discourse) and, at sufficient scale, **reasoning patterns** (chain-of-thought, arithmetic, analogy). Capability is an emergent side-effect of a simple objective applied at enormous scale.
+
+</Callout>
+
+The most striking emergent ability is **in-context learning**: shown a few examples *in the prompt* — `"12, 24, 36, 4?"` — a large model infers the rule and continues, with **no weight update at all**. GPT-3 made this famous, and it's the foundation of all prompting (Lesson 4.9).
+
+<ScalingLaws caption="Test loss falls predictably — log-linear — as model size, data, and compute grow. This empirical regularity, not any single breakthrough, is the foundation of the frontier-AI industry." />
+
+The **scaling hypothesis** is the empirical bet underneath all of this: performance improves *predictably* with model size, data volume, and compute. That's why the industry pours capital into scale — the curve has, so far, kept paying out.
+
+---
+
+## Continual Pre-training: The Cheaper Middle Path
+
+Between full pre-training and task fine-tuning sits a useful option: take a finished base model and **continue** its pre-training objective on domain-specific text at much smaller scale.
+
+<Callout type="key" title="When your domain speaks a different language">
+
+Reach for continual pre-training when your domain's *vocabulary and style* differ sharply from the base model's training mix — clinical notes, legal contracts, a niche programming language, or an under-represented human language. You keep the base model's world knowledge and language ability and only shift its distribution toward your domain. It's far cheaper than training from scratch, and it pairs naturally with the instruction tuning and LoRA we cover next: continual pre-training teaches the model *what your domain talks about*, fine-tuning teaches it *how to behave*.
+
+</Callout>
+
+---
+
+## Recap
+
+- Pre-training a frontier LLM costs **millions to hundreds of millions** of dollars — so the practical skill is **adapting** a shared base model, not building one.
+- The three objectives — **CLM** (next token, decoder), **MLM** (masked tokens, encoder), **span corruption** (T5) — all learn by predicting hidden tokens, differing in what's visible.
+- Next-token prediction at scale yields **emergent** world knowledge, reasoning, and especially **in-context learning** (learning from prompt examples with no weight update).
+- The **scaling hypothesis** — predictable, log-linear gains with size/data/compute — underwrites the whole industry; **continual pre-training** is the cheap way to shift a base model into a new domain.
+
+Next: the practical heart of the module — **fine-tuning**, from prompt engineering up to LoRA and QLoRA.

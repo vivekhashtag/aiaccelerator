@@ -104,6 +104,40 @@ import {
   TTSPipeline,
   FilterResponse,
   MelFilterbank,
+  // 4.1 Autoencoders
+  AutoencoderBottleneck,
+  DenoisingAutoencoder,
+  // 4.2 VAEs
+  VAELatentSpace,
+  ReparameterizationTrick,
+  // 4.3 GANs
+  GANArchitecture,
+  ModeCollapse,
+  // 4.4 Transformers & Attention
+  ScaledDotProductAttention,
+  MultiHeadAttention,
+  TransformerBlock,
+  TransformerFamilies,
+  GroupedQueryAttention,
+  BPEMerges,
+  // 4.5 Pre-training
+  PretrainingObjectives,
+  ScalingLaws,
+  // 4.6 Fine-tuning
+  FineTuningHierarchy,
+  LoRADecomposition,
+  QLoRAMemoryStack,
+  // 4.7 Unsloth
+  UnslothKernelFusion,
+  UnslothSpeedup,
+  // 4.8 RAG
+  RAGPipeline,
+  ChunkingStrategies,
+  HybridRetrieval,
+  RAGASMetrics,
+  // 4.9 Prompting
+  PromptingLadder,
+  SelfConsistency,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -195,6 +229,31 @@ const components = {
   TTSPipeline,
   FilterResponse,
   MelFilterbank,
+  AutoencoderBottleneck,
+  DenoisingAutoencoder,
+  VAELatentSpace,
+  ReparameterizationTrick,
+  GANArchitecture,
+  ModeCollapse,
+  ScaledDotProductAttention,
+  MultiHeadAttention,
+  TransformerBlock,
+  TransformerFamilies,
+  GroupedQueryAttention,
+  BPEMerges,
+  PretrainingObjectives,
+  ScalingLaws,
+  FineTuningHierarchy,
+  LoRADecomposition,
+  QLoRAMemoryStack,
+  UnslothKernelFusion,
+  UnslothSpeedup,
+  RAGPipeline,
+  ChunkingStrategies,
+  HybridRetrieval,
+  RAGASMetrics,
+  PromptingLadder,
+  SelfConsistency,
 };
 
 export async function renderMDX(source: string) {

@@ -1,0 +1,82 @@
+---
+title: "Unsloth: Practical Fast Fine-Tuning"
+module: "04"
+moduleTitle: "Generative AI & LLM Fundamentals"
+lesson: "4.7"
+slug: "4-7-unsloth"
+summary: "The library that makes QLoRA practical — how fused Triton kernels, manual LoRA backprop, fused RoPE, and smart checkpointing deliver 2–5× speed and ~50% less memory with zero accuracy loss, plus how to choose a base model and format your dataset (Instruction / ChatML / ShareGPT)."
+prerequisites: ["4.6 Fine-Tuning: Adapting Foundation Models"]
+---
+
+## What Unsloth Is
+
+QLoRA (Lesson 4.6) makes fine-tuning *possible* on small GPUs; **Unsloth** (Daniel Han et al., 2023) makes it *fast*. It's an open-source library that runs QLoRA fine-tuning **2–5× faster** using **60–70% less GPU memory** than the standard HuggingFace + PEFT + BitsAndBytes stack — with **no accuracy loss**. It's not a new algorithm; it's the same QLoRA, implemented far more carefully at the kernel level.
+
+This lesson is where Modules 1–2 pay off: the speedups are pure **systems engineering** — kernel fusion, memory-traffic reduction, skipping dead computation. The hardware lessons become a tangible 2.6× on your own training run.
+
+---
+
+## How Unsloth Gets Its Speedup
+
+<UnslothKernelFusion caption="The standard stack launches a separate CUDA kernel for Q, K, V, the matmul, and softmax — each a launch with VRAM round-trips. Unsloth fuses them into one kernel that keeps intermediates in on-chip SRAM. Same idea as Flash Attention (Module 6), specialised for fine-tuning." />
+
+Four optimisations stack up:
+
+- **Fused Triton attention kernels.** The vanilla implementation fires many small CUDA kernels (one each for Q, K, V, the matmul, softmax…), each paying launch overhead and writing intermediates to slow VRAM. Unsloth fuses them into a **single kernel** that keeps intermediates in fast on-chip **SRAM** (Module 2's memory hierarchy in action) — the same insight as Flash Attention.
+- **Manual LoRA backprop.** PyTorch autograd computes gradients through *every* op, including the frozen base. Unsloth hand-writes the LoRA backward pass, **skipping all frozen parameters** — no gradient memory and no backward time for weights that never change.
+- **Fused RoPE.** Rotary-embedding computation is memory-bandwidth bound (read positions, compute sin/cos, rotate); Unsloth folds it into the attention kernel, killing the extra memory round-trips.
+- **Smart gradient checkpointing.** It checkpoints only the expensive FFN layers (not attention, already efficient via the fused kernel) — most of the memory saving with less recomputation.
+
+<UnslothSpeedup caption="Fine-tuning LLaMA-3-8B (r=16, seq=2048, Alpaca, 1 epoch) on one A100 80GB: standard QLoRA takes 4.2 hrs at 16.4 GB; Unsloth takes 1.6 hrs at 7.8 GB — 2.6× faster, 52% less memory, identical accuracy." />
+
+---
+
+## Using Unsloth
+
+The API wraps the model so the optimisations are transparent — then you train with the standard HuggingFace `SFTTrainer` (or a plain PyTorch loop):
+
+<Formula label="Quick start" caption="FastLanguageModel loads the 4-bit base; get_peft_model attaches the LoRA adapters.">FastLanguageModel.from_pretrained(load_in_4bit=True) → get_peft_model(r=16, target_modules=[…]) → SFTTrainer</Formula>
+
+The settings that matter: `r` (rank, Lesson 4.6), `target_modules` (apply to all linear layers — `q,k,v,o,gate,up,down` — for best quality), `lora_alpha` (the `α` scaling), `lora_dropout = 0` (optimal per Unsloth), and `use_gradient_checkpointing = "unsloth"` for the smart variant. It supports the major open families — **LLaMA 3.1/3.2/3.3, Mistral, Qwen-2.5, Phi-4, Gemma 2, DeepSeek-R1 distills**.
+
+---
+
+## Choosing a Base Model
+
+Bigger isn't automatically better — match the model to your GPU and iteration speed:
+
+<StatGrid items={[
+  { value: "Qwen-2.5-0.5B", label: "~1.5 GB QLoRA", sub: "edge, experiments" },
+  { value: "LLaMA-3.2-3B", label: "~3 GB QLoRA", sub: "fast iteration, free Colab" },
+  { value: "LLaMA-3.1-8B", label: "~6–8 GB QLoRA", sub: "general, good quality" },
+  { value: "Qwen-2.5-14B+", label: "~12 GB+", sub: "higher-quality needs" }
+]} caption="Course recommendation: start on LLaMA-3.2-3B (fast, free Colab), graduate to LLaMA-3.1-8B (Colab Pro or A100). Iterate small, scale up once the pipeline works." />
+
+---
+
+## Dataset Formats
+
+The base model expects its data in a specific template; mismatch it and quality silently drops. Three common formats:
+
+<StatGrid items={[
+  { value: "Instruction", label: "instruction / input / output", sub: "Alpaca-style, single-turn" },
+  { value: "ChatML", label: "<|im_start|>role … <|im_end|>", sub: "multi-turn conversation" },
+  { value: "ShareGPT", label: "conversations: from/value", sub: "HuggingFace datasets" }
+]} caption="Unsloth ships formatters for all three — use get_chat_template() to apply the exact template your base model was trained with." />
+
+<Callout type="why" title="The chat template is not a formality">
+
+A model fine-tuned on `[INST]` tags but served with ChatML markers — or vice versa — will underperform for reasons that look like a "bad model" but are really a formatting bug. The special tokens (`<|im_start|>`, `[INST]`, sentinel markers) are part of what the model learned; serve the *same* template you trained on. `get_chat_template()` exists precisely so you never hand-roll these and get them subtly wrong. This discipline carries straight into Module 7, where the serving runtime must apply the identical template.
+
+</Callout>
+
+---
+
+## Recap
+
+- **Unsloth** runs the *same* QLoRA **2–5× faster** with **~50–70% less memory** and **no accuracy loss** — pure systems engineering, not a new algorithm.
+- The wins: **fused Triton attention kernels** (SRAM, à la Flash Attention), **manual LoRA backprop** (skip frozen params), **fused RoPE**, and **selective FFN checkpointing**.
+- The API is a thin wrapper (`FastLanguageModel` + `get_peft_model`) over the standard `SFTTrainer`; set `target_modules` to all linear layers and `lora_dropout = 0`.
+- **Choose the smallest base** that meets quality (LLaMA-3.2-3B → 3.1-8B), and **match the dataset format** (Instruction / ChatML / ShareGPT) to the model's template via `get_chat_template()`.
+
+Next: grounding the model in current, trustworthy facts — **Retrieval-Augmented Generation**.

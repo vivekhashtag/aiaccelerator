@@ -1,0 +1,85 @@
+---
+title: "Autoencoders"
+module: "04"
+moduleTitle: "Generative AI & LLM Fundamentals"
+lesson: "4.1"
+slug: "4-1-autoencoders"
+summary: "The first branch of the generative family — a network that compresses data through a bottleneck and reconstructs it, learning rich features with no labels. Architecture, the four useful variants (sparse, denoising, contractive, convolutional), and where autoencoders earn their keep: anomaly detection, dimensionality reduction, and LLM interpretability."
+prerequisites: ["3.3 Neural Networks from Scratch"]
+---
+
+## From Discriminative to Generative
+
+Module 3 built **discriminative** models — given an image, say "cat" or "dog." They learn the *boundary* between classes. Module 4 is about **generative** models: they learn the *distribution* of the data itself, so they can produce new examples — new images, text, audio, code.
+
+The generative family has four branches, and we climb them in order: **autoencoders** (compress and reconstruct), **VAEs** (turn that into principled sampling), **GANs** (sharp, realistic samples via an adversarial game), and **transformers** (sequences via attention — the engine of every LLM in Modules 5–10). We start with the simplest idea that already does something remarkable: learning structure with no labels at all.
+
+---
+
+## The Core Idea: Compression Through a Bottleneck
+
+An **autoencoder** is a network that squeezes its input through a narrow **bottleneck** and then tries to rebuild the original from that compressed code.
+
+<AutoencoderBottleneck caption="Encoder f maps input x down to a small latent code z; decoder g maps z back to a reconstruction x̂. The bottleneck forces the encoder to keep only the essential features — it physically cannot pass everything through." />
+
+<Formula label="Reconstruction loss" caption="The whole learning signal is 'rebuild the input' — no human labels anywhere.">L = ‖x − x̂‖²   (MSE)   or   BCE(x, x̂)</Formula>
+
+The magic is *where the supervision comes from*. There are no annotations — the input **is** its own target. This is **self-supervised learning**: the data labels itself. Because the bottleneck can't carry every pixel, the encoder is forced to summarise — to discover the data's underlying structure — and that learned representation is the prize, often more useful than the reconstruction itself.
+
+---
+
+## Architecture: A Symmetric Encoder–Decoder
+
+The **encoder** maps high-dimensional input down to a low-dimensional latent code; the **decoder** mirrors it in reverse. For an MNIST digit (784 pixels):
+
+<Formula label="Encoder → bottleneck → decoder" caption="32 numbers must capture the essence of 784 pixels — a 24.5× compression ratio.">784 → 256 → 128 → 32 (z)   →   128 → 256 → 784 (x̂)</Formula>
+
+For images the layers are usually **convolutional** (Module 3.4): the encoder downsamples with strided convolutions, and the decoder upsamples with **transposed convolutions** ("deconvolutions"), which place a scaled copy of the filter at each output position — the spatial inverse of a strided conv.
+
+<Callout type="insight" title="The output activation encodes your assumption about the data">
+
+For pixels in `[0,1]`, the decoder ends in a **sigmoid** (bounding the output to the valid range) and trains with **binary cross-entropy**, treating each pixel as a Bernoulli variable. Use plain MSE instead and reconstructions come out **blurry** — MSE averages over all plausible outputs, so it hedges. Matching the loss to the data distribution is a theme that returns for VAEs (next lesson) and every generative model after.
+
+</Callout>
+
+---
+
+## The Useful Variants
+
+A bottleneck *smaller* than the input (**undercomplete**) is the standard case — it forces compression. But if the bottleneck is *larger* than the input (**overcomplete**), the network can cheat by learning the identity function and learn nothing. The fixes are what make autoencoders genuinely useful:
+
+<StatGrid items={[
+  { value: "Sparse", label: "L1 penalty on z", sub: "few active units → interpretable" },
+  { value: "Denoising", label: "corrupt → clean", sub: "robust features; precursor to diffusion" },
+  { value: "Contractive", label: "penalise encoder Jacobian", sub: "locally flat latent space" },
+  { value: "Convolutional", label: "conv + transposed conv", sub: "the image workhorse" }
+]} caption="Each constraint stops the network taking the lazy identity shortcut and forces it to learn meaningful structure." />
+
+The **denoising** autoencoder is worth dwelling on: corrupt the input with noise, then train the model to output the *clean* version. To do that it must learn what the data should look like, ignoring the noise — which is exactly the intuition behind **diffusion models** (DALL·E 3, Stable Diffusion), the fifth branch of the family.
+
+<DenoisingAutoencoder caption="Add noise to the input, ask the network to reconstruct the original. Learning to remove corruption forces robust features — and is the conceptual seed of diffusion-based image generation." />
+
+---
+
+## Where Autoencoders Earn Their Keep
+
+- **Anomaly detection.** Train on *normal* data only. At inference, normal inputs reconstruct well (low error); anomalies reconstruct badly (high error) — threshold the error to flag them. Used in manufacturing defect detection, network-intrusion detection, and rare-disease medical imaging.
+- **Dimensionality reduction.** The latent `z` is a compact representation that, unlike **PCA** (Lesson 3.2), captures *non-linear* structure. t-SNE/UMAP visualisations often run on autoencoder latents.
+- **Pretraining.** An encoder pretrained to understand data structure is a better starting point than random init — the ancestor of today's foundation-model pretraining (Lesson 4.5).
+
+<Callout type="why" title="Sparse autoencoders are how we look inside an LLM">
+
+The most active research use is **interpretability**: Anthropic, EleutherAI and others train **sparse autoencoders** on the internal activations of an LLM to decompose them into human-readable features. The L1 sparsity penalty is what makes the features *monosemantic* (one unit ≈ one concept). This connects autoencoders — the simplest model in the module — directly to frontier AI-safety work on understanding what models like Claude have actually learned.
+
+</Callout>
+
+---
+
+## Recap
+
+- An **autoencoder** compresses input through a **bottleneck** and reconstructs it; the reconstruction error is the entire (self-supervised) learning signal — no labels needed.
+- The encoder/decoder are **symmetric**; for images, strided convs down and **transposed convs** up. Match the output activation + loss to the data (sigmoid + BCE for `[0,1]` pixels, or you get blur).
+- **Overcomplete** autoencoders must be regularised — **sparse, denoising, contractive** — or they learn the useless identity. Denoising is the seed of diffusion.
+- Real-world wins: **anomaly detection, non-linear dimensionality reduction, pretraining**, and **sparse autoencoders for LLM interpretability**.
+
+Next: fix the autoencoder's biggest weakness for *generation* — its disorganised latent space — with the **Variational Autoencoder**.

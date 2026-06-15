@@ -1,0 +1,87 @@
+---
+title: "Variational Autoencoders (VAEs)"
+module: "04"
+moduleTitle: "Generative AI & LLM Fundamentals"
+lesson: "4.2"
+slug: "4-2-variational-autoencoders"
+summary: "Turning the autoencoder into a true generator — why a standard latent space has 'holes', how encoding to a distribution (not a point) plus a KL term organises the space so you can sample from it, the ELBO objective, and the reparameterisation trick that makes the whole thing trainable."
+prerequisites: ["4.1 Autoencoders"]
+---
+
+## The Problem: A Latent Space Full of Holes
+
+A standard autoencoder (Lesson 4.1) learns to map each input to a single latent **point**. Nothing organises those points. There's no guarantee that the space *between* two learned codes decodes to anything sensible:
+
+<Formula label="Interpolation breaks" caption="Halfway between two valid codes is not guaranteed to be a valid image.">decoder(0.5·z_A + 0.5·z_B)  →  might be garbage</Formula>
+
+The latent space has **holes** — regions the decoder has never been trained on. So you can't just pick a random `z` and decode it to get a new sample, which is the one thing a *generative* model must do. The VAE fixes exactly this.
+
+---
+
+## The VAE Solution: Encode a Distribution, Not a Point
+
+The key idea: instead of encoding each input to a single point, encode it to a **distribution** over the latent space — a Gaussian with a mean `μ` and a (log-)variance `σ²`.
+
+<Formula label="Probabilistic encoder" caption="Two vectors out of the encoder, not one — a mean and a spread.">Encoder: x → [μ, log σ²]        Sample: z = μ + σ·ε,  ε ~ 𝒩(0, I)</Formula>
+
+<VAELatentSpace caption="A standard AE scatters inputs as isolated points with gaps between them. A VAE encodes each input as a small Gaussian blob and pulls them all toward 𝒩(0,I), so the whole space is covered — every z you sample decodes to something valid." />
+
+Encoding to overlapping fuzzy blobs (rather than sharp points) forces the decoder to make *neighbourhoods* meaningful: points near each other must decode to similar outputs. That's what plugs the holes.
+
+---
+
+## The ELBO: Two Terms in Tension
+
+The VAE trains on the **Evidence Lower BOund**, which balances two forces:
+
+<Formula label="VAE loss (ELBO)" caption="Reconstruct well, but keep each encoded distribution close to a standard normal prior.">L = 𝔼[log p(x|z)]  −  KL(q(z|x) ‖ p(z))</Formula>
+
+- The **reconstruction term** `𝔼[log p(x|z)]` is the familiar autoencoder objective — rebuild `x` from `z`.
+- The **KL term** `KL(q(z|x) ‖ 𝒩(0,I))` is the new regulariser. It pulls every encoded Gaussian toward the standard-normal **prior**, and for two Gaussians it has a clean closed form (no sampling needed):
+
+<Formula label="KL divergence, closed form" caption="Computed analytically per latent dimension during training.">KL(𝒩(μ, σ²) ‖ 𝒩(0, I)) = ½ Σ (μ² + σ² − 1 − log σ²)</Formula>
+
+<Callout type="key" title="The KL term is what makes sampling work">
+
+Pulling every input's distribution toward `𝒩(0,I)` does three things at once: nearby points decode to similar outputs, the latent space gets fully **covered** (no holes), and — crucially — you can now **sample `z ~ 𝒩(0,I)` with no encoder at all** and decode it into a brand-new valid sample. The tension is real, though: too much KL weight and the model ignores the input (posterior collapse) and produces generic blur; too little and you're back to a holey autoencoder. The β-VAE makes that trade-off an explicit knob.
+
+</Callout>
+
+---
+
+## The Reparameterisation Trick
+
+There's a problem hiding in the sampling step. `z = μ + σ·ε` involves drawing a random sample — and **you cannot backpropagate through a random node**. The gradient has nowhere to flow.
+
+The fix is one of the most elegant moves in deep learning: pull the randomness *out* of the path. Sample `ε ~ 𝒩(0,I)` first — a constant, independent of any parameter — then compute `z = μ + σ·ε` deterministically.
+
+<ReparameterizationTrick caption="Left: sampling z directly is a stochastic node — gradients can't pass. Right: draw ε from a fixed 𝒩(0,I), then z = μ + σ·ε is a deterministic function of μ and σ, so gradients flow straight through the + and × back into the encoder." />
+
+Now `μ` and `σ` sit on a normal, differentiable computation path; the only randomness is the externally-supplied `ε`. A trivial algebraic rearrangement turns an untrainable model into a trainable one.
+
+---
+
+## Generating and the VAE's Signature Trade-off
+
+Generation is now trivial — and needs no encoder:
+
+<Formula label="VAE generation" caption="Sample from the prior, decode. That's it.">z ~ 𝒩(0, I)        x̂ = decoder(z)</Formula>
+
+VAEs produce **smoother, more diverse** samples than a plain autoencoder and have a clean, continuous latent space you can interpolate and do arithmetic in. The cost: samples are often **slightly blurry**, because the MSE/BCE reconstruction term averages over all plausible outputs rather than committing to one sharp answer (the same averaging blur we met in 4.1).
+
+<Callout type="analogy" title="VAE vs GAN: the blur–sharpness trade">
+
+That blur is precisely the gap the next lesson attacks. A VAE optimises a *likelihood* and hedges across possibilities → safe but soft. A **GAN** optimises against a *critic* that punishes anything unrealistic → sharp but unstable. Diffusion models (the family's fifth branch) eventually get both. Knowing which failure you can tolerate — soft-but-stable vs sharp-but-temperamental — is the real engineering judgment.
+
+</Callout>
+
+---
+
+## Recap
+
+- A standard autoencoder's latent space has **holes**, so you can't sample from it; the VAE encodes each input to a **Gaussian distribution** instead of a point.
+- The **ELBO** = reconstruction − **KL-to-prior**; the KL term organises the latent space so `z ~ 𝒩(0,I)` decodes to valid new samples (computed in closed form).
+- The **reparameterisation trick** (`z = μ + σ·ε`, `ε ~ 𝒩(0,I)`) moves the randomness off the gradient path, making the model trainable end-to-end.
+- VAEs give smooth, diverse, interpolatable samples but are **slightly blurry** — the likelihood objective averages. GANs trade that blur for sharpness, and instability.
+
+Next: the adversarial game that produces photorealistic images — **Generative Adversarial Networks**.

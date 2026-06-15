@@ -89,14 +89,16 @@ Goal: implement neural nets from scratch in NumPy, reproduce them in PyTorch, th
 ## Module 4 — Generative AI & LLM Fundamentals
 *2 weeks · Laptop + Colab + Ollama · HuggingFace, Ollama, FAISS*
 
-**Topics**
-4.1 Transformer architecture & attention — Q/K/V, scaled dot-product, multi-head, positional encoding (RoPE), encoder/decoder, KV cache, GPT/BERT/T5/LLaMA variants
-4.2 Tokenization & embeddings — BPE/WordPiece/SentencePiece, vocab, token/positional embeddings, cosine similarity
-4.3 Pretraining, fine-tuning & alignment — causal/masked LM, PEFT (LoRA/QLoRA), instruction tuning, RLHF, DPO
-4.4 Prompting techniques — zero/few-shot, CoT, self-consistency, ToT, ReAct, structured output, sampling
-4.5 Context windows & limitations — context limits, lost-in-the-middle, hallucination, knowledge cutoff
-4.6 Retrieval-Augmented Generation (RAG) — pipeline, chunking, embedding models, vector DBs, reranking, hybrid search, RAGAS
-4.7 Data Engineering for AI pipelines ★ — ingestion, parsing, chunking strategies, cleaning, DVC versioning, embedding pipeline, quality metrics
+**Topics** *(built as 9 lessons from the updated `Module 04 Gen AI.pdf` — the generative-model family tree, richer than the original 4.1–4.7 outline)*
+4.1 Autoencoders — bottleneck compression, self-supervised reconstruction, sparse/denoising/contractive/convolutional variants, anomaly detection, sparse-AE interpretability
+4.2 Variational Autoencoders (VAEs) — probabilistic latent space, ELBO + KL regularisation, the reparameterisation trick, sampling, blur-vs-sharp trade-off
+4.3 GANs — adversarial minimax game, alternating training, failure modes (mode collapse, instability, vanishing gradients), DCGAN/WGAN-GP/StyleGAN
+4.4 Transformer architecture & attention — Q/K/V scaled dot-product, multi-head, the three families (BERT/GPT/T5), RMSNorm/RoPE/GQA/SwiGLU, BPE tokenization, positional embeddings
+4.5 Pre-training — scale & cost, CLM/MLM/span-corruption objectives, emergent capabilities + in-context learning, scaling hypothesis, continual pre-training
+4.6 Fine-tuning — the hierarchy, instruction tuning, full-FT memory, LoRA, QLoRA (NF4), RLHF vs DPO
+4.7 Unsloth ★ — fused Triton kernels, manual LoRA backprop, fused RoPE, smart checkpointing, benchmarks, base-model choice, dataset formats
+4.8 RAG & Data Engineering ★ — 5-stage pipeline, chunking strategies, embedding models + vector DBs, hybrid retrieval + reranking, citation-aware generation, DVC versioning, RAGAS
+4.9 Prompting techniques — zero/few-shot, chain-of-thought, self-consistency, structured/JSON output, system prompts
 
 **Labs**
 - 4-A Attention from Scratch (NumPy)

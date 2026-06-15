@@ -180,14 +180,18 @@ In rough teaching order:
     2026-06-15 from the former single `Diagrams.tsx` as it crossed 3,000 lines.
   - **Self-check quizzes removed** from all lessons (see §6). `QuizBlock` is unregistered (file kept).
 - **Content progress (Phase 2):** Module 1 (7 lessons), Module 2 — Computer Architecture &
-  Accelerators (6 lessons), and Module 3 — AI & Deep Learning Foundations (8 lessons; 3.2 Classical
-  ML and 3.8 Audio added by decision) are all built. Modules 1–2 + the light theme are live on
-  Vercel; Module 3 + the diagrams reorg are committed and pushed 2026-06-15.
+  Accelerators (6 lessons), Module 3 — AI & Deep Learning Foundations (8 lessons; 3.2 Classical
+  ML and 3.8 Audio added by decision), and Module 4 — Generative AI & LLM Fundamentals (9 lessons:
+  autoencoders → VAEs → GANs → transformers → pre-training → fine-tuning → Unsloth → RAG →
+  prompting, +24 SVG diagrams in `diagrams/module-04.tsx`, **Rose** accent) are all built. Modules
+  1–2 + the light theme are live on Vercel; Modules 3–4 + the diagrams reorg committed and pushed
+  (Module 3 + reorg 2026-06-15; Module 4 same session).
 - **DECISION (2026-06-12) — light reading theme.** Lesson content flipped from the dark
   "engineering instrument" theme to a **light reading theme** (white surfaces, dark text) for
   legibility; the home page stays dark (it uses hardcoded hex, not tokens). Driven by
   `styles/tokens.css` + the palette in `diagrams/_shared.tsx`. Lessons are also fully **mobile
   responsive** (overlay sidebar, hamburger). To revert to dark, restore the prior token/palette
   values (noted in-file).
-- Next concrete steps: continue the same SVG-diagram treatment into **Module 4** (`Module 04 Gen
-  AI.pdf`, 9 topics) and onward through Module 10.
+- Next concrete steps: continue the same SVG-diagram treatment into **Module 5** (Inference Systems
+  Fundamentals) and onward through Module 10. PDFs on disk are parsed with `pdftotext -layout`
+  (poppler) — the built-in PDF reader needs `pdftoppm`, which isn't installed.

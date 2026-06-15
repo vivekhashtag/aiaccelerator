@@ -1,0 +1,101 @@
+---
+title: "Retrieval-Augmented Generation & Data Engineering"
+module: "04"
+moduleTitle: "Generative AI & LLM Fundamentals"
+lesson: "4.8"
+slug: "4-8-rag"
+summary: "Grounding an LLM in an external, updatable knowledge base — the five-stage RAG pipeline, the chunking decisions that make or break it, embedding models and vector DBs, hybrid retrieval and cross-encoder reranking, citation-aware generation, DVC dataset versioning, and the four RAGAS metrics."
+prerequisites: ["4.7 Unsloth: Practical Fast Fine-Tuning"]
+---
+
+## The Problem RAG Solves
+
+A fine-tuned LLM is still trapped behind three walls: a **knowledge cutoff** (it knows nothing after its training date), **hallucination** (it invents plausible-but-wrong facts when unsure), and **context limits** (you can't paste an entire corpus into the prompt). **Retrieval-Augmented Generation** sidesteps all three: at query time, fetch the relevant documents from an external knowledge base and put them *in the prompt*, so the model answers from retrieved evidence rather than parametric memory alone.
+
+<RAGPipeline caption="Query → retrieve top-K from a vector store → stitch into an augmented prompt → LLM → grounded answer. The knowledge base is external and updatable, so you change what the model 'knows' without retraining it." />
+
+The strategic point: fine-tuning (Lessons 4.6–4.7) changes the model's *behaviour and style*; RAG changes its *knowledge*. They're complementary, and most production systems use both.
+
+---
+
+## The Pipeline, Stage by Stage
+
+RAG is really a **data-engineering** pipeline with an LLM at the end. Each stage is a place to win or lose quality.
+
+### Stage 1 — Ingestion (where most systems fail)
+
+Bad data in, bad answers out. Different file types need different parsers — **PyMuPDF/LlamaParse** for PDFs, **python-docx/Unstructured** for DOCX, **BeautifulSoup/Trafilatura** for HTML, pandas for CSV. Then **clean**: strip headers/footers/page numbers, normalise whitespace, remove boilerplate, drop near-duplicates (MinHash/SimHash), and language-detect to route non-English docs.
+
+### Stage 2 — Chunking (the highest-leverage decision)
+
+Chunks must be **small enough to retrieve precisely** but **large enough to hold a complete thought**. This single choice moves retrieval quality more than almost anything else.
+
+<ChunkingStrategies caption="Fixed-size is simple but slices through sentences; sentence/paragraph respect structure but vary wildly in length; semantic splits where meaning shifts; recursive (LangChain's default) splits at the largest natural boundary that fits. Parent-child indexes small, serves large." />
+
+<StatGrid items={[
+  { value: "256–1024", label: "chunk_size (tokens)", sub: "smaller = precise, less context" },
+  { value: "50–200", label: "overlap (tokens)", sub: "prevents losing boundary context" },
+  { value: "Recursive", label: "general default", sub: "split on \\n\\n → \\n → . → space" },
+  { value: "Parent-child", label: "advanced", sub: "retrieve small, feed large" }
+]} caption="Don't guess: build a 50–100 example (question, answer, source) eval set, sweep chunk_size, and pick the value that maximises retrieval hit-rate. Measurement beats intuition." />
+
+### Stage 3 — Embedding & Indexing
+
+An **embedding model** turns each chunk into a dense vector capturing meaning — **BGE-M3** (multilingual, free), **nomic-embed-text** (local, Apache), **text-embedding-3-large** (paid, top quality). A **vector database** stores them for fast approximate nearest-neighbour search: **FAISS** and **ChromaDB** for local/this course, **Pinecone/Weaviate/pgvector** for production. The standard similarity metric for text is **cosine similarity** — the normalised dot product from Lesson 4.2.
+
+### Stage 4 — Retrieval (where hybrid + rerank shine)
+
+<HybridRetrieval caption="Dense retrieval finds semantic matches (different words, same meaning); sparse BM25 finds exact keywords (product codes, names). Fuse both with RRF, then a slow cross-encoder reranks the top-20 down to a precise top-5." />
+
+Plain dense retrieval embeds the query and grabs the top-K. Two upgrades pay off almost always:
+
+- **Hybrid retrieval** combines dense (embeddings) with sparse (**BM25** keyword) results via **Reciprocal Rank Fusion** — dense catches paraphrases, sparse catches exact terms like part numbers. Hybrid beats either alone.
+- **Reranking (two-stage).** Retrieve top-20 fast with a bi-encoder, then **rerank** with a slow **cross-encoder** (e.g. BGE-reranker) that reads query and document *together*. You get cross-encoder accuracy at bi-encoder speed.
+
+### Stage 5 — Generation
+
+Prompt the model to answer **only** from the retrieved context, and to say "I don't know" otherwise. Better still, number the chunks and demand **citations** (`[1]`, `[2]`):
+
+<Callout type="key" title="Citation-aware generation is your anti-hallucination lever">
+
+Instructing the model to cite which numbered chunk each claim came from does two things: it lets a human (or an automated check) *verify* every statement against its source, and the very act of attributing tends to keep the model honest — it's harder to fabricate when forced to point at evidence. Combined with "answer only from context; otherwise say you don't know," this is the single most effective pattern for trustworthy RAG. It pairs directly with the **faithfulness** metric below.
+
+</Callout>
+
+---
+
+## Versioning the Knowledge Base with DVC
+
+In production the knowledge base — documents, chunks, embeddings — must be versioned **alongside** the code and model. **DVC** (Data Version Control) tracks large data directories in git without bloating the repo, storing the bytes in S3/GCS/Azure while git holds small pointer files.
+
+<Callout type="why" title="Re-embedding is a migration — version it like one">
+
+Upgrade your embedding model (say `text-embedding-3-small` → `-large`) and you must **re-embed every chunk** — the old and new vectors live in incompatible spaces. DVC lets you reproduce any prior state of the knowledge base by checking out a git commit, which is what makes three things possible: **debugging** ("why did accuracy drop after Tuesday's update?"), **rollback** ("the new embeddings made retrieval worse — revert"), and **auditability** ("exactly which data backed which model version?"). Treat the corpus as a versioned artifact, not a folder.
+
+</Callout>
+
+---
+
+## Evaluating RAG: The Four RAGAS Metrics
+
+A RAG system has two halves that can each fail — retrieval and generation — so it needs metrics for both. **RAGAS** automates four:
+
+<RAGASMetrics caption="Faithfulness and Answer Relevance grade the generation (is it grounded? is it on-topic?); Context Precision and Context Recall grade the retrieval (was the retrieved context useful and complete?). Evaluate all four on a held-out set before shipping." />
+
+<StatGrid items={[
+  { value: "Faithfulness", label: "answer ⊆ context?", sub: "catches hallucination" },
+  { value: "Answer Relevance", label: "answers the question?", sub: "catches off-topic" },
+  { value: "Context Precision", label: "retrieved chunks useful?", sub: "retrieval signal-to-noise" },
+  { value: "Context Recall", label: "all needed info found?", sub: "retrieval completeness" }
+]} caption="Low faithfulness → tighten the generation prompt; low context recall → fix chunking/retrieval. The four metrics localise the failure to a stage." />
+
+---
+
+## Recap
+
+- **RAG** grounds an LLM in an external, updatable knowledge base — fixing **knowledge cutoff, hallucination, and context limits**. Fine-tuning changes behaviour; RAG changes knowledge.
+- The pipeline is **ingest → chunk → embed/index → retrieve → generate**, and it's a **data-engineering** problem; **chunking** is the highest-leverage knob (measure hit-rate, don't guess).
+- **Hybrid retrieval** (dense + BM25 via RRF) plus **cross-encoder reranking** beat plain vector search; **citation-aware** generation is the core anti-hallucination pattern.
+- Version the corpus with **DVC** (re-embedding is a migration); evaluate with the four **RAGAS** metrics — two for generation, two for retrieval.
+
+Next: the thin but crucial interface between model and application — **prompting techniques**.

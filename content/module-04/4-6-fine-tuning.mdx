@@ -1,0 +1,118 @@
+---
+title: "Fine-Tuning: Adapting Foundation Models"
+module: "04"
+moduleTitle: "Generative AI & LLM Fundamentals"
+lesson: "4.6"
+slug: "4-6-fine-tuning"
+summary: "Turning a pretrained giant into your specialist — the fine-tuning hierarchy from prompting to full fine-tuning, instruction tuning, why full fine-tuning needs 138 GB, how LoRA's low-rank adapters cut that to 0.1% of parameters, how QLoRA fits an 8B model on a free Colab T4, and a tour of RLHF vs DPO alignment."
+prerequisites: ["4.5 Pre-training: How Foundation Models Are Built"]
+---
+
+## The Fine-Tuning Hierarchy
+
+A pretrained base model knows the world but isn't yet *yours* — and isn't even "helpful." Adapting it is a ladder, each rung costing more compute and risk but offering more adaptation:
+
+<FineTuningHierarchy caption="From zero-cost prompting at the base, up through soft-prompt tuning, LoRA, QLoRA, to full fine-tuning at the top. Climb only as high as your task demands — most production work lives on the LoRA/QLoRA rungs." />
+
+Higher rungs buy more domain adaptation but bring more compute, more data, and more risk of **catastrophic forgetting** (overwriting the base model's general knowledge). The engineering instinct is to climb as little as possible.
+
+---
+
+## Instruction Tuning: From Predictor to Assistant
+
+A raw pretrained model just predicts the next token — it is not inherently helpful or aligned. **Instruction tuning** converts it into an assistant by fine-tuning on `(instruction, response)` pairs:
+
+<Formula label="The instruction format" caption="The model learns to map intent → well-formatted, constrained response.">[System] You are a helpful assistant.  [User] Explain entanglement simply.  [Assistant] …</Formula>
+
+This teaches three things: understand user intent, respond in the expected assistant format, and follow constraints (be concise, safe, on-topic). Key datasets: **Alpaca** (52K), **FLAN** (1M+), **OpenHermes**, **ShareGPT**.
+
+<Callout type="pitfall" title="Catastrophic forgetting — and the one-epoch rule of thumb">
+
+Full fine-tuning on a *small* instruction set can make the model forget its pre-training knowledge. The standard guard is restraint: ~**1 epoch over ~50K examples** usually adapts behaviour without erasing knowledge. Heavier mitigations exist (EWC, mixing SFT with DPO data), but "don't over-train on too little data" prevents most damage. This is the same generalisation-vs-memorisation tension from Lesson 3.1, now with a very expensive base model at stake.
+
+</Callout>
+
+---
+
+## Full Fine-Tuning: The Expensive Ceiling
+
+Updating *all* parameters is the most powerful and the most costly option. The memory bill for an 8B model in FP32 is dominated not by the weights but by the optimiser:
+
+<StatGrid items={[
+  { value: "32 GB", label: "weights", sub: "8B × 4 bytes" },
+  { value: "32 GB", label: "gradients", sub: "one per weight" },
+  { value: "64 GB", label: "Adam state", sub: "m + v — the real killer" },
+  { value: "~138 GB", label: "total", sub: "needs 2× A100 80GB" }
+]} caption="Adam's two extra vectors per parameter (Lesson 3.1) cost more than the model itself — exactly why parameter-efficient methods exist." />
+
+Full fine-tuning is justified only with a **very large dataset** (>1M examples), a **big domain shift**, or when accuracy is critical and cost isn't. For almost everything else, there's LoRA.
+
+---
+
+## LoRA: Low-Rank Adaptation
+
+The core insight (Hu et al., 2021): when you fine-tune, the weight *change* `ΔW` is intrinsically **low-rank** — it has far less information than the full matrix. So don't store a full `ΔW`; factor it into two skinny matrices:
+
+<Formula label="LoRA" caption="Freeze W; train only the small A and B. r ≪ d_model, so 2rd ≪ d².">y = (W + ΔW)x = Wx + B·A·x,   B ∈ ℝ^(d×r), A ∈ ℝ^(r×d),   ΔW = (α/r)·BA</Formula>
+
+<LoRADecomposition caption="The pretrained weight W stays frozen; the trainable adapter is the product of a tall B and a wide A meeting at a thin rank-r waist. B starts at zero, so the model begins identical to the base and gently deviates." />
+
+A clever initialisation makes this safe: `A` is random, `B` is **zero**, so `ΔW = 0` at the start — the model behaves *exactly* like the base and only departs as training proceeds. The `α/r` scaling factor controls how strongly the adapter speaks.
+
+<StatGrid items={[
+  { value: "8.4M", label: "LoRA params (r=8)", sub: "Q,K,V,O across 32 layers" },
+  { value: "0.1%", label: "of 8B", sub: "trainable fraction" },
+  { value: "~21 GB", label: "fine-tune memory", sub: "vs 138 GB full (fits 1× A100)" },
+  { value: "0 ms", label: "inference overhead", sub: "merge BA back into W" }
+]} caption="Apply to more matrices (add the FFN up/down projections) for more capacity at more memory. Start at r=8; go to r=16/32 only if accuracy demands it." />
+
+<Callout type="key" title="LoRA's quiet superpower: zero inference cost">
+
+After training, the adapter merges back into the base weight — `W_merged = W + (α/r)·BA` — giving a model with the **exact same architecture and latency** as the original. Unlike adapter layers that add compute at inference, a merged LoRA is free at serving time. You can also keep adapters *separate* and hot-swap them: one base model in memory, many task-specific LoRAs loaded on demand. This is why LoRA, not full fine-tuning, is the default in production.
+
+</Callout>
+
+---
+
+## QLoRA: Fine-Tune an 8B Model on a Free Colab
+
+QLoRA (Dettmers et al., 2023) made fine-tuning a 65B model possible on a single 48 GB GPU — by quantising the frozen base to 4-bit *first*, then training LoRA adapters on top. Three innovations:
+
+- **4-bit NormalFloat (NF4).** A 4-bit type whose bins are *quantile-spaced* to match the normal distribution of pretrained weights — optimal for them. Storage drops to 0.5 bytes/param: LLaMA-3-8B goes from 16 GB (FP16) to **4 GB**.
+- **Double quantisation.** Even the quantisation constants are quantised, saving ~0.37 bits/param — small per weight, real at 70B.
+- **Paged optimiser.** Optimiser state is paged to CPU RAM during memory spikes (via NVIDIA unified memory), preventing OOM crashes.
+
+<StatGrid items={[
+  { value: "4 GB", label: "base in NF4", sub: "vs 16 GB FP16" },
+  { value: "~6–8 GB", label: "total training", sub: "fits a free Colab T4!" },
+  { value: "~99%", label: "of full-FT quality", sub: "4-bit cost is minimal" },
+  { value: "RTX 4090", label: "24 GB consumer GPU", sub: "8B fine-tuning at home" }
+]} caption="The forward pass dequantises NF4 → BF16 on the fly; gradients flow only through the FP16 adapters, never the frozen quantised base. The stable 4-bit foundation + FP16 adapters is why quality barely moves." />
+
+<QLoRAMemoryStack caption="Full fine-tuning's 138 GB tower (weights + gradients + Adam state) collapses to a ~21 GB LoRA stack and then a ~7 GB QLoRA stack — the difference between a multi-GPU cluster and a free notebook." />
+
+This is the democratising moment of the module: an 8B model, fine-tuned on hardware most people already have.
+
+---
+
+## Alignment: RLHF and DPO
+
+SFT (with LoRA/QLoRA) makes a model follow instructions; **alignment** further shapes it toward human *preferences*.
+
+<Callout type="analogy" title="DPO is RLHF without the reward model">
+
+**RLHF** collects human preference pairs, trains a separate **reward model**, then uses PPO to push the LLM toward high reward while a KL penalty keeps it near the SFT model — powerful but heavy (you juggle *three* models: policy, reward, reference). It aligned GPT-4, Claude, and Gemini. **DPO** (Direct Preference Optimisation) skips the reward model entirely: a closed-form loss fine-tunes directly on `(preferred, rejected)` pairs, pushing probability toward the winner `y_w` and away from the loser `y_l`. Much simpler, often comparable quality, and it runs with Unsloth + TRL's `DPOTrainer` — which is exactly where the next lesson goes.
+
+</Callout>
+
+---
+
+## Recap
+
+- Fine-tuning is a **hierarchy** — prompting → soft prompts → LoRA → QLoRA → full FT — and you climb only as far as the task needs; **instruction tuning** turns a predictor into an assistant (mind catastrophic forgetting: ~1 epoch / ~50K examples).
+- **Full fine-tuning** of an 8B model needs ~**138 GB** (Adam state dominates) — usually overkill.
+- **LoRA** trains low-rank adapters (`ΔW = BA`) — ~**0.1%** of parameters, ~21 GB, and **zero inference overhead** once merged (or hot-swappable).
+- **QLoRA** quantises the frozen base to **4-bit NF4**, fitting 8B fine-tuning in **~7 GB** (a free Colab) at ~99% of full quality.
+- **RLHF** (reward model + PPO) and the simpler **DPO** (direct on preference pairs) align the model to human preference.
+
+Next: making QLoRA 2–5× faster and lighter with custom kernels — **Unsloth**.

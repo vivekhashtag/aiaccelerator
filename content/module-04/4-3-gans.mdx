@@ -1,0 +1,85 @@
+---
+title: "Generative Adversarial Networks (GANs)"
+module: "04"
+moduleTitle: "Generative AI & LLM Fundamentals"
+lesson: "4.3"
+slug: "4-3-gans"
+summary: "The adversarial paradigm — a generator and discriminator locked in a minimax game that yields razor-sharp samples. The objective and the alternating training loop, the notorious failure modes (mode collapse, instability, vanishing gradients), and the fixes that tamed them: DCGAN, Wasserstein loss, and StyleGAN."
+prerequisites: ["4.2 Variational Autoencoders (VAEs)"]
+---
+
+## The Adversarial Idea
+
+GANs (Goodfellow et al., 2014) produce dramatically **sharper** images than autoencoders or VAEs — and they get there by a completely different route. Instead of optimising a reconstruction likelihood (which averages, and blurs), two networks are trained *against each other*:
+
+- **Generator G** takes random noise `z ~ 𝒩(0,I)` and produces a synthetic sample `G(z)`.
+- **Discriminator D** is shown either real data or `G(z)` and must output the probability that its input is real.
+
+<GANArchitecture caption="The generator turns noise into fakes; the discriminator judges real vs fake. The generator never sees real data directly — it learns entirely from the gradient the discriminator sends back about what gave it away." />
+
+The generator is a forger; the discriminator is the detective. As the detective sharpens, the forger must improve to keep fooling it — and vice versa. No reconstruction loss, no blur-by-averaging: G is pushed to make samples that are *indistinguishable*, not *average*.
+
+---
+
+## The Minimax Objective
+
+The two networks play a **minimax game** over a single value function:
+
+<Formula label="The GAN objective" caption="D maximises (tell real from fake); G minimises (fool D).">min_G max_D  𝔼[log D(x)] + 𝔼[log(1 − D(G(z)))]</Formula>
+
+At the theoretical optimum — the **Nash equilibrium** — the generator's samples are indistinguishable from real data, and the discriminator is reduced to outputting `0.5` everywhere (it can do no better than a coin flip). At that point G has implicitly learned the true data distribution.
+
+<Callout type="pitfall" title="The generator's loss needs a sign flip in practice">
+
+Training G to *minimise* `log(1 − D(G(z)))` looks right but fails early: when D easily spots the fakes, that term **saturates and its gradient vanishes** — G gets no signal exactly when it needs it most. In practice G is trained to *maximise* `log D(G(z))` instead (the "non-saturating" loss) — same intent, healthy gradients. This vanishing-gradient-from-a-confident-D problem recurs throughout GAN training and motivates the Wasserstein loss below.
+
+</Callout>
+
+---
+
+## Training: The Alternating Loop
+
+GANs train by alternating two updates each iteration — discriminator first, then generator:
+
+<Formula label="One training iteration" caption="Detach G when training D so its gradients don't leak; the generator's loss must flow back THROUGH D.">① train D on real + G(z).detach()    ②  train G via −log D(G(z)), backprop through D</Formula>
+
+The critical detail: the generator's gradient is computed by backpropagating *through the discriminator*. D is what tells G **which direction** to change a pixel to look more real. Get the update order or the `detach()` wrong and training quietly diverges.
+
+---
+
+## Why GANs Are Hard: The Failure Modes
+
+GANs are notoriously temperamental. Recognising the failure modes is most of the practical skill:
+
+<StatGrid items={[
+  { value: "Mode collapse", label: "G ignores diversity", sub: "one perfect output, fools D" },
+  { value: "Instability", label: "G and D oscillate", sub: "roles flip, never converge" },
+  { value: "Vanishing grad", label: "D too strong", sub: "G gets no signal" }
+]} caption="Two networks chasing a moving target — unlike a single loss, there's no monotonic 'training is going well' curve to watch." />
+
+**Mode collapse** is the signature failure: the generator discovers one output (say, a single digit style) that reliably fools the discriminator and stops producing anything else. It has no incentive to cover the other modes — D can't punish a *lack of diversity* when each individual sample looks real.
+
+<ModeCollapse caption="The real data has many modes (digit styles); a collapsed generator maps all its noise onto just one of them. Fixes — minibatch discrimination, unrolled GANs, the Wasserstein loss — give the model a reason to spread out." />
+
+---
+
+## The Fixes That Made GANs Work
+
+<Callout type="key" title="DCGAN, Wasserstein, StyleGAN — the trajectory to photorealism">
+
+**DCGAN** (Radford 2015) gave the architectural recipe that made GANs trainable on images: all-convolutional, strided convs instead of pooling, BatchNorm in both networks, ReLU in G (Tanh output), LeakyReLU in D. **WGAN** (Arjovsky 2017) replaced the cross-entropy loss with the **Wasserstein distance** — D becomes an unbounded "critic" scoring realism rather than a probability, which gives meaningful gradients even when real and fake distributions barely overlap (killing the vanishing-gradient problem); **WGAN-GP** enforces the needed Lipschitz constraint with a gradient penalty and is the modern research default. **StyleGAN** (Karras 2019) added a mapping network to a disentangled `W` space, injected style via **AdaIN** at each resolution, and **grew** resolution progressively (4×4 → 1024×1024) — producing the photorealistic faces that defined image generation right up until diffusion models took over.
+
+</Callout>
+
+GANs still matter as engineering tools beyond pure image synthesis: **data augmentation** (synthetic training images), **CycleGAN** for unpaired domain translation (horse ↔ zebra), **SRGAN** super-resolution (4× upscaling), and **deepfake detection** (you must understand the mechanics to catch them).
+
+---
+
+## Recap
+
+- A GAN pits a **generator** against a **discriminator** in a **minimax game**; at equilibrium G matches the real distribution and D is stuck at `0.5`. The adversarial signal — not a reconstruction loss — is what yields **sharp** samples.
+- Train by **alternating** D-then-G updates, backpropagating G's loss *through* D; use the non-saturating `max log D(G(z))` form to avoid vanishing gradients.
+- The failure modes — **mode collapse, instability, vanishing gradients** — are the real difficulty; there's no single loss curve that says "all is well."
+- **DCGAN** made them trainable, **WGAN-GP** made them stable, **StyleGAN** made them photorealistic — and the same `detach`/order discipline underlies every implementation.
+
+Next: the architecture that powers every modern LLM — the **Transformer** and its attention mechanism.

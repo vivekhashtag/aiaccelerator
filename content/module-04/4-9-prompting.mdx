@@ -1,0 +1,76 @@
+---
+title: "Prompting Techniques"
+module: "04"
+moduleTitle: "Generative AI & LLM Fundamentals"
+lesson: "4.9"
+slug: "4-9-prompting"
+summary: "The interface between a fine-tuned model and the application — zero- vs few-shot, chain-of-thought and why writing reasoning down helps, self-consistency voting, structured/JSON output with constrained generation, and the system prompt as the model's standing brief."
+prerequisites: ["4.8 Retrieval-Augmented Generation & Data Engineering"]
+---
+
+## The Cheapest Rung on the Ladder
+
+Prompting is the bottom of the fine-tuning hierarchy (Lesson 4.6): **zero compute, zero weight updates**, instant iteration. It's the interface layer — how the application actually talks to the model — and small wording changes can move quality more than a day of fine-tuning. This is the module's last lesson because everything before it (the architecture, the fine-tuning, the retrieval) ultimately gets *invoked* through a prompt.
+
+---
+
+## Zero-Shot and Few-Shot
+
+**Zero-shot**: describe the task, give the input, expect the output. **Few-shot**: show a handful of worked examples first, so the model calibrates to the exact format you want.
+
+<PromptingLadder caption="Zero-shot states the task; few-shot adds examples (in-context learning from Lesson 4.5); chain-of-thought asks for reasoning steps; self-consistency samples several reasonings and votes. Each rung trades more tokens for more reliability." />
+
+Few-shot consistently beats zero-shot for classification — the examples pin down the output format and the model's calibration. This is the **in-context learning** from Lesson 4.5 in everyday use: the model "learns" the pattern from the prompt with no weight update.
+
+<Formula label="Few-shot classification" caption="A few labelled examples teach the exact output vocabulary and format.">"damaged" → negative · "works fine" → neutral · "love it" → positive · "broke in a week" → ?</Formula>
+
+---
+
+## Chain-of-Thought: Let the Model Think on Paper
+
+For reasoning tasks, instruct the model to **show its work** before answering:
+
+<Formula label="Chain-of-thought" caption="The magic words for zero-shot CoT: append 'Let's think step by step.'">Q: 50 apples, sell 30% Mon then 20% of the rest Tue. → Mon: 15 sold, 35 left → Tue: 7 sold → 28</Formula>
+
+<Callout type="insight" title="Why writing reasoning down actually computes">
+
+A transformer does a fixed amount of computation per token. By generating intermediate steps **as tokens**, the model gives itself more compute and more context to condition on — each written step becomes input that shapes the next. It is, almost literally, "thinking out loud" to extend its own working memory onto the page. That's why simply appending **"Let's think step by step."** (zero-shot CoT) measurably lifts arithmetic and logical-reasoning accuracy — you're handing the model scratch paper. This insight is the seed of the reasoning models (o1-style) that Modules 5+ deploy.
+
+</Callout>
+
+**Self-consistency** takes CoT further: sample several reasoning paths (temperature > 0) and take the **majority vote** on the final answer. Independent derivations rarely make the *same* mistake, so voting cancels the noise.
+
+<SelfConsistency caption="Generate N chains-of-thought with sampling; they may reason differently but the correct answer recurs. Majority-vote the finals — wrong paths scatter, right paths agree. More compute for more reliability on problems with a definite answer." />
+
+---
+
+## Structured Output
+
+Applications need machine-readable output — JSON, not prose. Ask for it explicitly, and lean on **constrained generation** where available:
+
+<Callout type="key" title="JSON mode guarantees what a prompt only requests">
+
+Asking "return JSON" usually works — until the one time the model adds a chatty preamble and your parser throws in production. Many APIs now offer **constrained generation** (JSON mode / structured outputs) that forces every generated token to conform to a schema via **grammar-constrained decoding** — at the sampling level, invalid tokens simply can't be emitted. The difference is *requesting* valid output versus *guaranteeing* it. For anything that feeds a downstream system, prefer the guarantee; it's the same "make invalid states unrepresentable" discipline good engineers apply everywhere.
+
+</Callout>
+
+---
+
+## The System Prompt: A Standing Brief
+
+The **system prompt** sets behaviour, persona, and constraints for the whole conversation — distinct from the per-turn user message:
+
+<Formula label="A system prompt" caption="Domain, format, safety, and persona — set once, applied to every turn.">[System] You are a semiconductor-engineering assistant. Cite the relevant standard. Say so when unsure. Refuse off-domain questions.</Formula>
+
+System prompts are how you enforce **domain restriction**, **output format**, **safety constraints** (fine-tuning alone can't fully prevent misuse), and **persona consistency** across a multi-turn chat. They pair naturally with RAG (Lesson 4.8): the system prompt sets the rules, the retrieved context supplies the facts.
+
+---
+
+## Recap
+
+- Prompting is the **zero-cost** interface layer; wording can outperform fine-tuning, and it's where everything else in the module gets invoked.
+- **Few-shot** beats zero-shot by pinning format (in-context learning); **chain-of-thought** lifts reasoning because written steps give the model more compute and context — and "**Let's think step by step**" is the one-line trigger.
+- **Self-consistency** votes across sampled reasonings to cancel errors; **structured/JSON output** is best *guaranteed* by constrained generation, not merely requested.
+- The **system prompt** is the model's standing brief — domain, format, safety, persona — and combines with RAG's retrieved facts.
+
+That closes Module 4: from autoencoders to aligned, retrieval-grounded, well-prompted LLMs. **Module 5** takes these fine-tuned models from notebook to production — **inference systems**.

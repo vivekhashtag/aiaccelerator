@@ -1,0 +1,141 @@
+---
+title: "Transformer Architecture & Attention"
+module: "04"
+moduleTitle: "Generative AI & LLM Fundamentals"
+lesson: "4.4"
+slug: "4-4-transformers-attention"
+summary: "The engine of every modern LLM — scaled dot-product attention (Q/K/V) and why it's quadratic, multi-head attention and the causal mask, the full transformer block (FFN, residual stream, pre-norm) and how blocks stack, the three families (BERT/GPT/T5), the modern upgrades (RMSNorm, RoPE, GQA, SwiGLU), and how text becomes tokens via BPE."
+prerequisites: ["3.5 RNNs & Sequence Modelling"]
+---
+
+## Why Attention Won
+
+RNNs (Lesson 3.5) process a sequence step by step — `O(n)` sequential steps and vanishing gradients across long range. CNNs see only a local window and need many layers to connect distant tokens. The **Transformer** (Vaswani et al., 2017) removes both limits at once:
+
+- **Fully parallel** — every position is computed simultaneously in one matrix multiply (the GPU's favourite workload, Module 2).
+- **Direct long-range connections** — any two positions interact in `O(1)` steps, regardless of distance.
+
+That combination is why transformers replaced recurrence and now power every model in Modules 5–10.
+
+---
+
+## Scaled Dot-Product Attention
+
+The core operation. Each token emits three vectors — a **Query** ("what am I looking for?"), a **Key** ("what do I offer?"), and a **Value** ("what do I actually contain?"):
+
+<Formula label="Scaled dot-product attention" caption="Similarity → weights → weighted sum of values.">Attention(Q, K, V) = softmax(QKᵀ / √d_k) · V</Formula>
+
+<ScaledDotProductAttention caption="QKᵀ scores every query against every key; ÷√d_k keeps the softmax from saturating; softmax turns scores into weights; multiplying by V retrieves a weighted blend of what each token contains." />
+
+The `QKᵀ` product compares *every* query with *every* key — an `N × N` score matrix. Dividing by `√d_k` stops those dot products from growing so large in high dimensions that the softmax collapses to one-hot (and its gradient dies). Softmax normalises each row to attention weights; multiplying by `V` retrieves the relevant information.
+
+<Callout type="why" title="Attention is quadratic — and that bill drives Modules 6 and 7">
+
+Both `QKᵀ` and the `·V` step cost `O(N²·d_k)`. For `N = 4096` tokens that's ~16.7M scores **per head**; at `N = 100K` it's **10 billion**. This quadratic-in-sequence-length cost is *the* reason long-context models are expensive — and the reason **Flash Attention** (Module 6) and the **KV cache** (Module 7) are transformative rather than incremental. Hold onto this number; it explains most of LLM inference economics.
+
+</Callout>
+
+---
+
+## Multi-Head Attention
+
+Rather than one big attention over `d_model` dimensions, run `H` smaller attentions in parallel, each in a `d_k = d_model / H` subspace, then concatenate:
+
+<Formula label="Multi-head attention" caption="H independent attention 'views', concatenated and mixed by W^O.">MultiHead = Concat(head₁, …, head_H) · W^O,   headᵢ = Attention(QWᵢ^Q, KWᵢ^K, VWᵢ^V)</Formula>
+
+<MultiHeadAttention caption="Each head learns to attend to a different relationship — syntax, meaning, position, coreference — and their outputs are concatenated and projected. Diversity of views, at no extra cost over a single wide head." />
+
+Each head can specialise — one tracks subject–verb syntax, another word meaning, another nearby positions, another pronoun→antecedent coreference. Same total compute as one wide head, but far richer representations.
+
+<Callout type="why" title="The causal mask is one triangle of −∞">
+
+Decoder-only models (GPT, LLaMA) must not let a token peek at the future, or next-token training would be trivial. The mechanism is disarmingly simple: before the softmax, add `−∞` to every score where the key is *after* the query — the upper triangle of the `N×N` score matrix. Softmax turns `−∞` into a weight of exactly **0**, so position `i` attends only to `0…i`. No new parameters, no new operation — just a mask added to `QKᵀ`. That single triangle is the entire difference between BERT's bidirectional understanding and GPT's left-to-right generation.
+
+</Callout>
+
+---
+
+## The Full Transformer Block
+
+Attention is only *half* of a transformer layer. A complete **block** stacks two sublayers — multi-head attention and a position-wise **feed-forward network (FFN)** — and wraps each in a **residual connection** and a **normalisation**. Stack `N` identical blocks between a token-embedding table and an output head, and you have the whole model.
+
+<TransformerBlock caption="One block = (Norm → Multi-Head Attention → add) then (Norm → FFN → add). The residual connections form a 'residual stream' running straight up the model; each sublayer reads from it and writes a correction back. LLaMA-3-8B stacks 32 of these; the 70B stacks 80." />
+
+Three ideas make the block work, and two of them you've already met:
+
+- **The FFN is where the thinking-per-token happens.** It's a small two-layer MLP applied *independently* at every position: expand to ~4× width, apply a non-linearity, project back (the **SwiGLU** gated form from Lesson 3.3 in modern LLMs). It holds **~⅔ of the model's parameters** and is widely believed to be where factual **knowledge** is stored. The division of labour is clean: **attention moves information *between* positions; the FFN processes the information *at* each position.**
+- **The residual stream is the additive identity path, again.** Each sublayer computes `x + sublayer(x)` — it doesn't replace the representation, it adds a *correction* to a running sum that flows uninterrupted from the embeddings to the output. This is *exactly* ResNet's skip connection (Lesson 3.4) and the LSTM's additive cell state (Lesson 3.5): the same trick that let CNNs reach 1000 layers is what lets transformers train at 80. Without it, gradients couldn't survive the depth.
+- **Pre-norm vs post-norm.** The 2017 original normalised *after* the residual add (post-norm), which is unstable past a few dozen layers. Every modern LLM uses **pre-norm** — normalise *before* the sublayer — leaving the residual stream a clean, unnormalised highway. It's the single change that most enabled very deep, stably-trained LLMs.
+
+<Callout type="key" title="A whole LLM is this block, repeated">
+
+Zoom out and a frontier model is astonishingly regular: embed tokens → run `N` identical blocks (each: pre-norm → attention → add, pre-norm → FFN → add) → a final norm → an **unembedding / LM head** that projects back to vocabulary logits. There's no exotic machinery — just attention and FFN sublayers on a residual stream, stacked. The "intelligence" is emergent from depth, width, and scale (Lesson 4.5), not from architectural complexity. This uniformity is also *why* the systems optimisations in Modules 6–7 (Flash Attention, the KV cache, quantisation) generalise across every model — they all share this one shape.
+
+</Callout>
+
+---
+
+## The Three Transformer Families
+
+How you **mask** attention determines what a transformer is good for:
+
+<TransformerFamilies caption="Encoder-only sees all tokens both ways (understanding); decoder-only masks the future (generation); encoder-decoder bridges a bidirectional encoder to a causal decoder via cross-attention (seq2seq)." />
+
+<StatGrid items={[
+  { value: "Encoder-only", label: "BERT, RoBERTa, BGE", sub: "bidirectional · MLM · understand & embed" },
+  { value: "Decoder-only", label: "GPT, LLaMA, Mistral", sub: "causal mask · CLM · generate" },
+  { value: "Enc–Decoder", label: "T5, BART, Flan-T5", sub: "cross-attention · span corruption · seq2seq" }
+]} caption="Pick by task: classify/extract/embed → encoder-only; generate/chat → decoder-only; transform input→output (translate, summarise) → encoder-decoder." />
+
+- **Encoder-only (BERT).** No causal mask — every token attends both directions. Pretrained with **Masked Language Modelling** (mask 15%, predict them). Best for understanding: classification, NER, extractive QA, and the **embeddings** that power RAG retrieval (Lesson 4.8).
+- **Decoder-only (GPT/LLaMA).** **Causal mask** — token `i` sees only positions `0…i`. Pretrained with **Causal LM** (predict the next token). Generates autoregressively, one token per forward pass — which is exactly what the **KV cache** (Module 7) accelerates by reusing past K/V.
+- **Encoder–decoder (T5).** A bidirectional encoder feeds a causal decoder through **cross-attention**. Best when input and output formats differ — translation, summarisation.
+
+---
+
+## How Modern LLMs Differ from the 2017 Transformer
+
+The vanilla Transformer has been quietly upgraded. Four changes appear in essentially every modern open LLM (LLaMA, Mistral, Qwen):
+
+<StatGrid items={[
+  { value: "RMSNorm", label: "drops mean-centring", sub: "10–15% faster than LayerNorm" },
+  { value: "RoPE", label: "rotary position", sub: "relative pos, extrapolates" },
+  { value: "GQA", label: "fewer K/V heads", sub: "up to ~21× smaller KV cache" },
+  { value: "SwiGLU", label: "gated FFN", sub: "richer than ReLU, same params" }
+]} caption="You met RMSNorm and SwiGLU in Lesson 3.3 — here they land in their native habitat. RoPE and GQA are attention-specific." />
+
+**RoPE** (rotary position embedding) encodes position by *rotating* the Q and K vectors by an angle proportional to position, so the attention dot product naturally depends on *relative* position — and, unlike a learned position table, it **extrapolates** to longer contexts (via YaRN/NTK scaling). It replaces the original sinusoidal and learned-absolute schemes, neither of which generalise past their training length.
+
+<GroupedQueryAttention caption="Standard multi-head gives each query head its own K and V. GQA lets several query heads SHARE one K/V head; MQA shares a single K/V across all of them. Fewer K/V heads → a dramatically smaller KV cache with minimal quality loss." />
+
+**GQA** matters for *inference memory*, not quality. The KV cache is `2 · H · seq_len · d_head` per layer — for LLaMA-3-70B that's ~10.7 GB. By sharing K/V across groups of query heads (8 KV heads for 32 Q heads), LLaMA-3-8B shrinks it ~21×. **MQA** (one K/V for all heads, used in Falcon) is the extreme. This is the knob that makes long-context serving affordable.
+
+---
+
+## Tokenisation: From Text to Numbers
+
+A network processes integers, not characters. **Tokenisation** maps text to a sequence of token IDs that index an embedding table. The dominant algorithm is **Byte Pair Encoding (BPE)**:
+
+<BPEMerges caption="Start from characters, repeatedly merge the most frequent adjacent pair into a new symbol, until the vocabulary hits its target size (e.g. 128K for LLaMA-3). Common words become single tokens; rare words split into subwords." />
+
+This gives common words their own efficient token while still handling any out-of-vocabulary word by splitting it into subwords. Two consequences worth budgeting for: tokenisation is **asymmetric** (`"hello"` is one token; `"HELLO"` may be three) and **numbers are expensive** (`"123456789"` can be 4+ tokens, split digit-wise — which is why naive LLM arithmetic struggles).
+
+<StatGrid items={[
+  { value: "GPT-2", label: "50,257", sub: "BPE (tiktoken)" },
+  { value: "BERT", label: "30,522", sub: "WordPiece" },
+  { value: "LLaMA-3", label: "128,000", sub: "tiktoken BPE" },
+  { value: "Qwen-2.5", label: "151,936", sub: "tiktoken BPE" }
+]} caption="Bigger vocab → fewer tokens per sentence (cheaper context) but a larger embedding table. LLaMA-3's 128K vocab — 4× LLaMA-2's — is much better for multilingual text and code. SentencePiece (LLaMA-2, T5) is the language-agnostic variant that needs no pre-splitting." />
+
+---
+
+## Recap
+
+- The **Transformer** replaced RNN/CNN sequence models by being **fully parallel** with **direct long-range** connections.
+- **Scaled dot-product attention** scores every query against every key (`softmax(QKᵀ/√d_k)·V`); it is **quadratic in sequence length** — the cost that drives Flash Attention and the KV cache. The **causal mask** (a `−∞` triangle) is what makes a decoder generate left-to-right.
+- **Multi-head** attention runs many specialised attention views in parallel; the **three families** (encoder-only / decoder-only / encoder-decoder) differ by masking and suit understanding / generation / seq2seq.
+- A full **block** = attention + **FFN** sublayers, each on a **residual stream** with **pre-norm**; attention moves info *between* positions, the FFN (≈⅔ of params) processes it *at* each position. A whole LLM is just this block stacked `N` times between embeddings and an LM head — the same additive-identity path as ResNet/LSTM.
+- Modern LLMs add **RMSNorm, RoPE, GQA, SwiGLU**; GQA in particular slashes the inference **KV cache**.
+- **BPE** turns text into subword tokens — asymmetric and number-unfriendly, with vocab size trading context efficiency against embedding-table size.
+
+Next: how these architectures are trained at planetary scale — **pre-training foundation models**.

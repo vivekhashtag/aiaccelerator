@@ -49,7 +49,9 @@ Do not introduce new heavy dependencies without flagging the tradeoff first.
 
 ## 4. Phased Roadmap — build in this order, do not skip ahead
 
-> **CURRENT PHASE: Phase 0** ← update this marker as we progress.
+> **CURRENT PHASE: Phase 2 (content scaling)** ← update this marker as we progress.
+> Phase 0 is complete and live; **Phase 1 (Supabase auth + saved progress) is intentionally deferred** —
+> by user direction we are scaling content first (Modules 1–3 built; marching through 4–10).
 >
 > Hard rule: do not build features from a later phase unless the current phase is complete and I have explicitly moved the marker. If you think a later-phase feature is needed early, say so and ask — do not just build it.
 
@@ -172,8 +174,20 @@ In rough teaching order:
   code so they always load, never 404, carry no licensing risk, and are guaranteed to match the
   prose. This supersedes the "every lesson must be interactive" framing in §1–§2 and the §8
   interactive backlog for now. The reference `TransistorSwitch` interactive was removed.
-  - Diagram library: `components/lesson/Diagrams.tsx` (24 SVG components, registered in `lib/mdx.ts`).
-    Shared `DiagramFrame` + a fixed semantic palette mirroring `styles/tokens.css`.
+  - Diagram library: `components/lesson/diagrams/` (~81 SVG components, registered in `lib/mdx.ts`).
+    Shared `DiagramFrame` + semantic palette in `_shared.tsx`; figures split per module
+    (`module-01.tsx`, `module-02.tsx`, `module-03.tsx`) behind an `index.ts` barrel — reorganized
+    2026-06-15 from the former single `Diagrams.tsx` as it crossed 3,000 lines.
   - **Self-check quizzes removed** from all lessons (see §6). `QuizBlock` is unregistered (file kept).
-- Next concrete steps: deploy to Vercel (point root at `aiaccelerator/`, drop the stray outer
-  lockfile), then continue the same SVG-diagram treatment into Modules 2–10.
+- **Content progress (Phase 2):** Module 1 (7 lessons), Module 2 — Computer Architecture &
+  Accelerators (6 lessons), and Module 3 — AI & Deep Learning Foundations (8 lessons; 3.2 Classical
+  ML and 3.8 Audio added by decision) are all built. Modules 1–2 + the light theme are live on
+  Vercel; Module 3 + the diagrams reorg are committed and pushed 2026-06-15.
+- **DECISION (2026-06-12) — light reading theme.** Lesson content flipped from the dark
+  "engineering instrument" theme to a **light reading theme** (white surfaces, dark text) for
+  legibility; the home page stays dark (it uses hardcoded hex, not tokens). Driven by
+  `styles/tokens.css` + the palette in `diagrams/_shared.tsx`. Lessons are also fully **mobile
+  responsive** (overlay sidebar, hamburger). To revert to dark, restore the prior token/palette
+  values (noted in-file).
+- Next concrete steps: continue the same SVG-diagram treatment into **Module 4** (`Module 04 Gen
+  AI.pdf`, 9 topics) and onward through Module 10.

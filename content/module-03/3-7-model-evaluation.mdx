@@ -1,0 +1,103 @@
+---
+title: "Model Evaluation"
+module: "03"
+moduleTitle: "AI & Deep Learning Foundations"
+lesson: "3.7"
+slug: "3-7-model-evaluation"
+summary: "How to measure whether a model actually works — error terms and regression metrics (MAE/MSE/RMSE/R²), the confusion matrix, precision/recall/F1, ROC-AUC, the error decomposition, calibration, and learning curves for diagnosis."
+prerequisites: ["3.6 Training vs Inference"]
+---
+
+## Accuracy Lies
+
+"Our model is 99% accurate" can be worthless. A cancer screen where 99% of cases are negative gets 99% accuracy by predicting "negative" every time — while catching **zero** cancers. Evaluation is its own engineering discipline: pick the metric that matches the *consequences* of being wrong. We start with the **error term** itself, then build the metrics on top.
+
+---
+
+## Error Terms: Regression
+
+For continuous outputs, the error term is the **residual** — the gap between truth and prediction:
+
+<ResidualsDiagram caption="Each residual is yᵢ − ŷᵢ, the vertical distance from a point to the fitted line. Every regression metric is a different way of summarising these error terms." />
+
+<Formula label="Regression error metrics" caption="Same residuals, different summaries — the choice changes what you optimise for.">MAE = mean|yᵢ−ŷᵢ|     MSE = mean(yᵢ−ŷᵢ)²     RMSE = √MSE     R² = 1 − SS_res/SS_tot</Formula>
+
+How to choose:
+
+| Metric | What it does | Use when |
+|---|---|---|
+| **MAE** | average absolute error, same units as y | you want robustness to outliers |
+| **MSE / RMSE** | squares the error — punishes big misses hard | large errors are disproportionately costly |
+| **MAPE** | error as a % of the true value | you need a scale-free, relatable number |
+| **R²** | fraction of variance the model explains | comparing models on the same target |
+
+<Callout type="insight" title="The metric is a value judgement, not a formula">
+
+MSE vs MAE isn't a technicality — it encodes what you *care about*. Squaring means one 10-unit miss hurts as much as a hundred 1-unit misses, so MSE chases the worst cases (good for, say, demand forecasting where a giant stockout is catastrophic). MAE treats all errors linearly (good when occasional outliers are just noise). Pick the error term that matches the business cost — the same judgement you used choosing a loss in Lesson 3.1.
+
+</Callout>
+
+---
+
+## Error Terms: Classification
+
+For categories, the error terms are **the four outcomes** of a prediction. The **confusion matrix** lays them out:
+
+<ConfusionMatrix caption="True/false × positive/negative. Every classification metric is a ratio of these four cells — and which ratio you care about depends on whether a false positive or a false negative hurts more." />
+
+From these four cells come the core metrics:
+
+<Formula label="Precision, recall, F1" caption="Precision: of predicted positives, how many were right. Recall: of actual positives, how many we caught.">precision = TP/(TP+FP)     recall = TP/(TP+FN)     F1 = 2·P·R/(P+R)</Formula>
+
+There is a **tradeoff**: lower the decision threshold and recall rises but precision falls, and vice-versa. Which to favour depends entirely on consequences:
+
+<StatGrid items={[
+  { value: "Cancer screen", label: "max recall", sub: "a miss (FN) can kill" },
+  { value: "Spam filter", label: "max precision", sub: "deleting real mail (FP) is worse" },
+  { value: "Fraud alert", label: "balance (F1)", sub: "both errors costly" },
+  { value: "Self-driving", label: "both critical", sub: "composite metric" }
+]} caption="F1 is the harmonic mean — it stays low unless both precision and recall are high (precision 1.0, recall 0.1 → F1 = 0.18, not 0.55)." />
+
+**ROC-AUC** evaluates a classifier *across all thresholds* at once:
+
+<ROCCurve caption="The ROC curve plots true-positive rate against false-positive rate at every threshold. AUC is the area beneath: 1.0 is perfect, 0.5 is random. It answers 'does the model rank positives above negatives?'" />
+
+Use **AUC** when you want threshold-independent ranking quality; use **F1** when you've fixed a specific operating threshold. For many-class problems (ImageNet's 1000 classes), **Top-5 accuracy** — true label in the top 5 predictions — is the standard, forgiving of genuine ambiguity.
+
+---
+
+## Where Error Comes From
+
+Every error term decomposes — conceptually — into three parts, which ties evaluation back to Lesson 3.1:
+
+<Formula label="The error decomposition" caption="Bias and variance you can fight; irreducible noise you cannot.">expected error = bias² + variance + irreducible noise</Formula>
+
+- **Bias** — the model is too simple (underfit). High train *and* test error.
+- **Variance** — the model memorised noise (overfit). Low train, high test error — a big **generalisation gap**.
+- **Irreducible noise** — randomness in the data itself; no model removes it.
+
+A **learning curve** (train and validation error vs epochs) is how you *read* this in practice: a widening gap means variance (regularise, get data); both curves high and close means bias (bigger model, train longer); spikes mean an unstable learning rate or a corrupted data pipeline.
+
+---
+
+## Calibration: Are the Confidences Honest?
+
+A model that says "90% confident" should be right ~90% of the time. Modern deep nets are usually **over-confident** — they output 99% on far more than 99%-accurate cases. **Expected Calibration Error (ECE)** measures the gap; **temperature scaling** (dividing logits by a learned `T > 1` before softmax) fixes it with no accuracy cost.
+
+<Callout type="why" title="Calibration is a reliability requirement, not a nicety">
+
+An agent (Module 9) that acts on a classifier's output must trust its confidence — it should treat a 55% prediction very differently from a 99% one. Uncalibrated confidence makes a "confident" agent dangerous. This is the first thread of the **Agent Evaluation & Reliability** theme that runs through Modules 9–10: a model that can't say *how sure it is* can't be safely automated.
+
+</Callout>
+
+---
+
+## Recap
+
+- **Accuracy alone misleads** on imbalanced data — choose metrics by the *cost* of each error.
+- **Regression error terms** are residuals; summarise them with **MAE** (robust), **MSE/RMSE** (punish big misses), **MAPE** (scale-free), **R²** (variance explained) — the choice is a value judgement.
+- **Classification** flows from the **confusion matrix**: precision vs recall (a tradeoff set by consequences), **F1** (harmonic mean), **ROC-AUC** (threshold-independent ranking), Top-K.
+- Error decomposes into **bias² + variance + noise**; **learning curves** diagnose which you have.
+- **Calibration** makes confidence trustworthy — the entry point to agent reliability (Modules 9–10).
+
+Next: the audio front-end and the signal-processing filters behind ASR and TTS — **Audio, Sampling & Filters**.

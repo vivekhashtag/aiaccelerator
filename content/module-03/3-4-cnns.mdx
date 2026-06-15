@@ -1,0 +1,114 @@
+---
+title: "Convolutional Neural Networks"
+module: "03"
+moduleTitle: "AI & Deep Learning Foundations"
+lesson: "3.4"
+slug: "3-4-cnns"
+summary: "How networks learn to see — the convolution operation (and its tie to signal processing), stride/padding/pooling, the classic architectures from LeNet to ResNet to MobileNet, the receptive field, and transfer learning."
+prerequisites: ["3.3 Neural Networks from Scratch"]
+---
+
+## Why MLPs Fail at Images
+
+Take a standard `224×224×3` image — that's 150,528 input values. A single fully-connected hidden layer of 4096 would need **616 million weights**, for *one* layer. Worse, an MLP treats every pixel as an independent feature: a cat in the top-left and the same cat in the bottom-right are completely unrelated inputs. It has no notion of space.
+
+**Convolutional Neural Networks** fix this by baking in three priors about images: **local connectivity** (a neuron sees only a small patch), **weight sharing** (the same filter runs at every position), and **hierarchy** (early layers find edges, later layers find objects).
+
+---
+
+## The Convolution Operation
+
+A convolutional layer slides a small learned **filter** (kernel) across the input, computing a dot product at every position to produce a **feature map**.
+
+<ConvolutionOp caption="The filter slides over the input; at each position it computes a dot product with the underlying patch, writing one value into the feature map. Slide it everywhere and you get the whole map." />
+
+<Formula label="2D convolution" caption="A weighted sum over a local patch — a MAC at every output position.">Output[i,j] = Σₘ Σₙ Input[i+m, j+n] · Filter[m,n] + bias</Formula>
+
+Because the *same* filter weights are reused at every position, a CNN learns "an edge detector" **once** and applies it everywhere — that's weight sharing, the analogue of an RNN sharing weights across time. A real layer has shape `(C_out, C_in, K, K)`: many filters, each spanning all input channels. The cost is pure MACs:
+
+<Formula label="Convolution MAC count" caption="You computed this exact formula in Lab 1-D.">MACs = C_in × C_out × K × K × H_out × W_out</Formula>
+
+ResNet-50's first layer (`7×7`, 3→64 channels, 224→112) alone is **118 million MACs** — for one image. This is why CNN inference is a GPU/accelerator job.
+
+<Callout type="insight" title="This is the convolution from signal processing">
+
+If you've seen signals and systems, this is the *same* convolution. The filter is an **impulse response**; sliding-and-summing is a **linear, time-invariant (LTI) operation**; "weight sharing across position" is exactly what *time-invariance* means. A CNN layer is a bank of learned LTI filters — and that lens pays off directly in Lesson 3.8, where we turn audio into images (spectrograms) and convolve over them.
+
+</Callout>
+
+---
+
+## Stride, Padding, Pooling
+
+Three knobs control how feature maps shrink and how much spatial detail survives:
+
+- **Padding** — `VALID` (no pad) lets the map shrink each layer; `SAME` zero-pads so the output keeps the input's size. Most CNNs use SAME to control dimensions deliberately.
+- **Stride** — how far the filter jumps. Stride 1 preserves size; stride 2 halves it (learned downsampling).
+- **Pooling** — downsample by aggregating local regions, with no parameters.
+
+<PoolingDiagram caption="2×2 max pooling: each region collapses to its strongest activation, halving the spatial size and giving cheap translation invariance. Average pooling and global average pooling are variants." />
+
+**Global average pooling (GAP)** is the modern replacement for the giant fully-connected classifier head: average each entire feature-map channel down to a single number, turning an `H×W×C` tensor into a `C`-vector with **zero parameters**. VGG's dense layers held ~90% of its weights; GAP deletes them, which curbs overfitting and lets the network accept any input size — which is why ResNet and nearly every CNN since ends in GAP.
+
+---
+
+## Dilated Convolutions
+
+A **dilated** (atrous) convolution spaces its taps apart by a dilation factor instead of sampling adjacent pixels. The filter keeps its 9 weights but covers a wider area, so stacking dilated layers grows the receptive field *exponentially* with depth — without adding parameters and without throwing away resolution the way pooling does.
+
+<DilatedConvolution caption="A 3×3 filter dilated by 2 still has only 9 weights, but its taps span a 5×5 region. Stack a few and the receptive field explodes — dense context with full-resolution output." />
+
+This is the backbone of dense-prediction models: **WaveNet** stacks dilated convolutions to model raw audio across thousands of samples (Lesson 3.8), and segmentation networks use them to see global context while keeping pixel-level output.
+
+---
+
+## The Classic Architectures
+
+The history of CNNs is a history of going **deeper** — and of the tricks that made depth trainable.
+
+<StatGrid items={[
+  { value: "LeNet-5", label: "1998", sub: "first practical CNN" },
+  { value: "AlexNet", label: "2012", sub: "ReLU+dropout+GPU; ignited DL" },
+  { value: "VGG", label: "2014", sub: "depth via 3×3 stacks" },
+  { value: "ResNet", label: "2015", sub: "skip connections → 1000 layers" }
+]} caption="AlexNet's 2012 ImageNet win (15.3% top-5 error, 10.8 points ahead) is the moment the industry realised deep nets on GPUs dominate." />
+
+**VGG's** lesson: a stack of two `3×3` filters covers the same receptive field as one `5×5`, but with fewer parameters and *two* non-linearities. Smaller filters, more depth, better features.
+
+**ResNet's** breakthrough solved a real problem: past ~20 layers, deeper networks got *worse* on both training and test error — gradients vanished before reaching the early layers. The fix is the **skip connection**:
+
+<ResNetSkipBlock caption="Instead of learning the full mapping, the block learns a residual F(x) and adds the input back: output = F(x) + x. The skip path guarantees a gradient route of strength ≥ 1." />
+
+<Callout type="key" title="Skip connections and LSTM gates solve the same problem the same way">
+
+The `+x` means the backward gradient always has a path of strength ≥ 1 — vanishing gradients (Lesson 3.3) can't kill it, so ResNets train at 50, 101, even 1000+ layers. Hold onto this shape: the LSTM's *additive* cell-state update (Lesson 3.5) is the very same trick applied across time, and the transformer's residual stream (Module 4) is it again. **Additive identity paths are how deep nets stay trainable.**
+
+</Callout>
+
+**MobileNet** went the other way — *efficiency* for edge devices — splitting a convolution into a **depthwise** (per-channel spatial) plus a **pointwise** (`1×1` channel-mixing) step, cutting MACs ~8–9×. This is the architecture you'll run on the Raspberry Pi (Module 5) and the FPGA (Module 8).
+
+---
+
+## Receptive Field & Transfer Learning
+
+A neuron's **receptive field** is the region of the input that can influence it. Stack layers and it grows — which is how a final-layer neuron comes to "see" the whole image.
+
+<ReceptiveField caption="Each 3×3 layer widens the receptive field by 2. Depth is what lets a deep neuron integrate context from across the entire image." />
+
+For FPGA streaming inference (Module 8), the receptive field literally sets how much input must be buffered before computation can start — an architecture choice with a hardware cost.
+
+**Transfer learning** is the practical shortcut that makes CNNs usable without a data centre: take a model pretrained on ImageNet, keep its early layers (they learned universal edge/texture/colour detectors), and retrain only the final layer(s) for your task. **Feature extraction** (freeze the backbone) needs minutes and little data; **fine-tuning** (unfreeze with a low learning rate) needs more but scores higher. You'll do exactly this in Lab 3-D with ResNet-50.
+
+**Data augmentation** is the other half of training on limited data: randomly flip, crop, rotate, colour-jitter, or mix (Mixup/CutMix) each image every epoch, so the network sees a fresh variant each pass and learns the invariances real images have — a cat mirrored is still a cat. It's essentially free regularisation and is standard in every vision pipeline.
+
+---
+
+## Recap
+
+- CNNs beat MLPs on images via **local connectivity, weight sharing, and hierarchy** — far fewer weights, and built-in spatial awareness.
+- **Convolution** is a learned filter dot-producted across the input (a MAC per position) — and it's the *same* operation as signal-processing convolution (a bank of learned LTI filters), a bridge we cash in for audio in Lesson 3.8.
+- **Stride/padding/pooling** manage spatial size; **global average pooling** replaces the FC head with zero parameters; **dilated convolutions** widen the receptive field exponentially without extra weights; **MobileNet's** depthwise-separable convs make CNNs edge-ready.
+- The architecture arc **LeNet → AlexNet → VGG → ResNet** is the story of going deeper; **ResNet's skip connection** (an additive identity path) defeats vanishing gradients — the same trick as LSTMs and transformers.
+- The **receptive field** grows with depth (and sets FPGA buffering); **transfer learning** and **data augmentation** make all of this practical without massive data.
+
+Next: sequences and memory — **RNNs, LSTMs, and why transformers replaced them**.

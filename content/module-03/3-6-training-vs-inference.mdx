@@ -1,0 +1,78 @@
+---
+title: "Training vs Inference"
+module: "03"
+moduleTitle: "AI & Deep Learning Foundations"
+lesson: "3.6"
+slug: "3-6-training-vs-inference"
+summary: "The same model lives two very different lives — training (forward + backward + update, all activations stored) vs inference (forward only). Memory footprints, the three inference modes, gradient checkpointing, and torch.compile — the hinge into Modules 5-10."
+prerequisites: ["3.5 RNNs & Sequence Modelling"]
+---
+
+## One Model, Two Lives
+
+This short lesson is the hinge between *building* models (this module) and *deploying* them (Modules 5–10). The same network behaves completely differently depending on whether you are **training** it or **serving** it.
+
+- **Training** — forward pass, compute loss, **backward pass** (backprop), update weights. Runs in large batches, stores every activation, and keeps gradients and optimiser state. Compute-bound.
+- **Inference** — forward pass *only*. No gradients, no updates. Can run at batch=1, discards activations immediately, and the weights are frozen (so they can be quantized and cached). Memory-bandwidth-bound at small batch.
+
+<Callout type="why" title="torch.no_grad() and model.eval() are not the same switch">
+
+`model.eval()` changes *behaviour* — it makes dropout pass-through and BatchNorm use running stats (Lesson 3.3). `torch.no_grad()` changes *bookkeeping* — it stops building the autograd graph, cutting ~30–40% of time and memory. **Production inference needs both.** Forgetting `eval()` gives wrong, non-deterministic outputs; forgetting `no_grad()` just wastes memory and speed.
+
+</Callout>
+
+---
+
+## The Memory Gap
+
+The defining difference is memory. Training must hold four things; inference holds essentially one.
+
+<TrainInferenceMemory caption="Training carries weights + gradients + optimiser state (Adam's m,v) + every layer's activations. Inference carries weights and one layer's activations. The gap is roughly 15–24× vs 4–5× the parameter size." />
+
+<Formula label="Memory, in multiples of parameter count P" caption="Training is dominated by activations and optimiser state — neither exists at inference.">train ≈ 15–24 × P          infer ≈ 4–5 × P (or 2P in FP16)</Formula>
+
+<StatGrid items={[
+  { value: "ResNet-50", label: "~1.5 GB train", sub: "~50 MB infer" },
+  { value: "BERT-base", label: "~6.6 GB train", sub: "~220 MB infer" },
+  { value: "Llama-3-8B", label: "~480 GB train", sub: "~14 GB infer" },
+  { value: "Llama-3-70B", label: "~4.2 TB train", sub: "~140 GB infer" }
+]} caption="This is why Llama-3-8B serves on one RTX 4090 (24 GB) but won't train even on 8×A100 (640 GB) without checkpointing and ZeRO sharding." />
+
+<Callout type="key" title="This is the Module 2 roofline, made concrete">
+
+The activation memory comes straight from backprop needing every forward activation (Lesson 3.3); the optimiser state from Adam (Lesson 3.1). At **inference, batch=1**, you reload all the weights to produce each output and barely reuse them — **memory-bandwidth-bound**, exactly as the roofline predicted in Module 2. Raise the batch size and the same weights serve many inputs → arithmetic intensity climbs → you cross into **compute-bound**. The optimal inference batch size *is* the roofline's ridge point.
+
+</Callout>
+
+---
+
+## The Three Inference Modes
+
+"Inference" isn't one thing — the serving pattern dictates the hardware and the metrics.
+
+<InferenceModes caption="Batch (throughput, offline) · Real-time (lowest latency, an SLA) · Streaming (token-by-token, measured by time-to-first-token and tokens/sec)." />
+
+- **Batch** — thousands of inputs together; maximise throughput; latency irrelevant (offline scoring, dataset labelling).
+- **Real-time** — one input, minimum latency under an SLA (50 ms for speech, frames for vision). Throughput secondary.
+- **Streaming** — produce output incrementally (LLM tokens, live ASR). Measured by **TTFT** (time-to-first-token) and **tokens/sec**. This is the mode Module 7 lives in.
+
+---
+
+## Training Large Models on Small Memory
+
+Two techniques you'll meet constantly:
+
+**Gradient checkpointing** — don't store every activation; keep only a few "checkpoints" and *recompute* the rest during the backward pass. Costs ~33% extra compute, but activation memory drops from O(N) to O(√N) for N layers. It's what lets Llama-70B and GPT-3 train at all.
+
+**`torch.compile()`** (PyTorch 2.0+) — traces the graph and applies operator fusion, memory-layout optimisation, and kernel selection automatically (1.5–2.5× inference speedup). It's the eager-mode bridge to the graph-optimisation world of Module 6 — the same fusion ideas, one line of code.
+
+---
+
+## Recap
+
+- **Training** = forward + backward + update, large batches, all activations stored — compute-bound and memory-hungry. **Inference** = forward only, frozen weights, discardable activations — memory-bandwidth-bound at batch=1.
+- Always set **`model.eval()` and `torch.no_grad()`** for serving — different switches, both required.
+- The **memory gap** (~15–24× P vs ~4–5× P) is why models you can serve on one GPU may need a cluster to train — a direct consequence of backprop + Adam, and a restatement of the Module 2 roofline.
+- The **three inference modes** (batch / real-time / streaming) set your metrics and hardware; **gradient checkpointing** and **`torch.compile()`** stretch what fits.
+
+Next: how to tell whether any of it actually *works* — **model evaluation**.

@@ -1,10 +1,47 @@
 # Project Status
 
-**Last updated:** 2026-06-12
+**Last updated:** 2026-06-15 — Module 3 DL-depth enrichment done, `Diagrams.tsx` split per-module into `components/lesson/diagrams/`, docs updated. **Module 3 + Harvard fix + diagrams reorg being committed & pushed this session.** (Light theme + mobile responsive shipped earlier in commit `74863d9`.)
 
 ---
 
-## ✅ Module 2 built (2026-06-12): Computer Architecture & Accelerators
+## 🧪 Module 3 built (2026-06-12): AI & Deep Learning Foundations — NOT yet pushed
+
+**8 lessons** under `content/module-03/`. The source `Module 03.pdf` had 6 topics; we **added two by decision** — `3.2 Classical ML` and `3.8 Audio` (see notes). Same image-rich pattern, light theme, module accent = **Violet**. `next build` green (21 lesson pages total: 7+6+8). **+29 new SVG diagrams** in `Diagrams.tsx` (registered in `lib/mdx.ts`).
+
+- `3-1-ml-overview` — paradigms, train/val/test, loss, bias–variance (+ double descent), gradient descent + Adam.
+- `3-2-classical-ml-ensembling` ★ NEW (decision) — regression/trees/**XGBoost**, bagging/boosting/stacking, k-means/PCA, **classical-vs-deep** framework, BFSI use cases. Engineering-judgment altitude, not theory.
+- `3-3-neural-networks-from-scratch` — neuron = MAC, activations, MLP, init/BatchNorm/dropout, backprop.
+- `3-4-cnns` — convolution (+ **convolution-as-LTI** bridge), pooling, LeNet→ResNet→MobileNet, receptive field, transfer learning.
+- `3-5-rnns-sequences` — RNN/BPTT/vanishing, LSTM/GRU, why transformers replaced RNNs.
+- `3-6-training-vs-inference` — memory gap, 3 inference modes, checkpointing, `torch.compile`.
+- `3-7-model-evaluation` — **error terms expanded per request**: regression (MAE/MSE/RMSE/R² + residuals) AND classification (confusion matrix, P/R/F1, ROC-AUC), error decomposition, calibration.
+- `3-8-audio-filters-asr-tts` ★ NEW (decision) — **filters in depth per request** (filtering = convolution, FIR/IIR, low/high/band-pass, windowing), sampling/Nyquist, STFT→mel filterbank→MFCC, Whisper ASR, TTS vocoder.
+
+> **✅ DONE (2026-06-15) — DL-depth enrichment added to 3.3/3.4/3.5:**
+> - **3.3:** SiLU/Swish + **SwiGLU** (LLaMA), **exploding gradients + gradient clipping**, **LayerNorm vs RMSNorm**, AdamW/weight-decay/LR-warmup/label-smoothing.
+> - **3.4:** **dilated convolutions** (+ new `DilatedConvolution` SVG), **global average pooling**, **data augmentation**.
+> - **3.5:** **bidirectional RNNs + seq2seq** encoder-decoder, exploding-gradient + clipping note.
+> Kept "a bit more" — mostly prose + one new dilated-conv diagram. Recaps updated. `next build` green (24 pages).
+
+> **Module 4 preview (read for forward-refs):** the updated `Module 04 Gen AI.pdf` now has **9 topics** — autoencoders, VAEs, GANs, transformers/attention, pretraining, fine-tuning, **Unsloth**, RAG, prompting (richer than `curriculum.md`'s 4.1–4.7).
+
+> **Harvard fix:** a paragraph on Harvard architecture (DSP/microcontroller pure-Harvard; modern CPU = modified-Harvard with split L1 I/D caches) was added to `2-1-cpu-architecture.mdx` to close a curriculum-parity gap — also uncommitted.
+
+---
+
+## 🎨 Lessons now LIGHT theme + mobile responsive (2026-06-12) — ✅ pushed (commit `74863d9`)
+
+**Light reading theme** — supersedes the dark "engineering instrument" theme (below) for *module content*. The **home page is intentionally still dark** (it uses hardcoded hex, not tokens).
+- Flipped `styles/tokens.css` to white surfaces / dark text; `LessonLayout` (accent-light → darker shade, light top bar, `prose` not `prose-invert`); the `C` palette in `Diagrams.tsx` to light-card values, incl. **39 highlight tints rehued** to the palette.
+- To revert to dark: restore the previous token/palette values (noted in-file).
+
+**Mobile responsive** — driven by media-query classes in `app/globals.css`:
+- Sidebar is an overlay (≤1024px) with a **fixed top-left ≡ hamburger** that also reflows the desktop reading column (`body.sidebar-collapsed`); marketing grids stack (≤880px); padding tightens (≤768px); MDX tables scroll.
+- `next.config.ts` gained **`allowedDevOrigins`** so the dev server hydrates when tested over the LAN/phone (without it: no JS → hamburger & sidebar-expand silently "don't work").
+
+---
+
+## ✅ Module 2 built (2026-06-12) & pushed/live: Computer Architecture & Accelerators
 
 Module 2 authored in the same image-rich pattern as Module 1 — prose + callouts + formulas +
 hand-drawn SVG diagrams + stat-grids + recap, no interactives, no quizzes. **6 lessons** mapping
@@ -18,9 +55,9 @@ hand-drawn SVG diagrams + stat-grids + recap, no interactives, no quizzes. **6 l
 - `2-6-parallelism` — Dennard's end, Amdahl/Gustafson, data/tensor/pipeline/expert parallelism, micro-batching, continuous batching, disaggregation, speculative decoding.
 
 **+22 new SVG diagrams** added to `Diagrams.tsx` (registered in `lib/mdx.ts`); palette gained
-`blue`/`violet` accents for Module 2. **Build verified:** `next build` green, all 13 lesson pages
-(7 + 6) prerender; the home-page Module 2 card auto-flips to "6 lessons" (content is
-directory-discovered). **Not yet pushed to GitHub / deployed** — local only so far.
+`blue`/`violet` accents for Module 2. **Build verified:** `next build` green; the home-page Module 2
+card auto-flips to "6 lessons" (content is directory-discovered). **Pushed to GitHub & deploying on
+Vercel** (commit `74863d9`, 2026-06-12) — bundled with the light theme + responsive work above.
 
 > Module 2 labs (2-A Roofline plotter, 2-B pipeline sim, 2-C GPU-vs-CPU benchmark, 2-D bandwidth
 > benchmark) are deferred with the Module 1 labs as a separate hands-on track.
@@ -108,9 +145,13 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 ### Phase 2 — scale the content
 - [x] Port all Module 1 lesson content from PDF (Topics 1.1–1.7) ✓ done 2026-06-09
 - [x] Module 1 SVG diagrams — every topic illustrated ✓ done 2026-06-11
-- [x] Module 2 — Computer Architecture & Accelerators (6 lessons, 22 SVG diagrams) ✓ 2026-06-12
-- [ ] Push Module 2 to GitHub + verify Vercel deploy
-- [ ] March through Modules 3–10 (prose + SVG diagrams, same pattern)
+- [x] Module 2 — Computer Architecture & Accelerators (6 lessons, 22 SVG diagrams) ✓ **pushed** 2026-06-12
+- [x] Light reading theme + full mobile responsive ✓ **pushed** 2026-06-12 (commit `74863d9`)
+- [x] Module 3 — AI & Deep Learning Foundations (8 lessons, 30 SVG diagrams) ✓ built 2026-06-12; DL-depth enrichment + dilated-conv diagram added 2026-06-15
+- [x] DL-depth enrichment to 3.3/3.4/3.5 ✓ 2026-06-15 (see Module 3 section)
+- [x] Reorganized diagrams — split `Diagrams.tsx` (3,176 lines) into `components/lesson/diagrams/` (`_shared` + `module-01/02/03` + `index` barrel) ✓ 2026-06-15
+- [x] Updated `docs/curriculum.md` (8-lesson Module 3) + `CLAUDE.md` (§4 phase marker, §10 status, light theme, diagrams reorg) ✓ 2026-06-15
+- [ ] **▶ NEXT:** March through Modules 4–10 (prose + SVG diagrams, same pattern) — Module 4 source `Module 04 Gen AI.pdf` on disk (9 topics)
 
 > The old "Module 1 interactive backlog" (CMOS NAND, live truth tables, bit-flipper, MAC
 > animation, systolic array, etc.) is **shelved** as of the 2026-06-11 direction change. Each is
@@ -126,7 +167,7 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 | Route | `app/modules/[module]/[lesson]/page.tsx` |
 | Lesson shell | `components/lesson/LessonLayout.tsx` |
 | Sidebar | `components/lesson/LessonSidebar.tsx` |
-| **SVG diagrams** | `components/lesson/Diagrams.tsx` (51 figures — 29 Module 1 + 22 Module 2 — the course "images") |
+| **SVG diagrams** | `components/lesson/diagrams/` (81 figures — 29 Module 1 + 22 Module 2 + 30 Module 3 — the course "images"). Split per module: `_shared.tsx` (palette `C`, light-theme + `DiagramFrame`), `module-01/02/03.tsx`, `index.ts` barrel. |
 | MDX content blocks | `components/lesson/LessonBlocks.tsx` (Callout / Formula / Figure / StatGrid) |
 | Prev/next nav | `components/lesson/LessonNav.tsx` |
 | Quiz (unregistered, kept for later) | `components/lesson/QuizBlock.tsx` |

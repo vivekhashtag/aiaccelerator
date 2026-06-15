@@ -30,6 +30,12 @@ Caches, pipelines, out-of-order execution, the GPU's thousands of cores, the FPG
 
 </Callout>
 
+### Harvard: a second bus
+
+The most direct way to ease the bottleneck is to **stop sharing the bus**. A **Harvard architecture** gives instructions and data their *own* separate memories and buses, so the processor can fetch the next instruction *and* read or write data **in the same cycle**. Pure Harvard machines are common in **DSPs and microcontrollers**, where predictable, sustained throughput matters more than flexibility.
+
+General-purpose CPUs use a pragmatic blend called **modified Harvard**: a single unified main memory (von Neumann — code is just data you can load and run) feeding **split L1 instruction and data caches** (Harvard) right at the core. You keep von Neumann's flexibility while getting Harvard's parallel fetch where it actually pays off — at the fast end of the **memory hierarchy** (Lesson 2.4), which is also why this counts as a fix for the *structural hazard* we meet later in this lesson.
+
 ---
 
 ## The Fetch–Decode–Execute Cycle

@@ -1,0 +1,113 @@
+---
+title: "Audio, Filters & Speech (ASR/TTS)"
+module: "03"
+moduleTitle: "AI & Deep Learning Foundations"
+lesson: "3.8"
+slug: "3-8-audio-filters-asr-tts"
+summary: "The audio use case end to end — sampling and Nyquist, filters in depth (FIR/IIR, low/high/band-pass, windowing), the waveform→STFT→mel front-end and MFCCs, and the ASR (speech→text) and TTS (text→speech) pipelines that build on the rest of this module."
+prerequisites: ["3.7 Model Evaluation"]
+---
+
+## Sound Is a Signal
+
+So far the inputs were images (CNNs) and token sequences (RNNs). **Audio** is a third kind: a continuous pressure wave — a *signal*. To feed it to a neural network we must first **sample** it: measure its amplitude at a fixed rate.
+
+<AudioSampling caption="A continuous sound wave measured fs times per second. Each dot is one sample. Speech is typically 16 kHz; CD audio 44.1 kHz." />
+
+Two parameters define the digitisation: the **sample rate** `fs` (samples/sec) and the **bit depth** (bits per sample). The sample rate is governed by a hard law:
+
+<Formula label="The Nyquist–Shannon sampling theorem" caption="Sample below this and high frequencies fold down into false low ones — aliasing.">fs > 2 × (highest frequency present)</Formula>
+
+<Callout type="why" title="Aliasing is sampling's version of a silent bug">
+
+Human speech lives mostly below 8 kHz, so 16 kHz sampling captures it (Nyquist satisfied). Sample too slowly and frequencies above `fs/2` don't just disappear — they **alias**, masquerading as lower frequencies that corrupt the signal irreversibly. The fix is a **filter**: a low-pass *anti-aliasing* filter applied *before* sampling removes the too-high frequencies first. Which is exactly why filters come next.
+
+</Callout>
+
+---
+
+## Filters: Shaping a Signal
+
+A **filter** passes some frequencies and attenuates others. This is the signal-processing core of audio — and you already know its mathematics, because **a filter is a linear, time-invariant (LTI) system, and applying it is convolution**:
+
+<Formula label="Filtering is convolution" caption="The filter's impulse response h convolved with the signal x — the same operation as a CNN layer (Lesson 3.4).">y[n] = Σₖ h[k] · x[n−k]</Formula>
+
+This is the **same convolution** from Lesson 3.4 — there the kernel was a learned image filter; here `h` is a designed audio filter. A CNN layer *is* a bank of learned filters; classical DSP *designs* them by hand.
+
+**FIR vs IIR.** A **FIR** (Finite Impulse Response) filter has a finite `h` — just convolution with a fixed set of taps; always stable, easy to reason about. An **IIR** (Infinite Impulse Response) filter feeds its own output back (recurrence), getting a sharper response from far fewer coefficients — but it can go unstable, like the RNNs of Lesson 3.5.
+
+By *which* frequencies they keep, filters come in three basic shapes:
+
+<FilterResponse caption="Low-pass keeps low frequencies (anti-aliasing, smoothing); high-pass keeps high (pre-emphasis, removing DC drift); band-pass keeps a middle band (telephony, formant isolation)." />
+
+In a speech pipeline you meet all three: a **low-pass** anti-aliasing filter before sampling, a **high-pass pre-emphasis** filter to boost the quieter high frequencies that carry consonant information, and — coming up — a whole **bank of band-pass filters** to extract features.
+
+<Callout type="insight" title="Windowing: the filter you apply before every STFT">
+
+To analyse how frequencies change over time we chop audio into short overlapping frames — but a hard cut creates spurious frequencies (spectral leakage). So each frame is multiplied by a smooth **window** (Hann, Hamming) that tapers to zero at the edges. A window is itself a filter applied in time; choosing it trades frequency resolution against leakage. This is the bridge from a raw waveform to the time–frequency picture a neural net wants.
+
+</Callout>
+
+---
+
+## From Waveform to Features
+
+Neural nets don't eat raw samples well — too long, too redundant. The standard front-end turns audio into an **image** of frequency over time.
+
+<SpectrogramPipeline caption="Slice the waveform into windowed frames, take the Short-Time Fourier Transform of each (STFT) to get a spectrogram, then pass it through the mel filterbank to get a compact mel-spectrogram." />
+
+The **STFT** runs a Fourier transform on each short frame, giving a **spectrogram**: how much energy sits at each frequency, at each moment. Then we reduce its hundreds of frequency bins with the **mel filterbank** — a set of overlapping **triangular band-pass filters**, spaced on the perceptual *mel* scale (narrow and dense at low frequencies, wide and sparse at high, mirroring human hearing):
+
+<MelFilterbank caption="Each triangle is a band-pass filter summing the energy in its band. Spacing follows the mel scale — so the features match how we actually perceive pitch. This is filters from the last section, applied as a feature extractor." />
+
+Take the **log** of the mel energies (loudness is perceived logarithmically) and you have a **log-mel spectrogram** — the input to modern speech models like Whisper. Apply one more step, a **DCT** to decorrelate the bands, and you get the classic **MFCCs** that powered ASR for decades.
+
+<Callout type="key" title="The whole front-end is just filters and convolution">
+
+Anti-aliasing (low-pass), pre-emphasis (high-pass), windowing (a time filter), the STFT, and the mel filterbank (band-pass bank) — every step is a filter. And once audio is a mel-spectrogram **image**, you process it with the *same* convolutions and transformers from the rest of this module. The signals-and-systems content earns its place here precisely because it's the on-ramp to the neural network.
+
+</Callout>
+
+---
+
+## ASR: Speech → Text
+
+**Automatic Speech Recognition** turns the mel-spectrogram into text.
+
+<ASRPipeline caption="Audio → mel front-end → encoder (learns acoustic features) → decoder (emits text tokens). Whisper is an encoder–decoder transformer trained on 680k hours of audio." />
+
+Two decoding styles dominate: **CTC** (predict a character per frame, then collapse repeats — fast, non-autoregressive) and **attention/encoder-decoder** (generate text tokens one at a time, like an LLM — more accurate, the Whisper approach).
+
+<Callout type="why" title="ASR decode is an LLM inference problem in disguise">
+
+An attention-based ASR decoder generates tokens **autoregressively** — one at a time, each depending on the last. That makes it **memory-bandwidth-bound at batch=1**, with the exact same KV-cache and latency concerns as LLM serving (Module 7). Everything you'll learn there — continuous batching, quantization, streaming — applies directly to deploying Whisper. Speech is not a separate world; it's the same inference stack with an audio front-end.
+
+</Callout>
+
+---
+
+## TTS: Text → Speech
+
+**Text-to-Speech** runs the pipeline backwards: turn text into a mel-spectrogram, then render that into a waveform.
+
+<TTSPipeline caption="Text → acoustic model (predicts a mel-spectrogram, e.g. Tacotron 2 / FastSpeech) → neural vocoder (mel → waveform, e.g. HiFi-GAN / WaveNet) → audio." />
+
+The split mirrors ASR. The **acoustic model** predicts *what* the speech should look like in mel-space; the **vocoder** is the expensive part that synthesises the actual high-rate waveform (a vocoder must produce 16,000+ samples per second). Early vocoders (WaveNet) used **dilated convolutions** — the same dilation from Lesson 3.4 — to cover long audio context; modern ones (HiFi-GAN) use GANs for real-time synthesis.
+
+<Callout type="insight" title="ASR and TTS are real-time/streaming inference">
+
+Both are latency-sensitive: a voice assistant needs sub-50 ms response (Lesson 3.6's real-time mode), and live captioning/streaming TTS produce output incrementally (streaming mode). On edge devices the models are **quantized** (Module 6) and may run on a DSP, NPU, or FPGA (Module 8). The audio use case stitches together every thread of this course — signals → CNNs/transformers → inference modes → optimisation → hardware.
+
+</Callout>
+
+---
+
+## Recap
+
+- **Audio is a sampled signal**; the **Nyquist theorem** (`fs > 2·f_max`) sets the rate, and an anti-aliasing **low-pass filter** must run before sampling.
+- A **filter** is an LTI system, and filtering **is convolution** — the same operation as a CNN layer. **FIR** (stable, finite) vs **IIR** (sharp, recurrent); **low/high/band-pass** shapes; **windowing** tames STFT leakage.
+- The audio front-end — **STFT → spectrogram → mel filterbank (band-pass bank) → log/MFCC** — is filters all the way down, producing an "image" the network convolves over.
+- **ASR** (audio → mel → encoder/decoder → text, e.g. Whisper) is autoregressive, memory-bound decode — an LLM inference problem; **TTS** runs it backwards (acoustic model → vocoder).
+- Speech is **real-time/streaming inference** that reuses every layer of this course — the perfect bridge into Modules 4–8.
+
+This completes Module 3. **Next — Module 4: Generative AI & LLM Fundamentals** — autoencoders, the transformer and attention from first principles, pretraining and fine-tuning, and RAG.

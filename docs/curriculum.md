@@ -68,13 +68,15 @@ Goal: how CPUs, GPUs, and FPGAs differ architecturally, why GPUs suit AI, and ho
 
 Goal: implement neural nets from scratch in NumPy, reproduce them in PyTorch, then train/evaluate a CNN on real images.
 
-**Topics**
-3.1 ML overview — supervised/unsupervised, bias-variance, loss functions, gradient descent, optimizers, regularization
-3.2 Neural nets from scratch — perceptron, MLP, activations, forward pass, backprop, weight init, batch/layer norm, dropout
-3.3 CNNs for vision — convolution, filters, pooling, classic architectures (LeNet→ResNet→MobileNet), transfer learning
-3.4 RNNs & sequence modeling — vanilla RNN, BPTT, vanishing gradient, LSTM, GRU, seq2seq, attention preview
-3.5 Training vs inference — memory/compute differences, batch size effects, no_grad/eval/compile
-3.6 Model evaluation — accuracy/precision/recall/F1, confusion matrix, ROC-AUC, benchmarks, over/underfitting
+**Topics** *(built as 8 lessons — 3.2 Classical ML and 3.8 Audio added by decision; see STATUS.md)*
+3.1 ML overview — supervised/unsupervised, train/val/test, bias-variance + double descent, loss functions, gradient descent, optimizers (Adam)
+3.2 Classical ML & ensembling ★ — regression/trees/XGBoost, bagging/boosting/stacking, k-means/PCA, classical-vs-deep framework, BFSI use cases
+3.3 Neural nets from scratch — perceptron, MLP, activations (incl. SiLU/SwiGLU), backprop, weight init, batch/layer/RMS norm, dropout, AdamW/warm-up, gradient clipping
+3.4 CNNs for vision — convolution (as LTI), pooling + global average pooling, dilated convolutions, classic architectures (LeNet→ResNet→MobileNet), receptive field, transfer learning, data augmentation
+3.5 RNNs & sequence modeling — vanilla RNN, BPTT, vanishing/exploding gradient + clipping, LSTM, GRU, bidirectional, seq2seq, why transformers replaced RNNs
+3.6 Training vs inference — memory/compute differences, the 3 inference modes, checkpointing, no_grad/eval/compile
+3.7 Model evaluation — regression (MAE/MSE/RMSE/R², residuals) + classification (confusion matrix, P/R/F1, ROC-AUC), error decomposition, calibration
+3.8 Audio, filters & ASR/TTS ★ — filtering as convolution (FIR/IIR, low/high/band-pass, windowing), sampling/Nyquist, STFT→mel→MFCC, Whisper ASR, TTS vocoder
 
 **Labs**
 - 3-A MLP from Scratch (NumPy only)

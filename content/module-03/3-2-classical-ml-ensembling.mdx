@@ -1,0 +1,128 @@
+---
+title: "Classical ML & Ensembling"
+module: "03"
+moduleTitle: "AI & Deep Learning Foundations"
+lesson: "3.2"
+slug: "3-2-classical-ml-ensembling"
+summary: "The models that win when the data is tabular — linear and logistic regression, decision trees, random forests, and gradient boosting (XGBoost); plus k-means, PCA, SVM, k-NN; the bagging/boosting/stacking ensemble family; and a clear framework for choosing classical ML vs deep learning."
+prerequisites: ["3.1 Machine Learning Overview"]
+---
+
+## Not Every Problem Is a Neural Network
+
+This course is about deep learning and the hardware that runs it — but a working AI engineer who reaches for a neural network *every* time will lose. An enormous share of real production ML, especially in **finance, insurance, and operations**, is **tabular**: rows of structured features (age, income, transaction count, days-since-last-login) predicting an outcome (default, fraud, churn). On that kind of data, **gradient-boosted trees routinely beat deep nets** — with less data, less tuning, faster training, and a model you can actually explain to a regulator.
+
+This lesson is the toolbox for that world. It's deliberately at **engineering altitude**: what each model is good at and *when to reach for it*, not the derivations.
+
+---
+
+## The Baselines: Linear & Logistic Regression
+
+Always start here. A baseline you understand beats a complex model you don't.
+
+- **Linear regression** predicts a continuous value as a weighted sum of features: `ŷ = wᵀx + b`. The same dot product you've seen since Module 1 — a single neuron with no activation.
+- **Logistic regression** wraps that sum in a sigmoid to predict a **probability** for classification: `p = σ(wᵀx + b)`. Despite the name, it's the workhorse classifier — fast, calibrated, and fully interpretable (each weight is a feature's effect on the log-odds).
+
+<Callout type="insight" title="A neural network is regression stacked and bent">
+
+Linear regression is one neuron. Logistic regression is one neuron with a sigmoid. Stack thousands of them with non-linear activations between (Lesson 3.3) and you get a deep network. Classical and deep ML are the same machinery at different scales — which is exactly why the bias–variance and gradient-descent ideas from 3.1 carry straight over.
+
+</Callout>
+
+---
+
+## Decision Trees: Rules a Human Can Read
+
+A **decision tree** asks a sequence of yes/no questions about the features, splitting the data until each leaf is (mostly) one class.
+
+<DecisionTreeDiagram caption="Each internal node tests one feature; each path ends in a decision. A tree is a flowchart the model learned by itself — which is why it's so easy to audit." />
+
+Trees are wonderfully **interpretable** and need no feature scaling — but a single deep tree **overfits** badly (high variance: memorises the training rows). The fix is not to abandon trees, but to combine many of them. That's ensembling, and it's where tabular ML gets its power.
+
+---
+
+## Ensembling: Many Weak Models, One Strong One
+
+The core idea: a crowd of imperfect models, combined well, beats any single one. Three recipes dominate:
+
+<EnsembleMethods caption="Bagging trains models in parallel on bootstrap samples and votes (cuts variance). Boosting trains them in sequence, each fixing the last's mistakes (cuts bias). Stacking trains a meta-model to blend them." />
+
+- **Bagging** (Bootstrap Aggregating) — train many trees *in parallel* on random resamples of the data, then average/vote. This averages away the variance of individual trees. A **Random Forest** is bagging plus random feature subsets at each split.
+- **Boosting** — train trees *in sequence*, each one focused on the examples the previous trees got wrong, then sum their weighted predictions. This drives down bias and produces the strongest tabular models. **XGBoost** and **LightGBM** are the industry standard.
+- **Stacking** — train several different base models, then train a **meta-model** to learn the best way to combine their outputs. Squeezes out the last few points; common in competitions.
+
+<Callout type="key" title="Bagging fights variance, boosting fights bias">
+
+Map this straight back to Lesson 3.1's tradeoff. **Random Forest** (bagging) takes high-variance trees and averages the variance down — robust, hard to overfit, trivially parallel. **Gradient boosting** (XGBoost) takes weak high-bias stumps and adds them up to reduce bias — higher accuracy, but you must tune learning rate and tree count or it overfits. For most tabular problems, a tuned gradient-boosted model is the one to beat.
+
+</Callout>
+
+---
+
+## The Rest of the Toolbox
+
+A quick map of the other classical models worth knowing — and when each earns its place:
+
+| Model | Best for | Note |
+|---|---|---|
+| **Logistic regression** | Baselines, calibrated probabilities | Fast, interpretable, hard to beat as a starting point |
+| **Random Forest** | Robust tabular classification | Low-tuning, parallel, resists overfitting |
+| **XGBoost / LightGBM** | Highest-accuracy tabular | The tabular champion; needs tuning |
+| **SVM** | Small data, clear margins | Powerful with kernels, scales poorly to big data |
+| **k-NN** | Simple, lazy baselines | No training; slow at predict time |
+| **Naive Bayes** | Text/spam, tiny data | Fast, surprisingly strong on word counts |
+
+---
+
+## Unsupervised: Finding Structure Without Labels
+
+Two classical tools you'll keep using — including inside the deep-learning and LLM pipeline:
+
+**k-means clustering** partitions data into *k* groups by repeatedly assigning each point to its nearest centroid and moving centroids to the mean of their members.
+
+<KMeansClusters caption="No labels — k-means discovers the groups by minimizing each point's distance to its cluster centroid. Used for customer segmentation, anomaly grouping, and exploring embeddings." />
+
+**PCA (Principal Component Analysis)** compresses many correlated features into a few **principal components** that capture the most variance — for visualisation, denoising, and speeding up downstream models.
+
+<Callout type="why" title="These resurface in Module 4">
+
+Clustering and dimensionality reduction aren't just classical-ML relics — they run *inside* modern AI systems. In **RAG** (Module 4) you cluster and reduce embedding vectors; **vector search** is nearest-neighbour (k-NN) at scale; anomaly detection on agent traces (Module 9) is clustering. Learn them here, reuse them everywhere.
+
+</Callout>
+
+---
+
+## Classical ML vs Deep Learning: The Decision
+
+This is the judgment that matters most — and the cheapest mistake to get wrong.
+
+<ClassicalVsDeep caption="Tabular, smaller data, interpretability, CPU budget → gradient-boosted trees. Images, audio, text, raw high-dimensional signals, large data, accelerator budget → deep nets." />
+
+<Callout type="pitfall" title="Reaching for deep learning by default is the classic over-engineer">
+
+Deep nets shine on **perceptual, high-dimensional, raw** data — pixels, audio samples, token sequences — where features must be *learned*. On **structured tabular** data with engineered features, a gradient-boosted tree usually wins on accuracy *and* trains in seconds on a CPU *and* gives you feature importances for the compliance team. Defaulting to a neural network there costs you accuracy, money, GPUs, and explainability all at once.
+
+</Callout>
+
+### Where this lands in finance (BFSI)
+
+Concrete use cases where classical ML is the right call — and why:
+
+<StatGrid items={[
+  { value: "Fraud", label: "XGBoost", sub: "tabular txns, fast, ranked alerts" },
+  { value: "Credit", label: "Logistic / GBM", sub: "must be explainable to regulators" },
+  { value: "Churn", label: "Random Forest", sub: "feature importances guide action" },
+  { value: "AML", label: "Clustering + trees", sub: "group unusual behaviour" }
+]} caption="In BFSI, interpretability and latency are often non-negotiable — which is exactly where boosted trees and logistic regression beat a black-box net." />
+
+---
+
+## Recap
+
+- On **tabular** data — the bulk of production ML, especially in BFSI — **classical models often beat deep nets** on accuracy, speed, cost, and explainability.
+- **Linear/logistic regression** are the baselines (and the atoms of neural networks); always start there.
+- A single **decision tree** is interpretable but overfits — so we **ensemble**: **bagging** (Random Forest) cuts variance, **boosting** (XGBoost/LightGBM) cuts bias, **stacking** blends models.
+- **k-means** and **PCA** find structure without labels — and reappear inside RAG, vector search, and agent monitoring (Module 4, 9).
+- The key engineering call: **tabular/interpretable/CPU → boosted trees**; **perceptual/raw/large/accelerator → deep nets**. Don't reach for deep learning by reflex.
+
+Next: we build the deep-learning side from the ground up — a single neuron to a trained network — in **Neural Networks from Scratch**.

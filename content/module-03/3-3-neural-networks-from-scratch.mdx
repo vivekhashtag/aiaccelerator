@@ -1,0 +1,112 @@
+---
+title: "Neural Networks from Scratch"
+module: "03"
+moduleTitle: "AI & Deep Learning Foundations"
+lesson: "3.3"
+slug: "3-3-neural-networks-from-scratch"
+summary: "Build the deep-learning machine from one neuron up — the neuron as a MAC, why non-linear activations are essential, the MLP, weight initialisation, batch norm and dropout, and backpropagation: the chain rule that lets a network learn."
+prerequisites: ["3.2 Classical ML & Ensembling"]
+---
+
+## One Neuron Is One MAC
+
+A neural network looks intimidating until you see its atom. An **artificial neuron** takes inputs, multiplies each by a weight, sums them, adds a bias, and passes the result through an activation function.
+
+<NeuronMAC caption="A neuron: weighted sum of inputs (the dot product wᵀx) plus a bias, then a non-linear activation. The dot product is exactly the MAC operation from Module 1." />
+
+<Formula label="The neuron" caption="A weighted sum (pre-activation z), then an activation f.">z = wᵀx + b          a = f(z)</Formula>
+
+That weighted sum `wᵀx` is **the MAC from Module 1** — one multiply-accumulate per input. A neuron's forward pass is N MACs; a layer is a matrix multiply (Module 2); a network is millions of them. The bias `b` shifts the decision boundary off the origin, so the neuron can represent more than lines through zero.
+
+The **perceptron** (Rosenblatt, 1957) was a single neuron with a step activation. Its fatal limit: it can only separate *linearly* separable data — it famously cannot learn XOR. The fix is depth: stack neurons into layers.
+
+---
+
+## Why Non-Linearity Is Essential
+
+Here is the most important idea in the whole module. Stack two *linear* layers and you get:
+
+<Formula label="Linear layers collapse" caption="Two linear layers are mathematically just one — depth buys nothing without non-linearity.">W₂(W₁x + b₁) + b₂ = (W₂W₁)x + (W₂b₁ + b₂)</Formula>
+
+No matter how many linear layers you stack, the result is *still a single linear function*. **Non-linear activations** break this collapse — they're what let depth represent arbitrarily complex mappings (the Universal Approximation Theorem).
+
+<ActivationFunctions caption="Sigmoid and tanh saturate at the extremes (their gradients vanish); ReLU passes positive values through unchanged; GELU is a smooth ReLU used in transformers." />
+
+<StatGrid items={[
+  { value: "Sigmoid", label: "(0,1) output", sub: "binary output layer only" },
+  { value: "Tanh", label: "(−1,1), zero-centred", sub: "LSTM gates" },
+  { value: "ReLU", label: "max(0,z)", sub: "the workhorse" },
+  { value: "GELU", label: "smooth ReLU", sub: "BERT, GPT" }
+]} caption="ReLU's gradient is exactly 1 for positive inputs — which is what let networks go from ~10 layers to 1000." />
+
+<Callout type="pitfall" title="Sigmoid in hidden layers kills deep networks">
+
+At large inputs, sigmoid's derivative is ≈ 0. In backpropagation that near-zero multiplies at *every* layer — after 10 layers the gradient reaching the front is `0.25¹⁰ ≈ 10⁻⁷`, effectively zero. This **vanishing gradient** is why deep nets were untrainable until **ReLU** (gradient 1 for positive inputs) replaced sigmoid in hidden layers. (Watch out for the opposite failure too — a ReLU neuron stuck always-negative "dies"; Leaky ReLU fixes it.)
+
+</Callout>
+
+Modern LLMs push past GELU. **SiLU/Swish** (`x·σ(x)`) is a smooth, self-gating activation; **SwiGLU** — a gated variant where a Swish-activated branch multiplies a second linear branch — is the feed-forward activation in LLaMA, PaLM, and most current LLMs, buying a small but reliable quality gain for a modest extra matmul.
+
+---
+
+## The Multi-Layer Perceptron
+
+Stack neurons into layers, and layers into a network. Each layer is a matrix multiply plus an activation.
+
+<MLPArchitecture caption="An MLP: fully-connected layers. Each layer computes Hˡ = f(Wˡ·Hˡ⁻¹ + bˡ) — the matrix multiply from Module 2, made non-linear by f." />
+
+<Formula label="MLP forward pass (per layer)" caption="X is a batch of inputs; this is one matrix multiply per layer — the GPU's favourite operation.">Hˡ = f(Hˡ⁻¹ · Wˡᵀ + bˡ)</Formula>
+
+A modest MNIST MLP (`784 → 512 → 512 → 10`) has ~670K parameters and needs ~670K MACs per image — about 1.3 MFLOPs. An H100 could run it ~760 billion times a second; as the roofline predicted, the limit here is **batch throughput and memory bandwidth**, not compute.
+
+---
+
+## Making Training Actually Work
+
+Three techniques separate "a network that trains" from "a network that diverges."
+
+**Weight initialisation.** Start all weights at zero and every neuron in a layer computes the same thing forever (symmetry never breaks). Too large and activations explode; too small and they vanish. **Xavier/Glorot** init (for sigmoid/tanh) and **He/Kaiming** init (for ReLU) set the variance so signals stay healthy across depth — He is PyTorch's default for `Linear` and `Conv2d`.
+
+**Batch normalisation.** Normalise each layer's activations to zero mean / unit variance per mini-batch, then learn a scale and shift. This allows much higher learning rates, reduces sensitivity to init, and acts as a mild regulariser.
+
+<Callout type="warning" title="BatchNorm behaves differently in training vs inference">
+
+In training, BN uses the *current batch's* statistics; in inference it uses *running averages* accumulated during training — which is why `model.eval()` matters. Get this wrong and a model that's perfect in training gives garbage at batch=1 in production. (At tiny batch sizes, batch stats are too noisy — transformers use **LayerNorm** instead, normalising across features rather than the batch, so it behaves identically at any batch size. Newer LLMs like LLaMA go further with **RMSNorm**, which drops the mean-centring and rescales by the root-mean-square alone — cheaper, with no measurable quality loss.)
+
+</Callout>
+
+**Dropout.** During training, randomly zero a fraction of neurons each step. This forces the network not to rely on any single neuron — an implicit ensemble (echoing Lesson 3.2). Like BN, it's **off at inference** (`model.eval()`); forgetting to switch is a classic production bug that makes outputs change run-to-run.
+
+**Optimiser and schedule.** Production training rarely uses plain Adam. **AdamW** decouples **weight decay** (an L2 pull toward smaller weights) from the gradient step, which generalises better and is the default for transformers. A short **learning-rate warm-up** — ramping the LR up from near-zero over the first few hundred steps — keeps the early, noisy gradients from destabilising training before the running statistics settle, after which a cosine schedule anneals it back down. **Label smoothing** (training against a target of 0.9 instead of 1.0) stops the model becoming over-confident and improves its calibration (Lesson 3.7).
+
+**Exploding gradients.** Vanishing is one failure mode; the mirror image is the **exploding gradient** — when the per-layer factors exceed 1, their product blows up and the loss goes to `NaN`. The standard guard is **gradient clipping**: whenever the gradient vector's norm crosses a threshold, rescale it back down, capping the step size without changing its direction. It's near-universal in training RNNs (Lesson 3.5) and transformers.
+
+---
+
+## Backpropagation: How a Network Learns
+
+Forward pass gives a prediction and a loss. **Backpropagation** is how we get the gradient of that loss with respect to *every* weight — efficiently — so gradient descent (Lesson 3.1) can take a step. It's just the **chain rule** applied from the output backward.
+
+<BackpropFlow caption="Forward: compute each layer's output and store its activations. Backward: starting from the loss, apply the chain rule layer by layer to get every gradient." />
+
+<Formula label="The chain rule, per layer" caption="Each layer's gradient is built from the next layer's — that's the 'back' in backprop.">∂L/∂Wˡ = ∂L/∂zˡ · (aˡ⁻¹)ᵀ          ∂L/∂aˡ⁻¹ = (Wˡ)ᵀ · ∂L/∂zˡ</Formula>
+
+Frameworks (PyTorch, JAX) do this automatically via a **computational graph**: every tensor op records how to compute its backward pass, and `.backward()` walks the graph in reverse. Beautifully, the softmax + cross-entropy gradient simplifies to just `∂L/∂z = a − y`.
+
+<Callout type="why" title="Backprop is why training costs so much more than inference">
+
+The backward pass needs every intermediate **activation** from the forward pass — so training must store them all simultaneously, while inference can discard each layer's activations as soon as it's done. For ResNet-50 at batch 32, activations are ~2.4 GB vs ~50 MB at inference. That ~15–24× memory gap (we quantify it in Lesson 3.6) is the single biggest reason a model you can *serve* on one GPU may need a cluster to *train*. It's also why Adam's optimiser state (Lesson 3.1) hurts so much.
+
+</Callout>
+
+---
+
+## Recap
+
+- A **neuron** is a MAC (`wᵀx + b`) plus an activation; the bias shifts the boundary, and a perceptron alone can't even learn XOR.
+- **Non-linear activations** are essential — without them any depth collapses to one linear layer. **ReLU** (and GELU/**SwiGLU** in transformers) beat sigmoid/tanh by not vanishing.
+- An **MLP** stacks these into matrix-multiply layers — the GPU's favourite workload.
+- **He/Xavier init, batch/layer norm, dropout, AdamW + warm-up, and gradient clipping** are what make deep training stable; BN and dropout switch behaviour at `eval()` time.
+- **Backpropagation** is the chain rule run backward over the computational graph — and its need to store all activations is why training is far more memory-hungry than inference.
+
+Next: give the network an eye — **convolutional neural networks** for images.

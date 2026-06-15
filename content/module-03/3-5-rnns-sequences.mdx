@@ -1,0 +1,103 @@
+---
+title: "RNNs & Sequence Modelling"
+module: "03"
+moduleTitle: "AI & Deep Learning Foundations"
+lesson: "3.5"
+slug: "3-5-rnns-sequences"
+summary: "Giving a network memory — the recurrent cell and weight sharing across time, backpropagation through time and the vanishing-gradient wall, how LSTMs fix it with a gated cell state, and why transformers replaced recurrence for most tasks."
+prerequisites: ["3.4 Convolutional Neural Networks"]
+---
+
+## Sequences Need Memory
+
+CNNs exploit *spatial* structure. But text, audio, and time-series have *temporal* structure — earlier elements change the meaning of later ones. Consider:
+
+> "The **bank** can guarantee deposits will eventually be safe…"
+
+Is "bank" a riverbank or a financial institution? The answer depends on words that come *later*. MLPs and CNNs process fixed-size inputs with no notion of order. **Recurrent Neural Networks** process a sequence step by step, carrying a **hidden state** that acts as memory of everything seen so far.
+
+---
+
+## The Recurrent Cell
+
+At each step `t`, an RNN combines the current input `xₜ` with the previous hidden state `hₜ₋₁` to produce a new hidden state:
+
+<Formula label="The recurrent update" caption="The same weights Wₓ, Wₕ, b are reused at every step — weight sharing across time.">hₜ = tanh(Wₓ·xₜ + Wₕ·hₜ₋₁ + b)</Formula>
+
+To see the computation, **unroll** the loop into a chain of identical cells:
+
+<RNNUnroll caption="The same cell applied at each time step, passing its hidden state forward. Weight sharing across time mirrors the CNN's weight sharing across space — but the steps must run in sequence." />
+
+<Callout type="why" title="Sequential dependency is the RNN's blessing and its curse">
+
+Carrying `hₜ` forward is what gives an RNN memory — but `hₜ` can't be computed until `hₜ₋₁` is done. A length-1024 sequence needs 1024 sequential matrix multiplies that **cannot be parallelised across time**. This is precisely the wall the GPU (Module 2) hates — and the core reason transformers, which process all positions at once, eventually won.
+
+</Callout>
+
+---
+
+## The Vanishing Gradient, Again
+
+Training uses **Backpropagation Through Time (BPTT)** — the chain rule applied along the unrolled chain. And here the vanishing-gradient problem from Lesson 3.3 returns with a vengeance:
+
+<Formula label="Gradient through time" caption="The recurrent weight is multiplied by itself T times — exponential decay.">∂hₜ/∂h₁ = Πₖ Wₕᵀ · diag(tanh′(zₖ))</Formula>
+
+If the recurrent weight's largest singular value is below 1 (needed for stability), this product **shrinks exponentially** with sequence length. For `T = 100`, the gradient from the end back to the start is essentially zero — so a vanilla RNN simply **cannot learn long-range dependencies**. If "safe" is 50 words after "bank," the connection never gets learned.
+
+The same product can also go the *other* way: when the recurrent weight's singular values exceed 1, the gradient **explodes** and the loss goes to `NaN`. RNNs are especially prone to this, so **gradient clipping** — rescaling the gradient whenever its norm crosses a threshold — is a standard part of training them. Clipping tames the exploding side; the LSTM below tackles the vanishing side.
+
+---
+
+## LSTM: A Protected Memory
+
+The **LSTM** (Hochreiter & Schmidhuber, 1997) fixes this with an explicitly managed **cell state** — a "conveyor belt" that carries information across many steps with minimal interference — regulated by three learned **gates**.
+
+<LSTMCell caption="The cell state runs along the top, modified only by a forget gate (×) and an input gate (+). Gates decide what to erase, what to write, and what to output — protecting long-range memory." />
+
+<Formula label="The cell-state update" caption="Additive: forget some old memory, add some new — gradients flow through the +.">cₜ = fₜ ⊙ cₜ₋₁ + iₜ ⊙ c̃ₜ          hₜ = oₜ ⊙ tanh(cₜ)</Formula>
+
+The gates: **forget** (`fₜ`) decides what to erase, **input** (`iₜ`) what new info to write, **output** (`oₜ`) what to emit. The key is that the cell-state update is **additive**.
+
+<Callout type="key" title="You have seen this exact fix twice now">
+
+When the forget gate is near 1, the gradient flows through `cₜ = fₜ ⊙ cₜ₋₁ + …` *additively*, without shrinking — which is precisely how ResNet's `F(x) + x` skip connection (Lesson 3.4) defeats vanishing gradients, only here across **time** instead of depth. The **GRU** is a lighter LSTM (two gates, no separate cell state, ~⅓ fewer parameters) that often matches it. Additive identity paths: the universal trick for training deep things.
+
+</Callout>
+
+---
+
+## Stacking the Pieces: Bidirectional & Seq2Seq
+
+Two patterns turn the basic cell into something useful for real tasks.
+
+A **bidirectional RNN** runs two independent recurrences — one left-to-right, one right-to-left — and concatenates their hidden states, so every position's representation carries context from *both* directions. For our "bank" sentence, the later word "deposits" can now reach back to disambiguate it. The trade-off: it needs the whole sequence up front, so it suits transcription and tagging, not live streaming.
+
+**Sequence-to-sequence (seq2seq)** handles tasks where the input and output lengths differ — translation, summarisation. An **encoder** RNN compresses the input into a fixed-length context vector; a **decoder** RNN generates the output from it one token at a time. Its weakness — cramming an entire sentence into a single vector — is exactly what **attention** was invented to relieve (Module 4), and that idea grew into the transformer.
+
+---
+
+## Why Transformers Replaced RNNs
+
+RNNs and LSTMs have two structural limits:
+
+1. **Sequential computation** — `hₜ` depends on `hₜ₋₁`; you can't parallelise across time, wasting the GPU's thousands of cores.
+2. **Long-range degradation** — even LSTMs strain past ~1000 tokens.
+
+The **Transformer** (Vaswani et al., 2017) replaced recurrence with **attention**: every position attends to every other position *in parallel*, with a direct (length-1) gradient path between any two tokens. Both limits gone — which is why transformers power every modern LLM. (We build attention from first principles in **Module 4**.)
+
+<Callout type="insight" title="RNNs aren't dead — they fit where transformers don't">
+
+Recurrence still wins where you process tokens **one at a time as they arrive** (true streaming — a transformer wants the whole sequence), on **memory-constrained edge devices** (an LSTM is far smaller), and for naturally recurrent **time-series** (sensor and financial signals). Knowing *when* to use each is the same model-selection judgment as Lesson 3.2 — just one level up.
+
+</Callout>
+
+---
+
+## Recap
+
+- **RNNs** give networks memory via a hidden state passed across time, with weights shared across steps (the temporal analogue of CNN weight sharing).
+- Their **sequential dependency** blocks parallelism (bad for GPUs), and **BPTT** suffers exponential **vanishing gradients** on long sequences (and exploding ones, which **gradient clipping** tames).
+- **LSTMs** add a gated, **additive** cell state — the same anti-vanishing trick as ResNet skip connections — letting them carry long-range memory; **GRUs** are a lighter variant. **Bidirectional** RNNs add right-to-left context, and **seq2seq** encoder–decoders handle differing input/output lengths (the seed of attention).
+- **Transformers** replaced recurrence by making all positions interact in parallel with direct gradient paths (Module 4) — but RNNs still fit streaming, edge, and time-series niches.
+
+Next: the same model, two very different lives — **training vs inference**.

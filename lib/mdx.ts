@@ -66,7 +66,45 @@ import {
   AmdahlCurve,
   ParallelismTypes,
   MicroBatchPipeline,
-} from "@/components/lesson/Diagrams";
+  // 3.1 ML overview
+  MLLandscape,
+  DataSplitBar,
+  BiasVarianceCurve,
+  GradientDescentLandscape,
+  // 3.2 Classical ML
+  DecisionTreeDiagram,
+  EnsembleMethods,
+  KMeansClusters,
+  ClassicalVsDeep,
+  // 3.3 Neural nets
+  NeuronMAC,
+  ActivationFunctions,
+  MLPArchitecture,
+  BackpropFlow,
+  // 3.4 CNNs
+  ConvolutionOp,
+  DilatedConvolution,
+  PoolingDiagram,
+  ResNetSkipBlock,
+  ReceptiveField,
+  // 3.5 RNNs
+  RNNUnroll,
+  LSTMCell,
+  // 3.6 Training vs inference
+  TrainInferenceMemory,
+  InferenceModes,
+  // 3.7 Evaluation
+  ConfusionMatrix,
+  ROCCurve,
+  ResidualsDiagram,
+  // 3.8 Audio / filters
+  AudioSampling,
+  SpectrogramPipeline,
+  ASRPipeline,
+  TTSPipeline,
+  FilterResponse,
+  MelFilterbank,
+} from "@/components/lesson/diagrams";
 
 const components = {
   Callout,
@@ -126,6 +164,37 @@ const components = {
   AmdahlCurve,
   ParallelismTypes,
   MicroBatchPipeline,
+  // Module 3
+  MLLandscape,
+  DataSplitBar,
+  BiasVarianceCurve,
+  GradientDescentLandscape,
+  DecisionTreeDiagram,
+  EnsembleMethods,
+  KMeansClusters,
+  ClassicalVsDeep,
+  NeuronMAC,
+  ActivationFunctions,
+  MLPArchitecture,
+  BackpropFlow,
+  ConvolutionOp,
+  DilatedConvolution,
+  PoolingDiagram,
+  ResNetSkipBlock,
+  ReceptiveField,
+  RNNUnroll,
+  LSTMCell,
+  TrainInferenceMemory,
+  InferenceModes,
+  ConfusionMatrix,
+  ROCCurve,
+  ResidualsDiagram,
+  AudioSampling,
+  SpectrogramPipeline,
+  ASRPipeline,
+  TTSPipeline,
+  FilterResponse,
+  MelFilterbank,
 };
 
 export async function renderMDX(source: string) {

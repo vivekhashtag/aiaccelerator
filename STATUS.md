@@ -1,6 +1,6 @@
 # Project Status
 
-**Last updated:** 2026-06-15 — Module 3 DL-depth enrichment done, `Diagrams.tsx` split per-module into `components/lesson/diagrams/`, docs updated. **Module 3 + Harvard fix + diagrams reorg being committed & pushed this session.** (Light theme + mobile responsive shipped earlier in commit `74863d9`.)
+**Last updated:** 2026-06-15 — Module 3 DL-depth enrichment done, `Diagrams.tsx` split per-module into `components/lesson/diagrams/`, docs updated, two missing-React-key bugs fixed. **Module 3 + Harvard fix + diagrams reorg committed & pushed (`a5ee03b`) → Vercel auto-deploying.** (Light theme + mobile responsive shipped earlier in `74863d9`.)
 
 ---
 

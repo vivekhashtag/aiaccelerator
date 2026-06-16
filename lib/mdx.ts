@@ -208,6 +208,9 @@ import {
   TileAlignment,
   KVCacheQuant,
   SpeculativeDecoding,
+  // 6.6 The complete optimization pipeline
+  OptimizationPipeline,
+  ResNet50Journey,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -378,6 +381,8 @@ const components = {
   TileAlignment,
   KVCacheQuant,
   SpeculativeDecoding,
+  OptimizationPipeline,
+  ResNet50Journey,
 };
 
 export async function renderMDX(source: string) {

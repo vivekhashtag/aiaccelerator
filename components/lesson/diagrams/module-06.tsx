@@ -596,3 +596,72 @@ export function SpeculativeDecoding({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   6.6 — The Complete Optimization Pipeline
+   ════════════════════════════════════════════════════════════ */
+
+/* The 5-phase optimization decision flow, ordered by risk. */
+export function OptimizationPipeline({ caption }: { caption?: string }) {
+  const phases = [
+    { t: "1 · Characterise", s: "profile, find bottleneck", risk: "measure", c: C.off },
+    { t: "2 · Quick wins", s: "BF16 · Flash · compile", risk: "no risk", c: C.on },
+    { t: "3 · Quantization", s: "INT8 → QAT → AWQ", risk: "moderate", c: C.gate },
+    { t: "4 · Architecture", s: "prune · distill", risk: "higher", c: C.hole },
+    { t: "5 · HW tuning", s: "TensorRT · CUDA graphs", risk: "no risk", c: C.blue },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 220" width="100%" role="img" aria-label="The five-phase optimization pipeline">
+        {phases.map((p, i) => {
+          const y = 26 + i * 36;
+          return (
+            <g key={`ph${i}`}>
+              <rect x="40" y={y} width="200" height="28" rx="6" fill={`${p.c}16`} stroke={p.c} strokeWidth="1.3" />
+              <text x="52" y={y + 18} fontFamily={mono} fontSize="8.5" fontWeight="700" fill={p.c}>{p.t}</text>
+              <text x="250" y={y + 18} fontFamily={mono} fontSize="8" fill={C.muted}>{p.s}</text>
+              <rect x="446" y={y + 3} width="74" height="22" rx="4" fill={p.risk === "no risk" || p.risk === "measure" ? `${C.on}12` : `${p.c}12`} stroke={p.c} strokeWidth="0.9" />
+              <text x="483" y={y + 18} textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={p.c}>{p.risk}</text>
+              {i < 4 && <line x1="140" y1={y + 28} x2="140" y2={y + 36} stroke={C.faint} strokeWidth="1.2" />}
+            </g>
+          );
+        })}
+        <text x="280" y="214" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.faint}>at every phase: benchmark → verify accuracy → proceed or stop. Never skip measurement.</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* ResNet-50 optimization journey: cumulative speedup waterfall. */
+export function ResNet50Journey({ caption }: { caption?: string }) {
+  const steps = [
+    { t: "FP32", ms: 42.3, cum: "1×", acc: "76.3", c: C.off },
+    { t: "+BF16", ms: 21.8, cum: "1.9×", acc: "76.2", c: C.blue },
+    { t: "+compile", ms: 16.2, cum: "2.6×", acc: "76.2", c: C.violet },
+    { t: "+INT8", ms: 9.8, cum: "4.3×", acc: "75.9", c: C.gate },
+    { t: "+TensorRT", ms: 5.1, cum: "8.3×", acc: "75.8", c: C.on },
+    { t: "+prune", ms: 3.2, cum: "13.2×", acc: "75.4", c: LIME },
+  ];
+  const bx = (i: number) => 36 + i * 86;
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 230" width="100%" role="img" aria-label="ResNet-50 optimization journey">
+        <line x1="28" y1="170" x2="540" y2="170" stroke={C.line} strokeWidth="1" />
+        {steps.map((s, i) => {
+          const h = s.ms * 3.2;
+          return (
+            <g key={`rs${i}`}>
+              <rect x={bx(i)} y={170 - h} width="56" height={h} rx="3" fill={`${s.c}30`} stroke={s.c} strokeWidth="1.3" />
+              <text x={bx(i) + 28} y={170 - h - 6} textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={s.c}>{s.ms}ms</text>
+              <text x={bx(i) + 28} y="184" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={C.text}>{s.t}</text>
+              <text x={bx(i) + 28} y="196" textAnchor="middle" fontFamily={mono} fontSize="7" fill={LIME}>{s.cum}</text>
+              <text x={bx(i) + 28} y="208" textAnchor="middle" fontFamily={mono} fontSize="6.8" fill={C.muted}>{s.acc}%</text>
+            </g>
+          );
+        })}
+        <text x="284" y="24" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>ResNet-50: 42.3 ms → 3.2 ms = 13.2× faster, for −0.9% top-1</text>
+        <text x="284" y="224" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.faint}>every step measured and logged — the engineering record that justifies each deployment decision</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

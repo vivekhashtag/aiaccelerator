@@ -1,0 +1,90 @@
+---
+title: "The Complete Optimization Pipeline"
+module: "06"
+moduleTitle: "Model Optimization & Efficient Inference"
+lesson: "6.6"
+slug: "6-6-optimization-pipeline"
+summary: "Putting all five techniques together into a systematic, measurement-driven workflow. The five-phase decision flow ordered by accuracy risk, the benchmarking protocol that validates every step, a worked ResNet-50 journey from 42 ms to 3 ms (13.2×), and the thresholds worth memorising."
+prerequisites: ["6.1 Quantization", "6.2 Pruning & Sparsity", "6.3 Knowledge Distillation", "6.4 Graph Optimization & Operator Fusion", "6.5 Hardware-Aware Optimization"]
+---
+
+## From Techniques to Process
+
+You now have the full toolkit — quantization, pruning, distillation, graph optimization, hardware tuning. The difference between a junior who *knows* these and a senior who *ships* with them is **process**: applying them in the right order, measuring at every step, and stopping when the target is met. This capstone is that process.
+
+---
+
+## The Five-Phase Decision Flow
+
+Apply techniques in order of **payoff-per-risk** — cheap, zero-risk wins first; accuracy-risky changes only if you still need more:
+
+<OptimizationPipeline caption="Phase 1 characterises (profile, find whether you're compute- or memory-bound from the roofline). Phase 2 takes the free wins (BF16, Flash Attention, torch.compile). Phase 3 quantizes (moderate risk). Phase 4 changes the architecture (pruning, distillation — higher risk). Phase 5 does hardware-specific compilation (zero risk again). Benchmark and verify accuracy between every phase." />
+
+<Callout type="key" title="The order is the lesson">
+
+Most teams jump straight to phase 4 (pruning/distillation) and wonder why they got 2× when they needed 10× — they skipped the cheaper, safer 4× sitting in phases 2–3. **BF16 + Flash + torch.compile + INT8** alone often delivers most of the win with almost no accuracy cost and no training. Exhaust the low-risk phases before you spend training time or accuracy budget.
+
+</Callout>
+
+---
+
+## The Benchmarking Protocol
+
+Every phase must be validated with the **same** protocol — there is no optimization without measurement. For each candidate, record four numbers against the baseline:
+
+<StatGrid items={[
+  { value: "Accuracy", label: "+ accuracy_drop", sub: "vs the accuracy floor" },
+  { value: "Latency", label: "p50/p99 + speedup", sub: "from Lab 5-A" },
+  { value: "VRAM", label: "peak memory", sub: "fits the target?" },
+  { value: "Size", label: "model MB", sub: "deploy footprint" }
+]} caption="Accuracy, latency, memory, size — every step. An optimization that improves latency but blows the accuracy floor or the VRAM budget is a regression, not a win. The protocol turns 'it feels faster' into a defensible decision." />
+
+---
+
+## A Worked Journey: ResNet-50
+
+Theory becomes concrete in the cumulative log. Starting from the Lab 5-A FP32 baseline, each technique stacks on the last:
+
+<ResNet50Journey caption="42.3 ms → 3.2 ms — a 13.2× speedup for a 0.9% top-1 drop, achieved by stacking BF16, torch.compile, INT8 PTQ, TensorRT, and a final 30% channel-prune + QAT. Memory fell from 98 MB to 18 MB. Crucially, every step is measured and the accuracy impact documented." />
+
+<Callout type="insight" title="Read the curve, not just the endpoint">
+
+Notice the shape: the **early, zero-risk** steps (BF16, compile) already bought 2.6× for ~0.1% accuracy. INT8 + TensorRT pushed to 8.3× for ~0.5%. Only the final pruning step spent real accuracy (0.9% total) for the last 1.6×. If your target had been "5× faster," you'd have stopped after TensorRT — at **zero meaningful accuracy loss**. The pipeline tells you not just how to optimize, but **when to stop**.
+
+</Callout>
+
+---
+
+## Thresholds Worth Memorising
+
+The numbers that let you estimate before you benchmark:
+
+<StatGrid items={[
+  { value: "INT8", label: "≈0.4% max error", sub: "(x_max−x_min)/510" },
+  { value: "Distill", label: "α=0.9, T=4", sub: "+ the T² factor" },
+  { value: "2:4 + INT8", label: "≈8× vs FP32", sub: "Ampere theoretical" },
+  { value: "Spec decode", label: "≈ K × accept-rate", sub: "lossless throughput" },
+  { value: "Calibration", label: "100–500 samples", sub: "for activation ranges" },
+  { value: "QAT LR", label: "0.1–1% of train LR", sub: "or it forgets FP32" }
+]} caption="These let you sanity-check a result instantly: if INT8 costs 5% accuracy something is wrong (likely activation outliers — reach for SmoothQuant); if speculative decoding gives 1.2× your draft model is too weak." />
+
+---
+
+## Module Summary: The Optimization Engineer's Toolkit
+
+- **Quantization** is the first tool — INT8 is nearly free (2–4×, &lt;0.5%); AWQ-INT4 extends to 4–8× for LLMs; QAT is the accuracy insurance policy.
+- **Pruning** — structured (channel/head) gives portable speedups; unstructured only helps with NVIDIA 2:4; gradual beats post-hoc.
+- **Distillation** — the biggest gains but needs training; DistilBERT's 40/60/97 is the bar; soft labels + feature matching together.
+- **Graph optimization** — Flash Attention is non-negotiable for transformers; fusion and `torch.compile()` are zero-risk; TensorRT goes furthest.
+- **Hardware-aware** — align tiles, quantize the KV cache, use speculative decoding, and pick efficient architectures; always benchmark on the real target.
+
+---
+
+## Recap
+
+- Optimization is a **process**, not a bag of tricks: **Characterise → Quick wins → Quantization → Architecture → Hardware tuning**, ordered by accuracy risk.
+- **Measure every step** with the same protocol (accuracy, latency, VRAM, size) — and know **when to stop** (the target, not the maximum).
+- The **ResNet-50 journey** (13.2× for 0.9%) shows the shape: most of the win is in the early zero-risk phases; spend accuracy only when you must.
+- Internalise the **thresholds** so you can predict and sanity-check results before benchmarking.
+
+Next module: **Inference Frameworks & LLM Runtimes** — vLLM, llama.cpp, KV-cache paging, and continuous batching, where these optimizations meet production serving.

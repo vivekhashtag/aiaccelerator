@@ -11,7 +11,7 @@ const ALL_MODULES = [
   { num: "05", title: "Inference Systems Fundamentals",           weeks: 2  },
   { num: "06", title: "Model Optimization & Efficient Inference", weeks: 3  },
   { num: "07", title: "Inference Frameworks & LLM Runtimes",      weeks: 2  },
-  { num: "08", title: "FPGA & Hardware Acceleration for AI",      weeks: 4  },
+  { num: "08", title: "Hardware Acceleration: FPGA & Edge NPUs",  weeks: 4  },
   { num: "09", title: "Agentic AI Systems & Orchestration",       weeks: 2  },
   { num: "10", title: "End-to-End Systems, Scaling & Capstone",   weeks: 3  },
 ];

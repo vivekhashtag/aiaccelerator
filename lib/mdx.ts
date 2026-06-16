@@ -237,6 +237,11 @@ import {
   FrameworkPerfLadder,
   // 7.8 Raspberry Pi
   RPiModelOptions,
+  // Module 8 — Hardware Acceleration: FPGA + Edge NPUs
+  // 8.1 FPGA architecture
+  FpgaBuildingBlocks,
+  DspPacking,
+  ZynqPsPlFlow,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -430,6 +435,10 @@ const components = {
   FrameworkDecisionTree,
   FrameworkPerfLadder,
   RPiModelOptions,
+  // Module 8
+  FpgaBuildingBlocks,
+  DspPacking,
+  ZynqPsPlFlow,
 };
 
 export async function renderMDX(source: string) {

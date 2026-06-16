@@ -1,0 +1,103 @@
+---
+title: "FPGA Architecture: Reconfigurable Logic"
+module: "08"
+moduleTitle: "Hardware Acceleration: FPGA & Edge NPUs"
+lesson: "8.1"
+slug: "8-1-fpga-architecture"
+summary: "What's actually inside an FPGA and why it suits edge AI. The four building blocks (LUTs, flip-flops, DSP blocks, BRAM), why DSPs are the multiply-accumulate budget that low precision multiplies, the Zynq heterogeneous SoC (ARM PS + reconfigurable PL), and how PYNQ drives the whole thing from one line of Python."
+prerequisites: ["2.3 FPGA Architecture", "1.7 Multiply-Accumulate (MAC)"]
+---
+
+## A Blank Canvas of Logic
+
+A GPU has tens of thousands of *fixed* arithmetic units — you can only feed them math. An **FPGA** has hundreds of thousands of *programmable* logic cells that can be rewired at the electrical level to become **any digital circuit** you describe. After configuration, the FPGA behaves as if your circuit were etched into silicon.
+
+That places it between two extremes: more flexible than an **ASIC** (fixed forever, maximum performance) but lower power and far more specialised than a **GPU**. For the right edge workload — deterministic, low-latency, low-power inference — that trade-off wins.
+
+---
+
+## The Four Building Blocks
+
+Everything you build on an FPGA is a configuration of just four resources. Knowing them tells you exactly what you can build and at what cost:
+
+<FpgaBuildingBlocks caption="LUTs implement any Boolean logic (a LUT6 is a 64-entry truth table); flip-flops hold one bit of state per clock edge; DSP blocks are hardened multiply-accumulate units; BRAM is fast on-chip SRAM. On the PYNQ-Z2, the 220 DSPs are your MAC budget — the resource neural networks burn fastest." />
+
+<Callout type="key" title="DSPs are the MAC budget — and precision multiplies it">
+
+Every multiply-accumulate in a dot product needs a DSP. The PYNQ-Z2 has only **220** — so if your network needs more parallel multiplies than that, you must either **time-multiplex** (reuse DSPs across cycles), **quantize** to fit more ops per DSP, or buy a bigger FPGA. Quantization is the lever: one DSP packs **2 INT8** MACs, or **16–32 binary** ops. This is why low-precision quantization (Module 6) is even more impactful on FPGA than on GPU.
+
+</Callout>
+
+<DspPacking caption="The same 220 DSP blocks do vastly more work at lower precision: ~1 MAC per DSP at FP32, 2 at INT8, 16–32 at binary. On an FPGA, dropping precision doesn't just save memory (as on a GPU) — it directly multiplies your compute throughput." />
+
+<Callout type="why" title="630 KB — the constraint that makes FPGA AI interesting">
+
+The PYNQ-Z2's 140 BRAMs total just **630 KB** of on-chip memory — against an A100's 80 GB. Every network you map to the fabric must fit its critical working data into that budget. You can't throw memory at problems; you tile, stream, and quantize. The PYNQ-Z2 isn't competing with an A100 — it exists to teach FPGA design and to run **ultra-low-power, deterministic, sub-microsecond-latency** edge inference.
+
+</Callout>
+
+---
+
+## The Zynq SoC: PS + PL
+
+The PYNQ-Z2 is built on a Xilinx **Zynq** — a single die with two very different compute domains joined by a high-speed bus:
+
+<ZynqPsPlFlow caption="The PS (Processing System) is a real ARM Cortex-A9 running Linux/Python — it orchestrates. The PL (Programmable Logic) is the FPGA fabric — it runs your custom accelerator. The AXI bus moves data between them. This CPU + reconfigurable-logic 'heterogeneous SoC' is the same blueprint as the Apple Neural Engine and Snapdragon Hexagon." />
+
+- **PS (Processing System):** a conventional dual-core ARM with full Linux — runs Python, manages files and I/O, and *orchestrates* the accelerator.
+- **PL (Programmable Logic):** the FPGA fabric where your custom neural-network accelerator lives.
+- **AXI interconnect:** the bus the ARM uses to hand data to the fabric and read results back.
+
+---
+
+## PYNQ: Driving the Fabric from Python
+
+Historically, using an FPGA meant C, device drivers, and manual memory management. **PYNQ** (Python on Zynq) collapses that to a clean Python API running in Jupyter on the board itself:
+
+```python
+from pynq import Overlay, allocate
+import numpy as np
+
+# 1. Program the FPGA fabric with a pre-compiled hardware design (.bit bitstream)
+overlay = Overlay("neural_network.bit")
+accel = overlay.neural_network_0          # grab the accelerator block by name
+
+# 2. Allocate buffers visible to BOTH the ARM (PS) and the FPGA (PL)
+inp = allocate(shape=(1, 3, 32, 32), dtype=np.float32)
+out = allocate(shape=(1, 10), dtype=np.float32)
+inp[:] = preprocess_image(image)          # load input data
+
+# 3. Hand the accelerator the buffer addresses and hit "start"
+accel.write(accel.register_map.INPUT_ADDR.address, inp.physical_address)
+accel.write(accel.register_map.OUTPUT_ADDR.address, out.physical_address)
+accel.write(accel.register_map.CONTROL.address, 1)   # start signal
+
+# 4. Wait for the hardware interrupt, then read results (no copy needed)
+accel.wait()
+predictions = out[:]
+```
+
+**Step by step:**
+
+1. `Overlay("neural_network.bit")` loads a compiled hardware design (a *bitstream*) **into the fabric** — this physically reconfigures the FPGA. `overlay.neural_network_0` is your accelerator block by the name it was given in hardware.
+2. `allocate(...)` reserves **shared memory** the ARM and the FPGA can both see (contiguous, physically addressed) — so there's no copying between CPU and accelerator.
+3. You write the input/output buffer **physical addresses** into the accelerator's registers and write `1` to its control register to start it.
+4. `accel.wait()` blocks until the hardware raises a "done" interrupt; then `out[:]` reads the results directly out of shared memory.
+
+<Callout type="insight" title="The division of labour">
+
+Notice the pattern: **Python (PS) orchestrates, hardware (PL) computes.** The ARM does the easy, irregular work — load an image, set registers, read results — while the fabric does the massively parallel MACs with deterministic timing. That split is the essence of every heterogeneous accelerator, from this $200 board up to a datacenter DPU. The next lesson shows how that `.bit` file is created — by writing C++ and letting **High-Level Synthesis** turn it into hardware.
+
+</Callout>
+
+---
+
+## Recap
+
+- An **FPGA** is reconfigurable logic — a blank canvas that becomes any digital circuit, sitting between fixed **ASIC** and general **GPU**.
+- Four building blocks: **LUTs** (any Boolean function), **flip-flops** (state), **DSP blocks** (hardened MACs), and **BRAM** (on-chip SRAM). On the PYNQ-Z2: 53k / 106k / 220 / 630 KB.
+- **DSPs are the MAC budget** (only 220), and **low precision multiplies it** — 2 INT8 or 16–32 binary ops per DSP; the 630 KB BRAM limit forces tiling and streaming.
+- The **Zynq SoC** pairs an ARM **PS** (Linux/Python orchestration) with the **PL** fabric (your accelerator) over **AXI** — a heterogeneous SoC.
+- **PYNQ** drives it all from Python: load a bitstream, allocate shared buffers, start the accelerator, read results — Python orchestrates, hardware computes.
+
+Next: how that bitstream is actually built — **High-Level Synthesis**, turning C++ into hardware.

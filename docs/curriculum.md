@@ -159,6 +159,8 @@ Goal: implement neural nets from scratch in NumPy, reproduce them in PyTorch, th
 7.4 Speculative decoding (draft model, Medusa, EAGLE)
 7.5 Streaming inference (SSE, WebSocket, token streaming)
 
+> **Built as 8 lessons** from `module-07.pdf` (8 topics, richer than this 5-topic outline) — adds Ollama, TGI, a framework-selection guide, and a Raspberry Pi deployment lesson. First module with **inline code snippets**.
+
 **Labs**
 - 7-A Deploy Llama 3.2 with vLLM (streaming API)
 - 7-B llama.cpp on Raspberry Pi (TPS vs quantization)

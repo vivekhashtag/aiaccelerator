@@ -1,6 +1,23 @@
 # Project Status
 
-**Last updated:** 2026-06-16 — **Module 6 built (6 lessons + 20 SVG diagrams)**; earlier same day: Module 5 completed (7 lessons) and Module 4 expanded to 13 lessons. All pushed to `main` → Vercel deploying. **47 lessons total**, 50 routes, `next build` green. **Next:** Module 7 — Inference Frameworks & LLM Runtimes.
+**Last updated:** 2026-06-16 — **Module 7 built (8 lessons + ~17 SVG diagrams + inline code)**; same day: Module 6 (6 lessons), Module 5 (7), Module 4 expanded to 13. All pushed to `main` → Vercel deploying. **55 lessons total**, 58 routes, `next build` green. **NEW:** hands-on modules (7+) embed **inline code snippets with step-by-step explanations** (new `CodeBlock` infra). **Next:** Module 8 — FPGA & Hardware Acceleration (code-heavy).
+
+---
+
+## 🖥️ Module 7 built (2026-06-16): Inference Frameworks & LLM Runtimes
+
+**8 lessons** under `content/module-07/`, from `module-07.pdf` (8 topics). Module accent = **Sky** (`C.sky`). **First module with inline code** — fenced code blocks render via a new `CodeBlock`/`Pre` component (dark editor-chrome, language label), and **every snippet has a numbered step-by-step walkthrough** (user direction). `next build` green — **55 lessons total**, 58 routes. ~17 new diagrams in `diagrams/module-07.tsx`.
+
+- `7-1-llm-serving-problem` — vision-vs-LLM, prefill/decode, decode ceiling, KV cache + memory formula (Python calculator).
+- `7-2-vllm` — PagedAttention (OS-paging analogy), continuous batching, full vLLM API (offline + OpenAI server + config + prefix caching + spec decoding).
+- `7-3-llama-cpp` — SIMD/NEON, GGUF k-quants + inline dequant, split offload, the Q4_K_M ladder, CLI tuning.
+- `7-4-ollama` — CLI workflow, REST + OpenAI APIs, Modelfiles.
+- `7-5-tgi` — Rust router + Python shards, Docker deploy, TGI vs vLLM.
+- `7-6-optimization-in-practice` — batch knee, decoding params, grammar-constrained JSON, tensor parallelism, Prometheus monitoring.
+- `7-7-framework-selection` — decision tree, ~26× same-hardware performance span, tie-breakers.
+- `7-8-raspberry-pi` — NEON build, model-size choices, llama-server (OpenAI API on a Pi), edge use cases.
+
+> **Code-block infra (reusable for Module 8):** `CodeBlock` + `Pre` in `LessonBlocks.tsx`, registered as `pre` in `lib/mdx.ts`. Author code as Markdown fenced blocks (```lang) — MDX treats them as literal so `{ < }` need NO escaping. Inline `code` polished in `globals.css`. **Always explain each snippet in numbered steps.**
 
 ---
 
@@ -217,7 +234,8 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 - [x] Module 5 — Inference Systems Fundamentals (7 lessons, 20 SVG diagrams) ✓ built & pushed 2026-06-16 (drafted prior session, wiring/build fixed this session)
 - [x] Module 4 expansion — +4 lessons (diffusion, MoE, decoding, multimodal) inserted in place ✓ 2026-06-16 (now 13 lessons)
 - [x] Module 6 — Model Optimization & Efficient Inference (6 lessons, 20 SVG diagrams) ✓ built & pushed 2026-06-16
-- [ ] **▶ NEXT:** **Module 7 — Inference Frameworks & LLM Runtimes** (vLLM, llama.cpp, Ollama, TGI; KV cache/PagedAttention, continuous batching, speculative decoding, streaming). PDF: not yet confirmed on disk (M1–6 PDFs are present; check for a Module 7 PDF or use `curriculum.md` Module 7). Parse PDFs with `pdftotext -layout` (poppler); the built-in PDF reader needs `pdftoppm`, which isn't installed.
+- [x] Module 7 — Inference Frameworks & LLM Runtimes (8 lessons, ~17 diagrams, **inline code + step explanations**) ✓ built & pushed 2026-06-16
+- [ ] **▶ NEXT:** **Module 8 — FPGA & Hardware Acceleration for AI** (PYNQ-Z2 board; HLS, dataflow, on-chip inference — **fully code-heavy** per the curriculum). PDF: check disk for a Module 8 PDF (`Module08.pdf`/`module-08.pdf`); none confirmed yet — else use `curriculum.md` Module 8. Use the `CodeBlock` infra + step-by-step explanations established in Module 7. Parse PDFs with `pdftotext -layout` (poppler).
 
 > The old "Module 1 interactive backlog" (CMOS NAND, live truth tables, bit-flipper, MAC
 > animation, systolic array, etc.) is **shelved** as of the 2026-06-11 direction change. Each is
@@ -233,7 +251,8 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 | Route | `app/modules/[module]/[lesson]/page.tsx` |
 | Lesson shell | `components/lesson/LessonLayout.tsx` |
 | Sidebar | `components/lesson/LessonSidebar.tsx` |
-| **SVG diagrams** | `components/lesson/diagrams/` (~180 figures — 29 M1 + 22 M2 + 30 M3 + 38 M4 + 20 M5 + 20 M6 — the course "images"). Split per module: `_shared.tsx` (palette `C`, light-theme + `DiagramFrame`), `module-01…06.tsx`, `index.ts` barrel. |
+| **SVG diagrams** | `components/lesson/diagrams/` (~197 figures — 29 M1 + 22 M2 + 30 M3 + 38 M4 + 20 M5 + 20 M6 + ~17 M7 — the course "images"). Split per module: `_shared.tsx` (palette `C`, light-theme + `DiagramFrame`), `module-01…07.tsx`, `index.ts` barrel. |
+| **Code blocks (M7+)** | `CodeBlock` + `Pre` in `components/lesson/LessonBlocks.tsx`; fenced ```lang blocks render with editor chrome (registered as `pre` in `lib/mdx.ts`). |
 | MDX content blocks | `components/lesson/LessonBlocks.tsx` (Callout / Formula / Figure / StatGrid) |
 | Prev/next nav | `components/lesson/LessonNav.tsx` |
 | Quiz (unregistered, kept for later) | `components/lesson/QuizBlock.tsx` |

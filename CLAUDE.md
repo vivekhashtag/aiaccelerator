@@ -193,7 +193,14 @@ In rough teaching order:
   **Module 6 — Model Optimization & Efficient Inference** (6 lessons: quantization → pruning-sparsity →
   knowledge-distillation → graph-optimization → hardware-aware-optimization → optimization-pipeline,
   +20 SVG diagrams in `diagrams/module-06.tsx`, **Lime** accent) built & pushed 2026-06-16.
-  **47 lessons total.**
+  **Module 7 — Inference Frameworks & LLM Runtimes** (8 lessons: serving-problem → vLLM → llama.cpp →
+  Ollama → TGI → optimization-in-practice → framework-selection → raspberry-pi, ~17 SVG diagrams in
+  `diagrams/module-07.tsx`, **Sky** accent) built & pushed 2026-06-16. **55 lessons total.**
+  - **DECISION (2026-06-16) — hands-on modules include inline code.** From **Module 7** on, lessons
+    embed **code snippets with step-by-step explanations** (not diagrams-only — that still holds for
+    the conceptual modules 1–6). New `CodeBlock`/`Pre` in `LessonBlocks.tsx` styles fenced ```lang
+    blocks (registered as `pre` in `lib/mdx.ts`); MDX treats fenced code as literal so `{ < }` need no
+    escaping. Module 8 (FPGA) is fully code-heavy. Always explain each snippet in numbered steps.
   - **Module 4 expansion (2026-06-16):** the 4 new lessons (4.3a diffusion, 4.4a MoE, 4.7a decoding,
     4.9a multimodal) were **inserted in place** via order-preserving slugs (`4-3a-…` sorts between
     `4-3-…` and `4-4-…`) — existing lessons keep their filenames/URLs/numbers. Lessons are
@@ -206,8 +213,9 @@ In rough teaching order:
   `styles/tokens.css` + the palette in `diagrams/_shared.tsx`. Lessons are also fully **mobile
   responsive** (overlay sidebar, hamburger). To revert to dark, restore the prior token/palette
   values (noted in-file).
-- Next concrete steps: continue the same SVG-diagram treatment through **Modules 7–10** (Module 7 =
-  Inference Frameworks & LLM Runtimes — vLLM, llama.cpp, Ollama, TGI; KV cache/PagedAttention,
-  continuous batching, speculative decoding, streaming). PDFs on disk are parsed with `pdftotext
-  -layout` (poppler) — the built-in PDF reader needs `pdftoppm`, which isn't installed. Verify builds
-  with `NEXT_DIST_DIR=.next-verify npx next build`; escape bare `<`/`{` in MDX prose (`&lt;`/`&#123;`).
+- Next concrete steps: continue through **Modules 8–10** (Module 8 = FPGA & Hardware Acceleration —
+  PYNQ-Z2, HLS, on-chip inference; **fully code-heavy**, use the Module 7 `CodeBlock` infra). A
+  possible **edge-microcontroller** lesson/module (STM32 N6 Neural-ART, NXP i.MX RT, Renesas RA AI) is
+  under discussion — see STATUS.md. PDFs on disk are parsed with `pdftotext -layout` (poppler) — the
+  built-in PDF reader needs `pdftoppm`. Verify builds with `NEXT_DIST_DIR=.next-verify npx next build`;
+  in **prose** escape bare `<`/`{` (`&lt;`/`&#123;`), but inside fenced ```code``` blocks they're fine.

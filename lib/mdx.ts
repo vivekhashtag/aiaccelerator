@@ -253,6 +253,9 @@ import {
   HardwarePhilosophies,
   LatencyJitter,
   EfficiencyBars,
+  // 8.5 NN on PYNQ-Z2
+  WhatFitsPynq,
+  StreamingConv,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -458,6 +461,8 @@ const components = {
   HardwarePhilosophies,
   LatencyJitter,
   EfficiencyBars,
+  WhatFitsPynq,
+  StreamingConv,
 };
 
 export async function renderMDX(source: string) {

@@ -373,3 +373,73 @@ export function EfficiencyBars({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   8.5 — NN on PYNQ-Z2
+   ════════════════════════════════════════════════════════════ */
+
+/* What fits on the PYNQ-Z2's 220 DSPs / 630 KB. */
+export function WhatFitsPynq({ caption }: { caption?: string }) {
+  const tiers = [
+    { t: "comfortable", c: C.on, items: ["MLP for MNIST (INT8) ~50 DSP, 230 KB", "small CNN for CIFAR-10 ~150 DSP", "keyword spotting (binary) 0 DSP"] },
+    { t: "challenging", c: C.gate, items: ["MobileNetV2 — needs tiling + reuse", "YOLO-tiny — heavy quantization"] },
+    { t: "not feasible", c: C.hole, items: ["ResNet-50 at full precision", "any transformer / LLM (16 GB ≫ 630 KB)"] },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 200" width="100%" role="img" aria-label="What fits on the PYNQ-Z2">
+        <text x="280" y="20" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>budget: 220 DSPs · 630 KB BRAM — work backwards from this</text>
+        {tiers.map((tier, i) => {
+          const y = 30 + i * 54;
+          return (
+            <g key={`wf${i}`}>
+              <rect x="20" y={y} width="120" height="48" rx="6" fill={`${tier.c}16`} stroke={tier.c} strokeWidth="1.3" />
+              <text x="80" y={y + 28} textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={tier.c}>{tier.t}</text>
+              {tier.items.map((it, k) => (
+                <text key={`wi-${i}-${k}`} x="156" y={y + 16 + k * 13} fontFamily={mono} fontSize="7.5" fill={C.text}>• {it}</text>
+              ))}
+            </g>
+          );
+        })}
+        <text x="280" y="194" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.faint}>you cannot accelerate a model that doesn't fit — measure the budget, THEN pick the architecture</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Streaming 3x3 convolution with a line buffer + sliding window. */
+export function StreamingConv({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 200" width="100%" role="img" aria-label="Streaming convolution with line buffer and sliding window">
+        {/* pixel stream */}
+        <text x="60" y="30" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.violet}>pixel stream</text>
+        {[0, 1, 2, 3].map((i) => (
+          <rect key={`ps${i}`} x={20 + i * 20} y="40" width="16" height="16" rx="2" fill={`${C.violet}30`} stroke={C.violet} strokeWidth="0.8" />
+        ))}
+        <line x1="104" y1="48" x2="130" y2="48" stroke={C.faint} strokeWidth="1.1" /><polygon points="130,48 123,44 123,52" fill={C.faint} />
+        {/* line buffer */}
+        <rect x="132" y="30" width="150" height="56" rx="6" fill={`${C.blue}10`} stroke={C.blue} strokeWidth="1.2" />
+        <text x="207" y="26" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.blue}>line buffer (2 rows)</text>
+        {[0, 1].map((r) => [0, 1, 2, 3, 4, 5].map((c) => (
+          <rect key={`lb-${r}-${c}`} x={140 + c * 23} y={38 + r * 22} width="20" height="18" rx="2" fill={`${C.blue}22`} stroke={C.blue} strokeWidth="0.6" />
+        )))}
+        {/* window */}
+        <rect x="300" y="30" width="80" height="80" rx="6" fill={`${ORANGE}10`} stroke={ORANGE} strokeWidth="1.3" />
+        <text x="340" y="26" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={ORANGE}>3×3 window</text>
+        {[0, 1, 2].map((r) => [0, 1, 2].map((c) => (
+          <rect key={`w-${r}-${c}`} x={310 + c * 22} y={40 + r * 22} width="18" height="18" rx="2" fill={`${ORANGE}26`} stroke={ORANGE} strokeWidth="0.7" />
+        )))}
+        <line x1="282" y1="58" x2="300" y2="65" stroke={C.faint} strokeWidth="1" />
+        {/* MACs */}
+        <line x1="380" y1="70" x2="406" y2="70" stroke={C.faint} strokeWidth="1.1" /><polygon points="406,70 399,66 399,74" fill={C.faint} />
+        <rect x="408" y="46" width="130" height="48" rx="6" fill={`${C.on}12`} stroke={C.on} strokeWidth="1.3" />
+        <text x="473" y="66" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.on}>9 MACs (unrolled)</text>
+        <text x="473" y="80" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>9 DSPs · 1 output/clk</text>
+        <text x="280" y="142" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.muted}>a line buffer holds just enough rows for a sliding window — no full-frame storage needed</text>
+        <text x="280" y="166" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.faint}>PIPELINE II=1 → one pixel in, one conv output out, every clock cycle</text>
+        <text x="280" y="186" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.faint}>cost: 9 DSPs · 2 BRAMs · ~200 LUTs · first output after 2 rows fill</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

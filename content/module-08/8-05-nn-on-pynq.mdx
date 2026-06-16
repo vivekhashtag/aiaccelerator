@@ -1,0 +1,159 @@
+---
+title: "Implementing a Neural Network on PYNQ-Z2"
+module: "08"
+moduleTitle: "Hardware Acceleration: FPGA & Edge NPUs"
+lesson: "8.5"
+slug: "8-05-nn-on-pynq"
+summary: "Building a real accelerator end to end. What actually fits on the PYNQ-Z2, the full MNIST flow — train with Brevitas, export to FINN-ONNX, compile to a bitstream, and deploy from PYNQ — with the measured sub-200µs results, and a from-scratch HLS streaming convolution layer using a line buffer and sliding window."
+prerequisites: ["8.3 Quantization for FPGA", "8.2 Programming an FPGA: HLS to Bitstream"]
+---
+
+## Work Backwards From the Budget
+
+The first FPGA design principle: **you cannot accelerate a model that doesn't fit.** With 220 DSPs and 630 KB of BRAM, you measure the budget first, then choose an architecture that fits inside it:
+
+<WhatFitsPynq caption="An INT8 MLP for MNIST or a small CIFAR-10 CNN fits comfortably; MobileNetV2 and YOLO-tiny are challenging (need tiling and aggressive quantization); ResNet-50 at full precision and any transformer/LLM are simply infeasible — a single Llama layer's weights dwarf the entire 630 KB." />
+
+---
+
+## The MNIST Flow, End to End
+
+We'll build a 784→256→128→10 INT8 MLP. **Step 1 — train with Brevitas** on your laptop (not the board):
+
+```python
+import torch, torch.nn as nn
+import brevitas.nn as qnn
+from brevitas.quant import Int8WeightPerTensorFloat, Int8ActPerTensorFloat
+
+class MNISTNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = qnn.QuantLinear(784, 256, bias=False, weight_quant=Int8WeightPerTensorFloat, return_quant_tensor=True)
+        self.act1 = qnn.QuantReLU(act_quant=Int8ActPerTensorFloat, return_quant_tensor=True)
+        self.fc2 = qnn.QuantLinear(256, 128, bias=False, weight_quant=Int8WeightPerTensorFloat, return_quant_tensor=True)
+        self.act2 = qnn.QuantReLU(act_quant=Int8ActPerTensorFloat, return_quant_tensor=True)
+        self.fc3 = qnn.QuantLinear(128, 10, bias=False, weight_quant=Int8WeightPerTensorFloat)
+
+    def forward(self, x):
+        x = x.view(x.size(0), -1)            # flatten 28×28 → 784
+        x = self.act1(self.fc1(x))
+        x = self.act2(self.fc2(x))
+        return self.fc3(x)
+# ... standard training loop → >97% on MNIST → torch.save(...)
+```
+
+**Step by step:**
+
+1. Every layer is a Brevitas `QuantLinear`/`QuantReLU` so weights *and* activations are INT8 — both MAC operands are integers, ready for hardware.
+2. The weight budget is the thing to check: FC1 = 784×256 = 196 KB, FC2 = 32 KB, FC3 = 1.25 KB → **~229 KB total**, comfortably inside the 630 KB BRAM.
+3. You train it exactly like any PyTorch model; quantization-aware training (Module 6) keeps accuracy above 97%.
+
+**Step 2 & 3 — export to FINN-ONNX and compile to hardware:**
+
+```python
+from brevitas.export import export_finn_onnx
+export_finn_onnx(model.eval(), torch.zeros(1, 1, 28, 28), "mnist_quant.onnx")
+
+# FINN compiler (on the laptop) — turns the ONNX into a bitstream
+from finn.core.modelwrapper import ModelWrapper
+model = ModelWrapper("mnist_quant.onnx")
+model = model.transform(Streamline())              # fold BatchNorm into FC weights
+model = model.transform(ConvertToFinnHLSNode())    # each FC → StreamingFCLayer
+model = model.transform(ZynqBuild(platform="Pynq-Z2", period_ns=10.0))  # P&R: 30–60 min
+```
+
+**Step by step:**
+
+1. `export_finn_onnx` serialises the quantized model (with its scales) into the FINN-ONNX format FINN understands.
+2. `Streamline()` absorbs BatchNorm and scaling factors into the layer weights — so no separate BN hardware is generated.
+3. `ConvertToFinnHLSNode()` maps each layer to a streaming HLS template (the dataflow blocks from 8.2/8.3).
+4. `ZynqBuild(...)` runs the full HLS → synth → place-and-route flow for the PYNQ-Z2 — this is the 30–60 minute step that emits the `.bit` file.
+
+<FinnPipeline caption="The same FINN pipeline from Lesson 8.3, now producing the MNIST accelerator: Brevitas model → FINN-ONNX → FINN compiler → Vivado → PYNQ. The heavy compile runs once on your laptop; the board just loads the result." />
+
+**Step 4 — deploy and benchmark on the board:**
+
+```python
+from pynq import Overlay, allocate
+import numpy as np, time
+
+overlay = Overlay("mnist_finn.bit")        # program the FPGA
+accel = overlay.TopModule_0
+inp = allocate(shape=(1, 784), dtype=np.uint8)
+out = allocate(shape=(1, 10), dtype=np.int32)
+
+def classify(image):
+    inp[:] = (image.flatten() * 255).astype(np.uint8)   # preprocess
+    accel.write(0x10, inp.physical_address)              # input buffer addr
+    accel.write(0x1c, out.physical_address)              # output buffer addr
+    accel.write(0x00, 1)                                 # ap_start = 1
+    while not (accel.read(0x00) & 0x4):                  # poll ap_done
+        pass
+    return int(np.argmax(out))
+
+N = 1000; t0 = time.perf_counter()
+for _ in range(N): classify(test_image)
+dt = time.perf_counter() - t0
+print(f"{N/dt:.0f} img/s, {dt/N*1e6:.1f} µs/img")        # ~5k–50k img/s, 50–200 µs
+```
+
+**Step by step:**
+
+1. `Overlay(...)` programs the fabric and exposes the accelerator; `allocate` makes shared input/output buffers visible to both ARM and FPGA.
+2. `classify` writes the buffer **physical addresses** into the accelerator's registers, sets `ap_start`, then polls the `ap_done` bit until the hardware finishes.
+3. The benchmark loop measures real throughput/latency — typically **5k–50k img/s at 50–200 µs, with &lt;1 µs jitter, drawing ~0.5 W** for the model. That's the determinism-and-efficiency thesis from 8.4, measured.
+
+---
+
+## Under the Hood: A Streaming Conv Layer in HLS
+
+To see *why* it's so efficient, here's a 3×3 convolution written in HLS — it processes a **pixel stream** using a line buffer and a sliding window, never storing the whole frame:
+
+```cpp
+typedef ap_int<8>  pixel_t;
+typedef ap_int<24> accum_t;     // 8+8+log2(9) bits → no overflow
+
+void conv3x3_stream(hls::stream<pixel_t> &in, hls::stream<accum_t> &out,
+                    weight_t kernel[3][3], int H, int W) {
+    #pragma HLS INTERFACE axis port=in            // AXI-Stream in/out
+    #pragma HLS INTERFACE axis port=out
+    #pragma HLS ARRAY_PARTITION variable=kernel complete   // all 9 weights in registers
+    hls::LineBuffer<2, 32, pixel_t> line_buf;     // just 2 rows, not the whole image
+    hls::Window<3, 3, pixel_t> win;
+
+    for (int row = 0; row < H; row++)
+        for (int col = 0; col < W; col++) {
+            #pragma HLS PIPELINE II=1             // one pixel per clock
+            pixel_t p = in.read();
+            line_buf.shift_pixels_up(col);  line_buf.insert_bottom_row(p, col);
+            win.shift_pixels_left();        win.insert_right_col(line_buf, row);
+            accum_t acc = 0;
+            for (int kr = 0; kr < 3; kr++)
+                for (int kc = 0; kc < 3; kc++) {
+                    #pragma HLS UNROLL            // 9 MACs in parallel → 9 DSPs
+                    acc += win.getval(kr, kc) * kernel[kr][kc];
+                }
+            if (row >= 2 && col >= 2) out.write(acc);  // emit once the window is valid
+        }
+}
+```
+
+<StreamingConv caption="A line buffer stores only the two rows needed for a 3×3 window; each incoming pixel shifts the window one step, and the 9 multiplies are unrolled across 9 DSPs. With PIPELINE II=1, one pixel enters and one convolved output leaves every clock cycle." />
+
+**Step by step:**
+
+1. The **line buffer** holds just *two* rows — enough for a 3×3 window to slide — so a 1-megapixel image never needs megabytes of storage; memory stays tiny (2 BRAMs).
+2. Each clock, `in.read()` pulls one new pixel, the line buffer and window shift, and the new 3×3 neighbourhood is ready.
+3. `ARRAY_PARTITION ... complete` puts all 9 weights in registers and `UNROLL` builds 9 parallel multipliers (9 DSPs), so the whole 3×3 dot product completes in one cycle.
+4. `PIPELINE II=1` makes it a true streaming filter — **one pixel in, one output out, per clock** — the most efficient way to run convolution on an FPGA.
+
+---
+
+## Recap
+
+- **Work backwards from the budget** (220 DSPs, 630 KB): an INT8 MNIST MLP (~229 KB) fits; ResNet-50/LLMs don't.
+- The MNIST flow is four steps: **train with Brevitas → export FINN-ONNX → FINN compile (30–60 min P&R) → deploy from PYNQ** — yielding ~5k–50k img/s at 50–200 µs, **&lt;1 µs jitter**, ~0.5 W.
+- The PYNQ driver pattern: program the overlay, allocate shared buffers, write addresses + `ap_start`, poll `ap_done`, read results.
+- A **streaming conv** uses a **line buffer** (2 rows) + sliding window + unrolled MACs with `PIPELINE II=1` — one pixel in, one output out per clock, never storing the full frame.
+
+Next: the production path that hides all this — **Vitis AI** and the DPU.

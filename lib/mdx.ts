@@ -224,6 +224,8 @@ import {
   GgufQuantLadder,
   GgufBlock,
   SplitOffload,
+  // 7.4 Ollama
+  OllamaStack,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -409,6 +411,7 @@ const components = {
   GgufQuantLadder,
   GgufBlock,
   SplitOffload,
+  OllamaStack,
 };
 
 export async function renderMDX(source: string) {

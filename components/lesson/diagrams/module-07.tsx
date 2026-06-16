@@ -320,3 +320,34 @@ export function SplitOffload({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   7.4 — Ollama
+   ════════════════════════════════════════════════════════════ */
+
+/* Ollama as a convenience layer over llama.cpp. */
+export function OllamaStack({ caption }: { caption?: string }) {
+  const layers = [
+    { t: "CLI + REST API", s: "ollama run/pull · :11434 · OpenAI-compatible", c: SKY },
+    { t: "convenience layer", s: "model library · Modelfiles · auto GPU detect (CUDA/Metal/ROCm)", c: C.violet },
+    { t: "llama.cpp / GGUF engine", s: "the actual inference (Lesson 7.3)", c: C.on },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 190" width="100%" role="img" aria-label="Ollama wraps llama.cpp">
+        {layers.map((l, i) => {
+          const y = 26 + i * 50;
+          return (
+            <g key={`ol${i}`}>
+              <rect x="60" y={y} width="420" height="40" rx="7" fill={`${l.c}14`} stroke={l.c} strokeWidth="1.4" />
+              <text x="270" y={y + 18} textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={l.c}>{l.t}</text>
+              <text x="270" y={y + 32} textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>{l.s}</text>
+              {i < 2 && <text x="270" y={y + 47} textAnchor="middle" fontFamily={mono} fontSize="9" fill={C.faint}>↓</text>}
+            </g>
+          );
+        })}
+        <text x="270" y="184" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>Ollama is llama.cpp + a package-manager UX — same engine, zero-config experience</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

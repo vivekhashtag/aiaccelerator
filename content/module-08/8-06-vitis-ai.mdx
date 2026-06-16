@@ -1,0 +1,90 @@
+---
+title: "Vitis AI & the DPU"
+module: "08"
+moduleTitle: "Hardware Acceleration: FPGA & Edge NPUs"
+lesson: "8.6"
+slug: "8-06-vitis-ai"
+summary: "The production alternative to FINN. Vitis AI deploys standard CNNs onto a pre-built DPU overlay — a fixed systolic-array neural engine already synthesised on the board — so you quantize, compile, and run in minutes instead of resynthesising for hours. The Vitis AI flow, what the DPU is, and the few lines of PYNQ code to run a model on it."
+prerequisites: ["8.5 Implementing a Neural Network on PYNQ-Z2"]
+---
+
+## FINN vs Vitis AI
+
+FINN (Lessons 8.3, 8.5) builds **custom hardware for each model** — maximum efficiency, but a 30–60 minute resynthesis every time the network changes. **Vitis AI** is AMD/Xilinx's *production* tool, and it makes the opposite trade: it targets a **pre-built, general-purpose accelerator** that's already on the board, so deploying a new model takes minutes:
+
+<FinnVsVitis caption="FINN generates a bespoke bitstream per model (fastest hardware, slowest iteration). Vitis AI quantizes and compiles your model to run on a resident DPU overlay — no synthesis — so you go from PyTorch to running in minutes. Bespoke speed vs deploy-in-minutes flexibility." />
+
+---
+
+## The Vitis AI Flow
+
+Three stages turn a trained model into something running on the board:
+
+1. **Quantizer** — post-training INT8 quantization with a calibration dataset (Module 6), producing an `.xmodel`.
+2. **Compiler** — maps the model's operations onto the **DPU** instruction set (no FPGA synthesis).
+3. **VART** (Vitis AI Runtime) — a Python/C++ API that schedules the DPU and handles pre/post-processing.
+
+The key difference from FINN: the DPU bitstream is **already on your board**, so the compiler just produces DPU instructions — not new hardware.
+
+---
+
+## What the DPU Is
+
+The **DPU (Deep Learning Processing Unit)** is a configurable IP core: a **systolic array** of INT8 MAC units (the same architecture as Google's TPU from Module 1) synthesised onto the FPGA fabric as a *fixed, general-purpose* CNN engine:
+
+<DpuEngine caption="The DPU is a pre-synthesised systolic MAC array living in the PL. It supports the standard CNN ops (Conv2D, depthwise conv, FC, pooling, ReLU) for any model — ResNet, VGG, MobileNet, YOLO — so one bitstream serves them all. The B4096 variant does 4096 ops/clock (1400 FPS on ResNet-50 on a ZCU104); the PYNQ-Z2 fits a smaller B1600." />
+
+<Callout type="why" title="A fixed accelerator on reconfigurable fabric">
+
+This is a subtle but important idea: the DPU is *general-purpose hardware* (like a tiny TPU) that happens to be implemented in *reconfigurable* fabric. You give up FINN's per-model customisation — and some of its peak efficiency — in exchange for never resynthesising. It's the FPGA world's answer to "I just want to run standard CNNs without becoming a hardware engineer," and it's the bridge to the productized NPUs you'll meet in the microcontrollers ahead, which take this exact idea — a fixed MAC engine — and harden it into silicon.
+
+</Callout>
+
+---
+
+## Running a Model on the DPU
+
+With Vitis AI's PYNQ integration, deployment is a handful of lines — load the DPU overlay, load the compiled model, and run:
+
+```python
+from pynq_dpu import DpuOverlay
+import numpy as np
+
+# 1. Load the pre-built DPU overlay (already synthesised — no P&R needed)
+overlay = DpuOverlay("dpu.bit")
+overlay.load_model("resnet18_quant.xmodel")   # the compiled .xmodel
+dpu = overlay.runner
+
+# 2. Prepare input and an output buffer
+input_data = prepare_input(image)             # normalise + resize to 224×224
+output_data = [np.empty(1000, dtype=np.float32)]
+
+# 3. Run asynchronously on the DPU, then wait for completion
+job_id = dpu.execute_async([input_data], output_data)
+dpu.wait(job_id)
+
+print("Predicted class:", int(np.argmax(output_data[0])))
+```
+
+**Step by step:**
+
+1. `DpuOverlay("dpu.bit")` programs the fabric with the **pre-built DPU** — this is instant compared to FINN's hours, because the bitstream already exists.
+2. `load_model(".xmodel")` loads the compiled, quantized network onto the DPU — swapping models is just loading a different `.xmodel`, no rebuild.
+3. `execute_async([...], output_data)` hands the input to the DPU and returns a job handle; `dpu.wait(job_id)` blocks until the systolic array finishes, then you read the result.
+
+<Callout type="key" title="FINN or Vitis AI — which to reach for">
+
+**FINN** when you need maximum efficiency for a *fixed* model (binary/ternary nets, ultra-low-latency streaming, smallest power) and can afford the synthesis time. **Vitis AI / DPU** when you're deploying *standard* CNNs, want to iterate quickly, or run several models on one board — the production default. Both quantize first (Module 6 is the foundation either way); they differ only in whether the hardware is bespoke or shared.
+
+</Callout>
+
+---
+
+## Recap
+
+- **Vitis AI** is the production path: **quantizer → compiler → VART runtime**, deploying onto a resident accelerator instead of resynthesising.
+- The **DPU** is a pre-built, general-purpose **systolic-array** CNN engine (a TPU-like MAC grid) in the fabric — one bitstream runs ResNet/VGG/MobileNet/YOLO; B4096 does 4096 ops/clock.
+- Deployment is a few lines: `DpuOverlay` → `load_model(.xmodel)` → `execute_async` / `wait` — **minutes, not hours**.
+- **FINN** for bespoke max-efficiency fixed models; **Vitis AI** for fast, flexible, standard-CNN deployment. Both rely on the Module 6 quantization foundation.
+
+Next: the patterns and economics that tie the FPGA part together — **streaming design, exact latency, energy-per-inference, and the road to ASIC**.

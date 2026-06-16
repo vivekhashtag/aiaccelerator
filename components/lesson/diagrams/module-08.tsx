@@ -443,3 +443,56 @@ export function StreamingConv({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   8.6 — Vitis AI & the DPU
+   ════════════════════════════════════════════════════════════ */
+
+/* FINN (custom per model) vs Vitis AI (pre-built DPU overlay). */
+export function FinnVsVitis({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 190" width="100%" role="img" aria-label="FINN versus Vitis AI deployment">
+        {/* FINN */}
+        <text x="150" y="24" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.hole}>FINN — custom hardware per model</text>
+        {["model", "synthesise (30–60 min)", "unique bitstream"].map((s, i) => (
+          <g key={`fv${i}`}>
+            <rect x="40" y={36 + i * 36} width="220" height="26" rx="4" fill={`${C.hole}12`} stroke={C.hole} strokeWidth="1" />
+            <text x="150" y={53 + i * 36} textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.hole}>{s}</text>
+            {i < 2 && <text x="150" y={66 + i * 36} textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>↓</text>}
+          </g>
+        ))}
+        <text x="150" y="166" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>max efficiency · resynth every model</text>
+        {/* Vitis */}
+        <text x="410" y="24" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.on}>Vitis AI — pre-built DPU overlay</text>
+        {["model", "quantize + compile (min)", "→ runs on the resident DPU"].map((s, i) => (
+          <g key={`vv${i}`}>
+            <rect x="300" y={36 + i * 36} width="220" height="26" rx="4" fill={`${C.on}12`} stroke={C.on} strokeWidth="1" />
+            <text x="410" y={53 + i * 36} textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.on}>{s}</text>
+            {i < 2 && <text x="410" y={66 + i * 36} textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>↓</text>}
+          </g>
+        ))}
+        <text x="410" y="166" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>deploy in minutes · no resynthesis</text>
+        <text x="280" y="184" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.faint}>FINN = bespoke speed · Vitis AI = the DPU is a fixed, general CNN engine you just load models onto</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* The DPU: a systolic-array overlay on the fabric. */
+export function DpuEngine({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 180" width="100%" role="img" aria-label="The DPU systolic array overlay">
+        <text x="270" y="22" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={ORANGE}>DPU — a systolic MAC array, pre-synthesised onto the PL</text>
+        {/* systolic grid */}
+        {[0, 1, 2, 3].map((r) => [0, 1, 2, 3, 4, 5].map((c) => (
+          <rect key={`dpu-${r}-${c}`} x={150 + c * 34} y={40 + r * 26} width="28" height="20" rx="2" fill={`${ORANGE}26`} stroke={ORANGE} strokeWidth="0.8" />
+        )))}
+        <text x="60" y="78" fontFamily={mono} fontSize="7.5" fill={C.muted}>weights →</text>
+        <text x="270" y="160" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>B4096 = 4096 ops/clock · INT8 · Conv/FC/Pool/ReLU · ResNet-50 @ 1400 FPS (ZCU104)</text>
+        <text x="270" y="176" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={C.faint}>same idea as Google's TPU — a fixed MAC grid, but living in reconfigurable fabric</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

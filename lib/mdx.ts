@@ -256,6 +256,9 @@ import {
   // 8.5 NN on PYNQ-Z2
   WhatFitsPynq,
   StreamingConv,
+  // 8.6 Vitis AI & DPU
+  FinnVsVitis,
+  DpuEngine,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -463,6 +466,8 @@ const components = {
   EfficiencyBars,
   WhatFitsPynq,
   StreamingConv,
+  FinnVsVitis,
+  DpuEngine,
 };
 
 export async function renderMDX(source: string) {

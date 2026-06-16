@@ -1,0 +1,73 @@
+---
+title: "Multimodal Models"
+module: "04"
+moduleTitle: "Generative AI & LLM Fundamentals"
+lesson: "4.9a"
+slug: "4-9a-multimodal-models"
+summary: "The capstone of the generative family — models that see, read, and reason across modalities at once. CLIP's contrastive image-text alignment into a shared space, the Vision Transformer that turns an image into a sequence of tokens, and the vision-language models (LLaVA, GPT-4V) that bolt a vision encoder onto an LLM through a small projector — reusing every idea from the rest of the module."
+prerequisites: ["4.4 Transformer Architecture & Attention"]
+---
+
+## One Model, Many Modalities
+
+Everything so far has been single-modality: autoencoders and diffusion on images, transformers and LLMs on text. **Multimodal models** break that wall — they take images, text, audio, or video together and reason across them: describe a photo, answer a question about a chart, read a screenshot, or follow a diagram. The frontier assistants (GPT-4V, Gemini, Claude) are all multimodal.
+
+The central problem is **representation**: a model can only compare things that live in the same space. Pixels and words have nothing in common numerically. So every multimodal system is, at heart, a way to project different modalities into **one shared embedding space** where "a photo of a dog" and the text "a dog" land near each other.
+
+<Callout type="insight" title="Multimodality reuses the whole module — it doesn't replace it">
+
+There is almost no new machinery here. CLIP is two transformer encoders and a contrastive loss. The Vision Transformer is the *same* attention block from 4.4 applied to image patches. A vision-language model is a frozen vision encoder + a small adapter + the LLM you already understand. Multimodal AI is mostly a clever *recombination* of the parts you've already built — which is exactly why it belongs at the end of this module.
+
+</Callout>
+
+---
+
+## CLIP: Aligning Images and Text
+
+**CLIP** (Contrastive Language–Image Pre-training, OpenAI 2021) is the foundation. It trains **two encoders** — one for images, one for text — so that a matching image–caption pair produces nearly identical embeddings, and mismatched pairs don't. Given a batch of N image–text pairs, it maximises the cosine similarity of the N correct pairs and minimises the N²−N incorrect ones:
+
+<CLIPContrastive caption="The contrastive objective: pull the matched (diagonal) image–text pairs together in the shared space and push every mismatched pair apart. Trained on 400M web image–caption pairs, CLIP needs no class labels — the captions ARE the supervision." />
+
+The payoff is **zero-shot** capability. To classify an image with no task-specific training, embed the image, embed candidate captions ("a photo of a cat", "…a dog", "…a car"), and pick the nearest — the model has never been "trained on your classes," yet it works. CLIP's text encoder is also what steers **text-to-image diffusion** (the conditioning in the diffusion lesson) and what powers semantic image search.
+
+---
+
+## Images as Tokens: the Vision Transformer
+
+To feed an image into a transformer, the **Vision Transformer (ViT)** does something deceptively simple: cut the image into a grid of fixed patches (typically 16×16 pixels), flatten and linearly embed each patch into a vector, add positional embeddings, and treat the result as a **sequence of tokens** — exactly like word tokens:
+
+<ViTPatches caption="An image becomes ~196 patch 'tokens' (plus a [CLS] token), each with a position embedding. From there the standard transformer encoder from 4.4 applies unchanged — self-attention lets every patch attend to every other, capturing global structure a CNN's local receptive field can't." />
+
+<Callout type="why" title="Why patches-as-tokens was a breakthrough">
+
+CNNs (Module 3) build up spatial understanding through stacks of *local* convolutions. ViT throws that out: with self-attention, patch 1 can attend directly to patch 196 in the very first layer, so global relationships are available immediately. Given enough data, this beats CNNs — and crucially, it means **the same transformer architecture handles both vision and language**, which is the foundation that makes a single multimodal model possible. One architecture, every modality.
+
+</Callout>
+
+---
+
+## Vision-Language Models: Bolting Sight onto an LLM
+
+CLIP aligns image and text but doesn't *generate* language. A **Vision-Language Model (VLM)** does — it lets an LLM literally "see" by feeding image tokens into its context alongside text. The dominant recipe (popularised by **LLaVA**) is strikingly cheap: take a **frozen** vision encoder (a CLIP ViT), a **frozen** LLM, and train only a small **projector** in between that maps image embeddings into the LLM's token-embedding space:
+
+<VLMArchitecture caption="The ViT encodes the image; the projector (often just an MLP) reshapes those features into vectors that live in the LLM's embedding space; the LLM then treats them as ordinary tokens prepended to the text prompt. Only the projector (and sometimes a light LLM fine-tune) is trained — minutes-to-hours, not the months a foundation model takes." />
+
+Once image patches are "tokens the LLM understands," everything the LLM can do with text — instruction following, reasoning, in-context learning — now operates over images too. Some architectures instead inject vision via **cross-attention** layers (Flamingo, Llama-style adapters), but the projector approach dominates for its simplicity.
+
+<Callout type="key" title="What VLMs can — and can't — do">
+
+VLMs unlock **image captioning, visual question answering (VQA), OCR, chart/document understanding, and UI grounding** (the perception layer agents will need in Module 9). The same template extends to **audio** (Whisper-style encoders → LLM) and **video** (frame sequences), heading toward **any-to-any** models. But the failure modes are real: VLMs **hallucinate** objects that aren't there, struggle with precise **spatial/counting** reasoning, and inherit every bias of the LLM and the web-scraped image data — which is why evaluation (RAGAS-style faithfulness, and the agent evals of Module 9) matters as much here as anywhere.
+
+</Callout>
+
+---
+
+## Recap — and the Generative Family, Complete
+
+- Multimodal models project different modalities into **one shared embedding space** so they can be reasoned about together — and they do it by **recombining** the module's existing parts, not inventing new ones.
+- **CLIP** uses a **contrastive** loss over two encoders to align images and text, giving **zero-shot** classification and the conditioning signal behind text-to-image diffusion.
+- The **Vision Transformer** turns an image into a **sequence of patch tokens**, so the standard transformer from 4.4 handles vision unchanged — one architecture for every modality.
+- A **VLM** bolts a frozen vision encoder onto a frozen LLM through a small trained **projector**, making image patches into tokens the LLM treats like words — the cheap, dominant recipe (LLaVA, GPT-4V).
+- This closes Module 4: from **autoencoders → VAEs → GANs → diffusion** (the generative family), through **transformers → MoE → pre-training → fine-tuning → Unsloth** (how LLMs are built), to **decoding → RAG → prompting → multimodal** (how they're used). You now have the full vocabulary of modern generative AI.
+
+Next module: **Inference Systems Fundamentals** — taking these models out of the notebook and serving them in production, where latency, throughput, and cost become the engineering problem.

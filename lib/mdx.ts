@@ -152,6 +152,10 @@ import {
   TemperatureEffect,
   TopKTopP,
   BeamSearch,
+  // 4.9a Multimodal models
+  CLIPContrastive,
+  ViTPatches,
+  VLMArchitecture,
   // Module 5 — Inference Systems Fundamentals
   // 5.1 Types of inference
   InferenceParadigms,
@@ -307,6 +311,9 @@ const components = {
   TemperatureEffect,
   TopKTopP,
   BeamSearch,
+  CLIPContrastive,
+  ViTPatches,
+  VLMArchitecture,
   // Module 5
   InferenceParadigms,
   StreamingTTFT,

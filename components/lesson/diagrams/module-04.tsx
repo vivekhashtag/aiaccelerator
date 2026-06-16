@@ -1298,3 +1298,126 @@ export function BeamSearch({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   4.9a — Multimodal Models
+   ════════════════════════════════════════════════════════════ */
+
+/* CLIP: contrastive image-text alignment into a shared space. */
+export function CLIPContrastive({ caption }: { caption?: string }) {
+  const n = 4;
+  return (
+    <DiagramFrame caption={caption} maxWidth={520}>
+      <svg viewBox="0 0 520 250" width="100%" role="img" aria-label="CLIP contrastive image-text training">
+        {/* image encoder */}
+        <rect x="20" y="96" width="70" height="40" rx="6" fill={`${C.blue}16`} stroke={C.blue} strokeWidth="1.3" />
+        <text x="55" y="112" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.blue}>image</text>
+        <text x="55" y="124" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.blue}>encoder</text>
+        {/* text encoder */}
+        <rect x="150" y="20" width="70" height="38" rx="6" fill={`${C.violet}16`} stroke={C.violet} strokeWidth="1.3" />
+        <text x="185" y="36" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.violet}>text</text>
+        <text x="185" y="48" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.violet}>encoder</text>
+        {/* similarity matrix */}
+        {Array.from({ length: n }, (_, r) =>
+          Array.from({ length: n }, (_, c) => {
+            const pos = r === c;
+            return (
+              <rect key={`cell-${r}-${c}`} x={150 + c * 44} y={70 + r * 44} width="40" height="40" rx="3"
+                fill={pos ? `${C.on}40` : C.panel} stroke={pos ? C.on : C.line} strokeWidth={pos ? 1.5 : 0.8} />
+            );
+          })
+        )}
+        {/* row labels (image embeds) */}
+        {Array.from({ length: n }, (_, r) => (
+          <text key={`il${r}`} x="138" y={94 + r * 44} textAnchor="end" fontFamily={mono} fontSize="8" fill={C.blue}>I{r + 1}</text>
+        ))}
+        {/* col labels (text embeds) */}
+        {Array.from({ length: n }, (_, c) => (
+          <text key={`tl${c}`} x={170 + c * 44} y="66" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.violet}>T{c + 1}</text>
+        ))}
+        <line x1="90" y1="116" x2="150" y2="116" stroke={C.faint} strokeWidth="1" />
+        <text x="335" y="240" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.faint}>maximise the diagonal (matched pairs), minimise the rest — text and images land in one shared space</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* ViT: an image becomes a sequence of patch tokens. */
+export function ViTPatches({ caption }: { caption?: string }) {
+  const cells = [];
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) cells.push({ r, c });
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 200" width="100%" role="img" aria-label="Vision transformer patch embedding">
+        {/* image with patch grid */}
+        {cells.map(({ r, c }) => (
+          <rect key={`px-${r}-${c}`} x={24 + c * 26} y={40 + r * 26} width="24" height="24"
+            fill={`${ROSE}${["10", "20", "30", "18"][(r + c) % 4]}`} stroke={C.line} strokeWidth="0.7" />
+        ))}
+        <text x="76" y="158" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.muted}>image → 16×16 patches</text>
+        <line x1="136" y1="92" x2="170" y2="92" stroke={C.faint} strokeWidth="1.2" />
+        <polygon points="170,92 163,88 163,96" fill={C.faint} />
+        <text x="153" y="80" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>flatten +</text>
+        <text x="153" y="106" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>linear</text>
+        {/* patch tokens */}
+        {[0, 1, 2, 3, 4].map((i) => (
+          <g key={`ptok${i}`}>
+            <rect x={180 + i * 50} y="74" width="40" height="36" rx="4" fill={i === 0 ? `${C.on}1a` : C.panel} stroke={i === 0 ? C.on : C.line} strokeWidth="1.1" />
+            <text x={200 + i * 50} y="96" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={i === 0 ? C.on : C.muted}>{i === 0 ? "[CLS]" : `p${i}`}</text>
+          </g>
+        ))}
+        <text x="430" y="96" fontFamily={mono} fontSize="9" fill={C.muted}>…</text>
+        {/* position embeddings */}
+        {[0, 1, 2, 3, 4].map((i) => (
+          <text key={`pos${i}`} x={200 + i * 50} y="126" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.violet}>+{i}</text>
+        ))}
+        <rect x="180" y="138" width="260" height="22" rx="5" fill={`${C.blue}12`} stroke={C.blue} strokeWidth="1.2" />
+        <text x="310" y="153" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.blue}>Transformer encoder (same as 4.4)</text>
+        <text x="310" y="186" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.faint}>once an image is a token sequence, attention works on it exactly like text</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Vision-language model: ViT → projector → LLM. */
+export function VLMArchitecture({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={580}>
+      <svg viewBox="0 0 580 210" width="100%" role="img" aria-label="Vision-language model architecture">
+        {/* image → ViT */}
+        <rect x="16" y="40" width="48" height="48" rx="5" fill={`${ROSE}20`} stroke={ROSE} strokeWidth="1.1" />
+        <text x="40" y="102" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>image</text>
+        <rect x="80" y="46" width="56" height="36" rx="5" fill={`${C.blue}16`} stroke={C.blue} strokeWidth="1.3" />
+        <text x="108" y="68" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.blue}>ViT</text>
+        <text x="108" y="98" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>frozen</text>
+        {/* projector */}
+        <rect x="152" y="46" width="56" height="36" rx="5" fill={`${C.gate}16`} stroke={C.gate} strokeWidth="1.4" />
+        <text x="180" y="61" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={C.gate}>projector</text>
+        <text x="180" y="73" textAnchor="middle" fontFamily={mono} fontSize="6.8" fill={C.muted}>(trained)</text>
+        <text x="180" y="98" textAnchor="middle" fontFamily={mono} fontSize="6.8" fill={C.muted}>→ LLM dims</text>
+        {/* token sequence into LLM */}
+        {[0, 1, 2].map((i) => (
+          <rect key={`imt${i}`} x={232 + i * 26} y="46" width="22" height="20" rx="3" fill={`${C.on}1a`} stroke={C.on} strokeWidth="1" />
+        ))}
+        <text x="271" y="80" textAnchor="middle" fontFamily={mono} fontSize="6.8" fill={C.on}>image tokens</text>
+        {[0, 1, 2].map((i) => (
+          <rect key={`txt${i}`} x={320 + i * 26} y="46" width="22" height="20" rx="3" fill={C.panel} stroke={C.line} strokeWidth="1" />
+        ))}
+        <text x="359" y="80" textAnchor="middle" fontFamily={mono} fontSize="6.8" fill={C.muted}>"what is this?"</text>
+        {/* arrows */}
+        <line x1="64" y1="64" x2="80" y2="64" stroke={C.faint} strokeWidth="1" /><polygon points="80,64 74,61 74,67" fill={C.faint} />
+        <line x1="136" y1="64" x2="152" y2="64" stroke={C.faint} strokeWidth="1" /><polygon points="152,64 146,61 146,67" fill={C.faint} />
+        <line x1="208" y1="64" x2="228" y2="64" stroke={C.faint} strokeWidth="1" /><polygon points="228,64 222,61 222,67" fill={C.faint} />
+        {/* LLM */}
+        <rect x="232" y="104" width="166" height="34" rx="6" fill={`${C.violet}14`} stroke={C.violet} strokeWidth="1.4" />
+        <text x="315" y="125" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.violet}>LLM (transformer decoder)</text>
+        <line x1="315" y1="66" x2="315" y2="104" stroke={C.faint} strokeWidth="1" /><polygon points="315,104 312,98 318,98" fill={C.faint} />
+        {/* output */}
+        <rect x="424" y="104" width="138" height="34" rx="6" fill={`${C.on}12`} stroke={C.on} strokeWidth="1.3" />
+        <text x="493" y="125" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.on}>"a tabby cat on a sofa"</text>
+        <line x1="398" y1="121" x2="424" y2="121" stroke={C.faint} strokeWidth="1" /><polygon points="424,121 418,118 418,124" fill={C.faint} />
+        <text x="290" y="184" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.faint}>the projector is the whole trick — it makes image patches look like tokens the frozen LLM already understands</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

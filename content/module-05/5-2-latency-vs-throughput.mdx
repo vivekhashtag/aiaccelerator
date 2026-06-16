@@ -1,0 +1,91 @@
+---
+title: "Latency vs Throughput"
+module: "05"
+moduleTitle: "Inference Systems Fundamentals"
+lesson: "5.2"
+slug: "5-2-latency-vs-throughput"
+summary: "The central tradeoff of inference systems — why batching buys throughput at the cost of latency, the Pareto frontier you must locate yourself on, Little's Law and why latency blows up catastrophically near capacity, the three LLM throughput metrics that people confuse, SLOs, and dynamic batching as the production resolution."
+prerequisites: ["5.1 Types of Inference"]
+---
+
+## The Fundamental Tension
+
+**Latency** is the time for one request to return; **throughput** is requests processed per second. They pull against each other, and understanding why is the conceptual foundation for everything that follows.
+
+Maximising throughput requires **batching** — accumulating requests so the GPU processes many at once. But batching *adds* latency: the first request must wait for the others to arrive. Concretely:
+
+<Formula label="The tradeoff, in numbers" caption="Batching raises GPU utilisation and throughput, but each request now pays the accumulation wait.">batch=1: ~15 ms latency, ~20 RPS (GPU 25% util)   ·   batch=32: ~115 ms latency, ~278 RPS (GPU 85% util)</Formula>
+
+There's no escaping this with a clever trick — only a **frontier** of optimal configurations to choose a point on:
+
+<LatencyThroughputPareto caption="Each point is a batch-size / timeout setting. You can trade latency for throughput along the curve, but you cannot beat it — points outside are impossible for this hardware+model, points inside are wasteful. Your job: find where your SLO lets you sit, then maximise throughput there." />
+
+---
+
+## Little's Law: The Most Important Formula in Systems Performance
+
+Every inference engineer should have this memorised:
+
+<Formula label="Little's Law" caption="Requests in the system = arrival rate × time each spends in it. Always true, no assumptions.">L = λ · W   (L = requests in system, λ = arrival rate, W = latency)</Formula>
+
+At 100 RPS with 50 ms latency, there are `100 × 0.050 = 5` requests in flight on average. Simple — but its consequence for **utilisation** is profound. For an M/M/1 queue, average wait is:
+
+<Formula label="Why latency explodes near capacity" caption="As utilisation ρ → 1, the denominator → 0 and latency diverges.">W = service_time / (1 − ρ),   ρ = utilisation = λ / μ</Formula>
+
+<LittlesLaw caption="Latency is flat and friendly until ~70% utilisation, then turns vertical. At ρ=0.5 wait is 2× service time; at ρ=0.9 it's 10×; at ρ=0.95 it's 20×. Queuing theory guarantees the cliff — you cannot engineer it away, only stay left of it." />
+
+<Callout type="key" title="Size your fleet for 75–80% utilisation, never higher">
+
+The hockey-stick is not a bug to fix — it's a mathematical guarantee. With a 15 ms service time and a 200 ms P99 SLO, running at 95% utilisation gives a P99 around 1200 ms (system looks broken); at 75–80% it stays within budget. So the rule is counterintuitive but firm: **leave 20–25% of your GPUs apparently "idle."** That headroom is what absorbs traffic spikes without a P99 blowup. Engineers who pack utilisation to 95% to "save money" cause the outages that cost far more. This headroom is also why real-time inference (Lesson 5.1) sometimes sacrifices utilisation on purpose.
+
+</Callout>
+
+---
+
+## The Three LLM Throughput Metrics (Stop Confusing Them)
+
+LLMs have three throughput numbers, and conflating them causes bad capacity decisions:
+
+<StatGrid items={[
+  { value: "Prefill", label: "prompt tokens/sec", sub: "compute-bound ∝ TFLOPS" },
+  { value: "Decode (aggregate)", label: "output tokens/sec, all users", sub: "bandwidth-bound, ~fixed" },
+  { value: "Per-user output", label: "aggregate ÷ users", sub: "drops as batch grows" }
+]} caption="For Llama-3-8B on A100: prefill ≈ 15,600 tok/s (compute), aggregate decode ≈ 100 tok/s (bandwidth). At batch 10 that's 10 tok/s each; at batch 100 it's 1 tok/s each — too slow." />
+
+The critical insight: **aggregate decode throughput is fixed by memory bandwidth, regardless of batch size**. Batching amortises KV-cache overhead and improves efficiency, but it cannot raise the fundamental bandwidth ceiling. More users sharing one GPU means each gets a thinner slice of the same fixed decode budget.
+
+---
+
+## SLOs: Business Requirements as Numbers
+
+An **SLO** (Service Level Objective) defines what "working" means. The discipline is to work *backwards* from the SLO to hardware:
+
+<StatGrid items={[
+  { value: "Availability", label: "99.9% → 8.76 h/yr down", sub: "redundancy, health checks" },
+  { value: "Latency", label: "P99 < 200 ms", sub: "needs utilisation headroom" },
+  { value: "TTFT", label: "< 500 ms for 95%", sub: "prefill capacity / priority queue" },
+  { value: "Throughput", label: "sustain 1000 RPS peak", sub: "fleet sizing + autoscale" }
+]} caption="Example: P95 TTFT < 300 ms for 200 concurrent users with 512-token prompts → one A100 suffices (33 ms prefill + 165 ms queue). Bump prompts to 2048 tokens → 786 ms → you need 3× capacity, a prompt cap, or disaggregated prefill servers." />
+
+---
+
+## Dynamic Batching: Throughput Without the Latency Explosion
+
+Static batching (wait for exactly N requests) stalls when traffic is light — the Nth request may never come. **Dynamic batching** runs inference when *either* the batch is full *or* a timeout expires — the production resolution.
+
+<DynamicBatching caption="Requests accumulate in a queue; the GPU fires when batch_size is reached OR max_wait_ms elapses, whichever comes first. The timeout caps the latency penalty while still capturing throughput when traffic is heavy." />
+
+<Formula label="The one tunable that matters" caption="max_wait_ms trades latency for throughput; tune it to your arrival rate and SLO.">max_wait_ms = 0 → batch≈1 (min latency)   ·   = 10 ms → bigger batches (more throughput)   ·   = 1000 ms → terrible for interactive</Formula>
+
+The art is matching `max_wait_ms` to arrival rate. At 100 RPS, a 10 ms wait accumulates ~1 request — barely helps. At 1000 RPS, the same 10 ms accumulates ~10 requests — nearly a **10× throughput gain** for 10 ms of added latency. Same knob, opposite value, depending on load. This is the core of every production inference server (Lesson 5.7).
+
+---
+
+## Recap
+
+- **Latency vs throughput** is the central tension: batching raises throughput and utilisation but adds an accumulation wait — you choose a point on a **Pareto frontier** you can't beat.
+- **Little's Law** (`L = λW`) plus the utilisation equation (`W = service/(1−ρ)`) means latency **explodes near capacity** — size fleets for **75–80%** utilisation to protect P99.
+- LLMs have **three** throughput metrics — prefill (compute-bound), aggregate decode (bandwidth-bound, **fixed**), and per-user output (drops with batch) — don't conflate them.
+- Derive hardware from **SLOs** by working backwards; **dynamic batching** (fire on full-batch *or* timeout) captures throughput while capping latency, with `max_wait_ms` as the key knob.
+
+Next: the formats a model must take to leave the notebook — the **deployment zoo**.

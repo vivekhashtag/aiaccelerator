@@ -1,6 +1,22 @@
 # Project Status
 
-**Last updated:** 2026-06-15 — **Module 4 (Generative AI, 9 lessons + 25 SVG diagrams) built**; Module 3 DL-depth enrichment done; `Diagrams.tsx` split per-module into `components/lesson/diagrams/`. Module 3 + reorg pushed (`a5ee03b`); **Module 4 being committed & pushed this session** → Vercel auto-deploying.
+**Last updated:** 2026-06-16 — **Module 5 (Inference Systems Fundamentals, 7 lessons + 20 SVG diagrams) completed & pushed**. The prior session drafted M5 but disconnected before wiring/build; this session fixed the build (3 MDX `<`-escapes in 5-1, `{}`-escape in 5-7, registered the 20 diagrams in `lib/mdx.ts`), verified `next build` green (40 routes), committed & pushed to `main`. **Next:** expand Module 4 (new lessons — diffusion, multimodal, + more — and diagrams).
+
+---
+
+## 🚀 Module 5 completed (2026-06-16): Inference Systems Fundamentals
+
+**7 lessons** under `content/module-05/`, from `Module 5` PDF (parsed source). Image-rich pattern, light theme, module accent = **Amber**. **+20 SVG diagrams** in `diagrams/module-05.tsx` (registered in `index.ts` barrel + `lib/mdx.ts`). `next build` green — **37 lessons total** (7+6+8+9+7), 40 routes.
+
+- `5-1-types-of-inference` — five paradigms (batch / real-time / streaming / edge / serverless), TTFT/TGS, picking the right architecture.
+- `5-2-latency-vs-throughput` — the central tradeoff, Pareto frontier, Little's Law (utilisation cliff at 75–80%), dynamic batching.
+- `5-3-model-formats` — checkpoint → ONNX → TensorRT/GGUF/Core ML journey, Netron, format decision tree.
+- `5-4-precision` — FP32→BF16→INT8→INT4 hierarchy, float bit layouts, quantization mapping, PTQ vs QAT, per-workload guidance.
+- `5-5-data-pipelines` — the pipeline can't be the bottleneck; padding/bucketing, caching layers.
+- `5-6-cost-engineering` — $/query, hardware cost bars, cascade routing, budget ladder.
+- `5-7-inference-server-architecture` — full stack, Triton (dynamic batching + instance groups), the 8-question deployment checklist.
+
+> **Build-fix note (was blocking):** drafted M5 never built. Fixes — escape bare `<`/`{` in MDX prose (parsed as JSX), and the easy-to-forget **register-diagrams-in-lib/mdx.ts** step (both the import list and the `components` map).
 
 ---
 
@@ -170,7 +186,8 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 - [x] Reorganized diagrams — split `Diagrams.tsx` (3,176 lines) into `components/lesson/diagrams/` (`_shared` + `module-01/02/03` + `index` barrel) ✓ 2026-06-15
 - [x] Updated `docs/curriculum.md` (8-lesson Module 3) + `CLAUDE.md` (§4 phase marker, §10 status, light theme, diagrams reorg) ✓ 2026-06-15
 - [x] Module 4 — Generative AI & LLM Fundamentals (9 lessons, 25 SVG diagrams) ✓ built 2026-06-15 (transformer-block depth added per user request)
-- [ ] **▶ NEXT:** March through Modules 5–10 (prose + SVG diagrams, same pattern) — **Module 5 = Inference Systems Fundamentals**; its PDF is not yet on disk (use `curriculum.md` Module 5, or ask the user for the source PDF). Parse PDFs with `pdftotext -layout` (poppler); the built-in PDF reader needs `pdftoppm`, which isn't installed.
+- [x] Module 5 — Inference Systems Fundamentals (7 lessons, 20 SVG diagrams) ✓ built & pushed 2026-06-16 (drafted prior session, wiring/build fixed this session)
+- [ ] **▶ NEXT:** **Expand Module 4** — add new lessons (diffusion models, multimodal, + a few more high-value topics) and diagrams to deepen the Gen-AI module. Then continue Modules 6–10 (prose + SVG diagrams, same pattern). Parse PDFs with `pdftotext -layout` (poppler); the built-in PDF reader needs `pdftoppm`, which isn't installed.
 
 > The old "Module 1 interactive backlog" (CMOS NAND, live truth tables, bit-flipper, MAC
 > animation, systolic array, etc.) is **shelved** as of the 2026-06-11 direction change. Each is

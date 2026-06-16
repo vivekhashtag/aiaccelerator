@@ -138,6 +138,34 @@ import {
   // 4.9 Prompting
   PromptingLadder,
   SelfConsistency,
+  // Module 5 — Inference Systems Fundamentals
+  // 5.1 Types of inference
+  InferenceParadigms,
+  StreamingTTFT,
+  EdgePriority,
+  // 5.2 Latency vs throughput
+  LatencyThroughputPareto,
+  LittlesLaw,
+  DynamicBatching,
+  // 5.3 Model formats
+  ModelFormatJourney,
+  TensorRTPipeline,
+  FormatDecisionTree,
+  // 5.4 Precision
+  PrecisionHierarchy,
+  FloatBitLayouts,
+  QuantizationMapping,
+  // 5.5 Data pipelines
+  InferencePipeline,
+  PaddingBucketing,
+  CachingLayers,
+  // 5.6 Cost engineering
+  HardwareCostBars,
+  CascadeRouter,
+  BudgetLadder,
+  // 5.7 Inference server architecture
+  InferenceServerStack,
+  TritonServer,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -254,6 +282,27 @@ const components = {
   RAGASMetrics,
   PromptingLadder,
   SelfConsistency,
+  // Module 5
+  InferenceParadigms,
+  StreamingTTFT,
+  EdgePriority,
+  LatencyThroughputPareto,
+  LittlesLaw,
+  DynamicBatching,
+  ModelFormatJourney,
+  TensorRTPipeline,
+  FormatDecisionTree,
+  PrecisionHierarchy,
+  FloatBitLayouts,
+  QuantizationMapping,
+  InferencePipeline,
+  PaddingBucketing,
+  CachingLayers,
+  HardwareCostBars,
+  CascadeRouter,
+  BudgetLadder,
+  InferenceServerStack,
+  TritonServer,
 };
 
 export async function renderMDX(source: string) {

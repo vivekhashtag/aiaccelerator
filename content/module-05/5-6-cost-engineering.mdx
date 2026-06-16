@@ -1,0 +1,77 @@
+---
+title: "Cost Engineering"
+module: "05"
+moduleTitle: "Inference Systems Fundamentals"
+lesson: "5.6"
+slug: "5-6-cost-engineering"
+summary: "Cost is a first-class design constraint, not an afterthought. The cost-per-query equation, when self-hosting beats an API, hardware cost comparison across GPU/CPU/FPGA/edge, the budget-constrained optimisation framework (precision → smaller model → routing), and the cascade pattern that routes easy queries to a cheap model."
+prerequisites: ["5.5 Data Pipelines for Inference"]
+---
+
+## Cost Is an Engineering Discipline
+
+The engineer who delivers the same quality at 3× lower cost isn't doing "optimisation" — they're generating business value directly. Cost belongs in the design from the start, and it reduces to one equation:
+
+<Formula label="Cost per query" caption="Everything you've learned about throughput feeds the denominator.">cost_per_query = GPU_hourly_rate / queries_per_hour = GPU_$/hr / (QPS × 3600)</Formula>
+
+A worked LLM example makes it concrete: Llama-3-8B on a $2.49/hr A100, ~80 tok/s, 500 tokens/query → 576 queries/hour → **$0.0043/query, ~$0.0086 per 1K tokens**.
+
+<Callout type="why" title="Self-hosting doesn't automatically beat an API">
+
+That $0.0086/1K is a humbling number: a frontier API like GPT-4o runs ~$0.0035/1K average — **cheaper than self-hosting an 8B model at low volume.** The intuition that "running it yourself is cheaper" is wrong until you're utilising the GPU well. The crossover comes from the levers in this module: INT8 quantization doubles throughput → $0.0043/1K (competitive); at 3× volume three A100s amortise shared cost → $0.0029/1K (self-hosting clearly wins). So the real question is never "API or self-host?" in the abstract — it's "at *what volume and utilisation*?" Below break-even, pay the API and skip the ops burden; above it, self-host. This is the cost twin of the 60% serverless crossover from Lesson 5.1.
+
+</Callout>
+
+---
+
+## Hardware Cost Comparison
+
+The same workload has wildly different economics across hardware — and edge is *not* the cheap option for throughput:
+
+<HardwareCostBars caption="Cost per 1K tokens (8B model) across hardware. On-prem amortised RTX 4090 is cheapest per token; a Raspberry Pi is ~17× more expensive per token than that 4090. Edge wins on privacy, offline operation, and no cold start — never on throughput economics." />
+
+<StatGrid items={[
+  { value: "$0.0008", label: "on-prem RTX 4090", sub: "amortised — cheapest/token" },
+  { value: "$0.0028", label: "A100 (spot / on-prem)", sub: "datacenter workhorse" },
+  { value: "$0.0097", label: "serverless A100", sub: "active billing, sparse traffic" },
+  { value: "$0.14", label: "Raspberry Pi 3B INT4", sub: "17× pricier/token than 4090" }
+]} caption="For sustained, fixed workloads an FPGA can be ~20× cheaper than cloud GPU per million images (5 W vs 72 W power) — but only after weeks of FPGA engineering amortise (Module 8). The cheapest compute depends entirely on volume and time horizon." />
+
+---
+
+## The Budget-Constrained Optimisation Framework
+
+Given a fixed budget and a target throughput, find the configuration that meets both while maximising quality. The moves stack, each trading a little quality for a large cost drop:
+
+<BudgetLadder caption="Start at FP32 baseline (100% quality, 100% cost/query). INT8 → 2× throughput, 50% cost, 99.2% quality. INT4 AWQ → 4× throughput, 25% cost, 97.5%. Smaller 3B model → 12× throughput, 8% cost, 92%. Each rung is a measured quality-for-cost trade." />
+
+The final move is the cleverest: **don't pick one model — route between them.**
+
+<Formula label="Model routing beats any single model" caption="Send easy queries to the cheap model, hard ones to the expensive model.">route 60% easy → 3B, 40% hard → 8B   →   quality 0.6·92% + 0.4·99.2% = 95.2%, throughput ~8×</Formula>
+
+---
+
+## The Cascade Pattern
+
+The cascade implements that routing: try the cheap model first; fall back to the expensive one only when the cheap model isn't confident enough.
+
+<CascadeRouter caption="Every request hits the small model first. If its confidence clears the threshold, return immediately (cheap path). Otherwise escalate to the large model. Most queries are easy, so the small model handles the majority — and the blended cost collapses while quality stays near the large model's." />
+
+<Callout type="key" title="The cascade is the highest-leverage cost move you have">
+
+Quantization buys 2–4×; a smaller model buys more but costs quality everywhere. The cascade buys most of the throughput of the small model *with most of the quality of the large one*, because real query distributions are dominated by easy cases. The single tunable — the **confidence threshold** — slides you along the cost/quality curve: raise it and more queries escalate (higher quality, higher cost); lower it and the small model handles more (cheaper, slightly lower quality). Track the `small_model_fraction` in production; it tells you exactly where you sit and whether your threshold is set right. This same tiered-routing idea reappears in agentic systems (Modules 9–10), where a cheap model triages and an expensive one handles the hard reasoning.
+
+</Callout>
+
+The hardware choice itself is a decision matrix: **CPU** for preprocessing, small models, and serverless; **GPU** for training and large-model inference; **FPGA** for ultra-low-latency, ultra-low-power, *fixed* models (deterministic latency, but weeks of development — Module 8).
+
+---
+
+## Recap
+
+- **Cost per query = GPU rate ÷ queries/hour** — a first-class constraint, and self-hosting only beats an API **above a volume/utilisation break-even**.
+- Hardware economics vary ~100×; **edge is not cheap for throughput** (a Pi is ~17× pricier/token than a 4090) — it wins on privacy, offline, and no cold start.
+- The **budget framework** stacks measured trades: INT8 (2×, −0.8%) → INT4 AWQ (4×, −2.5%) → smaller model (12×, −8%) → routing.
+- The **cascade** — cheap model first, escalate on low confidence — is the highest-leverage move, delivering small-model throughput at near-large-model quality; the **confidence threshold** is the knob.
+
+Next: assembling every lever into a running system — **inference server architecture**.

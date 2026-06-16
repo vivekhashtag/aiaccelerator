@@ -1,0 +1,105 @@
+---
+title: "Types of Inference"
+module: "05"
+moduleTitle: "Inference Systems Fundamentals"
+lesson: "5.1"
+slug: "5-1-types-of-inference"
+summary: "There is no single 'inference' — there are five paradigms, each with a different objective. Offline batch (throughput-only), real-time request-response (latency-everything), streaming token-by-token (TTFT + TGS), edge on-device (fit before accuracy), and serverless (pay-per-request, the cold-start tax). Choosing the wrong one is one of the most expensive mistakes in ML deployment."
+prerequisites: ["4.9 Prompting Techniques"]
+---
+
+## Serving Is a Different Discipline
+
+Every module so far taught you to *build* models. Module 5 teaches you to *serve* them — and the gap between "99% accuracy in a notebook" and "10,000 requests/second at 50 ms P99" is an ocean of engineering. A model nobody can send a request to is worth exactly nothing.
+
+The first decision is which **inference paradigm** you're in. There are five, each optimising for a different thing. Use the wrong one and you'll pay 20× too much or miss your latency target by an order of magnitude.
+
+<InferenceParadigms caption="Five paradigms, five objectives: batch maximises throughput, real-time minimises latency, streaming minimises perceived latency, edge fits within a power/size envelope, serverless minimises idle cost. The objective dictates every downstream choice." />
+
+---
+
+## Offline Batch: Throughput Is the Only Metric
+
+Process a large, fixed dataset all at once — score 50M reviews overnight, pre-compute embeddings for a corpus. **Nobody is waiting**, so latency per item is irrelevant; you only maximise items-per-dollar by saturating the GPU.
+
+The lever is **batch size**, and the roofline model (Module 2) tells you exactly where to set it. A single ResNet-50 image has arithmetic intensity ≈ 11 FLOP/byte — deeply memory-bound. At batch 32 it climbs to ≈ 350 FLOP/byte — compute-bound, near peak throughput.
+
+<Formula label="Optimal batch crosses the ridge point" caption="Batch up until arithmetic intensity passes the GPU's ridge point (Module 2); past that you're compute-bound and near peak.">batch* ≈ ⌈ridge_point / single_sample_AI⌉ = ⌈156 / 11⌉ ≈ 15  (batch 32–64 → ~95% of peak)</Formula>
+
+Key wins: pre-sort inputs by length (similar lengths share a batch → less padding waste), run multiple GPU workers (Ray), pin CPU memory for faster H2D transfer — and **profile** to learn whether GPU compute, CPU preprocessing, or I/O is the actual limit (they need different fixes).
+
+---
+
+## Real-Time: Latency Is Everything
+
+A human is waiting — fraud approval in &lt;100 ms, search results in &lt;200 ms. Now **every percentile matters** (P50, P95, P99, P99.9), and throughput is secondary: you maintain the SLO while absorbing load spikes, sometimes sacrificing GPU utilisation to do it.
+
+The discipline is to **decompose the latency budget** — because you can only optimise what you measure:
+
+<StatGrid items={[
+  { value: "~20 ms", label: "network + TLS + LB", sub: "round-trip, same region" },
+  { value: "~10 ms", label: "preprocessing", sub: "decode JPEG, resize, normalise" },
+  { value: "~15 ms", label: "GPU inference", sub: "ResNet-50, batch=1, FP16, A100" },
+  { value: "~3 ms", label: "H2D + D2H + serialise", sub: "transfers + JSON" }
+]} caption="A 200 ms budget might spend only 15 ms in the GPU. Optimising inference buys 15 ms; optimising network routing buys 20 ms. Measure first — assumptions are almost always wrong." />
+
+<Callout type="pitfall" title="The P99 tail is a different animal from the P50 median">
+
+A system with an 80 ms median can have an 800 ms P99 — and that "1 in 100" user is the one who leaves. Tail latency comes from sources the average hides: **GPU thermal throttling**, cache misses (a new model variant evicting another), `cudaMalloc` stalls on unseen tensor shapes, OS scheduling jitter, GC pauses upstream. You can't fix the tail by making the average faster; you fix it by hunting the specific spike sources. This is why we size fleets for headroom (Lesson 5.2), not for the median.
+
+</Callout>
+
+<Callout type="key" title="At batch=1, quantization is a latency optimisation, not just a size one">
+
+The single most important fact about real-time inference: **batch size 1 is almost always memory-bandwidth bound, not compute bound** (the roofline result from Module 2). The GPU's TOPS sit idle while weights stream in from VRAM. So reducing the *bytes* of those weights — quantization (Lesson 5.4) — directly cuts latency, because there are fewer bytes to move, not fewer multiplies to do. This reframes quantization: it's not only "make the model smaller," it's "make the model faster at batch=1."
+
+</Callout>
+
+---
+
+## Streaming: Minimise *Perceived* Latency
+
+For token-by-token generation (LLM chat, code completion), output is delivered as it's produced. A user asking for a 1000-word essay would stare at a blank screen for 30 seconds; with streaming they see the first word in &lt;500 ms and watch it grow. Total time is identical — **perceived** latency collapses. Two metrics govern the experience:
+
+<StreamingTTFT caption="TTFT (time to first token) = prefill of the whole prompt + overhead; after that, tokens arrive at TGS (token generation speed). Prefill is compute-bound and one-shot; decode is memory-bandwidth-bound and repeats per token." />
+
+- **TTFT (Time To First Token)** = prefill time + overhead. Prefill processes the entire prompt at once (compute-bound, Module 4), so it grows with prompt length. Targets: chat &lt;500 ms, voice &lt;200 ms, background tasks &lt;2 s.
+- **TGS (Token Generation Speed)** — tokens/second after the first. This is **memory-bandwidth bound** (decode loads all weights per token):
+
+<Formula label="Decode speed is a bandwidth calculation" caption="Each token streams the whole model from VRAM once — bandwidth ÷ model bytes.">TGS = bandwidth / model_bytes_per_token   →   Llama-3-8B BF16 on A100: 2 TB/s ÷ 16 GB ≈ 125 tok/s</Formula>
+
+A useful yardstick: human reading is ~5 tok/s, fast reading ~15 tok/s. **Any TGS above ~15 tok/s feels instant** — tokens outpace the eye. The standard transport is **Server-Sent Events (SSE)** (`text/event-stream`, one `data:` line per token, `[DONE]` to finish). Don't stream when the full output must be validated first (JSON), needs whole-output post-processing (translation), is binary (images), or has no streaming UI.
+
+---
+
+## Edge: Fit Before Accuracy
+
+Run on the device — phone, camera, microcontroller, Raspberry Pi. The constraints invert everything: 256 MB–8 GB RAM, 1–40 TOPS, a 1–15 W battery budget, a thermal envelope that throttles under sustained load, and often no network at all.
+
+<EdgePriority caption="Cloud inference optimises accuracy first (just add compute). Edge inverts the order: will it FIT, then will it run in TIME, then will the BATTERY last, and only last — is it accurate enough? Accuracy is the final consideration, not the first." />
+
+This ordering is backwards from how most ML engineers think, and internalising it is the whole point. Edge model families are built for it: MobileNetV3 (2.5–5.4M params), Whisper-Tiny (39M), and INT4 LLMs like LLaMA-3.2-1B (~0.6 GB) or Phi-3-Mini. Runtimes match the device: **Core ML** (Apple Neural Engine), **TFLite/NNAPI** (Android), **llama.cpp** (GGUF on any CPU via NEON/AVX SIMD — ~10–20 tok/s for a 3B INT4 on an M1), **ONNX Runtime Mobile**, **ExecuTorch**.
+
+---
+
+## Serverless: Pay Per Request, Mind the Cold Start
+
+Deploy to a managed service that scales automatically — including **to zero** — and bill per request (Modal, Replicate, SageMaker Serverless). The catch is the **cold start**: when an instance has been idle and shut down, the first request must provision a GPU (30–120 s), pull the container (30–60 s), and load weights (5–60 s) — **60–180 s total** for an 8B model. That rules out strict real-time SLOs unless you keep instances warm with periodic dummy requests.
+
+<Callout type="insight" title="The 60% utilisation crossover decides serverless vs dedicated">
+
+A dedicated A100 costs ~$2.49/hr — but if it's 95% idle, your *effective* cost per compute-hour is 20× worse. Serverless bills per second, so at 5% utilisation it's ~20× cheaper; at 80% utilisation it's roughly cost-competitive *plus* you shed the ops burden. The crossover is around **60% GPU utilisation**: below it, serverless wins; above it, dedicated hardware wins on cost. This single number — your actual utilisation — should drive the deploy decision, and it's the seed of the full cost engineering in Lesson 5.6.
+
+</Callout>
+
+---
+
+## Recap
+
+- Inference isn't one thing — it's **five paradigms**, each with a different objective; picking the wrong one is the costly, common mistake.
+- **Batch**: throughput only — batch up to the roofline **ridge point**. **Real-time**: latency everything — decompose the budget, hunt the **P99 tail**, and remember batch=1 is **bandwidth-bound** (so quantization cuts latency).
+- **Streaming**: minimise *perceived* latency via **TTFT** (prefill) and **TGS** (bandwidth-bound decode); >15 tok/s feels instant. Deliver over **SSE**.
+- **Edge**: invert the priorities — **fit → time → power → accuracy** — using mobile model families and SIMD runtimes like llama.cpp.
+- **Serverless**: pay-per-request with a **cold-start tax**; the **~60% utilisation** crossover decides it against dedicated hardware.
+
+Next: the tradeoff underneath all five — **latency vs throughput**, and the queuing theory that governs it.

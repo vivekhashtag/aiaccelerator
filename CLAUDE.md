@@ -185,13 +185,18 @@ In rough teaching order:
   autoencoders → VAEs → GANs → transformers → pre-training → fine-tuning → Unsloth → RAG →
   prompting, +24 SVG diagrams in `diagrams/module-04.tsx`, **Rose** accent) are all built. Modules
   1–2 + the light theme are live on Vercel; Modules 3–4 + the diagrams reorg committed and pushed
-  (Module 3 + reorg 2026-06-15; Module 4 same session).
+  (Module 3 + reorg 2026-06-15; Module 4 same session). **Module 5 — Inference Systems Fundamentals**
+  (7 lessons: types-of-inference → latency-vs-throughput → model-formats → precision → data-pipelines
+  → cost-engineering → inference-server-architecture, +20 SVG diagrams in `diagrams/module-05.tsx`,
+  **Amber** accent) built & pushed 2026-06-16 (drafted a prior session; build/wiring fixed this one).
+  **37 lessons total.**
 - **DECISION (2026-06-12) — light reading theme.** Lesson content flipped from the dark
   "engineering instrument" theme to a **light reading theme** (white surfaces, dark text) for
   legibility; the home page stays dark (it uses hardcoded hex, not tokens). Driven by
   `styles/tokens.css` + the palette in `diagrams/_shared.tsx`. Lessons are also fully **mobile
   responsive** (overlay sidebar, hamburger). To revert to dark, restore the prior token/palette
   values (noted in-file).
-- Next concrete steps: continue the same SVG-diagram treatment into **Module 5** (Inference Systems
-  Fundamentals) and onward through Module 10. PDFs on disk are parsed with `pdftotext -layout`
-  (poppler) — the built-in PDF reader needs `pdftoppm`, which isn't installed.
+- Next concrete steps: **expand Module 4** (new lessons — diffusion models, multimodal, + a few more
+  high-value Gen-AI topics — and supporting diagrams), then continue the same SVG-diagram treatment
+  through **Modules 6–10**. PDFs on disk are parsed with `pdftotext -layout` (poppler) — the built-in
+  PDF reader needs `pdftoppm`, which isn't installed.

@@ -1,0 +1,88 @@
+---
+title: "Precision: The Highest-Impact Optimisation"
+module: "05"
+moduleTitle: "Inference Systems Fundamentals"
+lesson: "5.4"
+slug: "5-4-precision"
+summary: "Numerical precision is the first optimisation to reach for — it cuts model size, memory bandwidth, and compute simultaneously. The precision hierarchy, why BF16 beats FP16, how INT8 quantization maps floats to integers (scale/zero-point, per-channel, calibration), INT4 with GPTQ and AWQ, FP8 on Hopper, and a per-task decision matrix."
+prerequisites: ["5.3 Model Formats: The Deployment Zoo"]
+---
+
+## One Knob, Four Effects
+
+Choosing precision is the first optimisation you apply, before anything else, because it moves four things **at once**: model size, memory-bandwidth consumption, compute throughput, and accuracy. Since batch=1 inference is bandwidth-bound (Lesson 5.1), cutting the bytes per weight cuts latency directly — fewer bytes to stream from VRAM.
+
+<PrecisionHierarchy caption="Each step down roughly halves size and bandwidth: FP32 → FP16/BF16 (2×) → INT8 (4×) → INT4/FP8 (8×) → INT2/binary. Accuracy loss grows from negligible (16-bit) to significant (4-bit), so each step must be measured against the FP32 baseline." />
+
+The rule of thumb for bandwidth-bound throughput: **FP16 ≈ 2× FP32, INT8 ≈ 4×, INT4 ≈ 8×**. Always establish FP32 accuracy as the reference, then measure how much each lower precision actually costs on *your* task.
+
+---
+
+## FP16 vs BF16: Same Size, Different Risk
+
+Both are 16 bits, but they split those bits differently — and that split decides stability:
+
+<FloatBitLayouts caption="FP16 spends 5 bits on exponent, 10 on mantissa (precise but narrow range, max ≈ 65,504). BF16 keeps FP32's 8 exponent bits and only 7 mantissa (same huge range, less precision). The exponent width is what matters for inference." />
+
+<Callout type="key" title="BF16 is almost always the right 16-bit choice">
+
+FP16's narrow range is a trap: a transformer activation product can exceed FP16's max of 65,504, **overflow to NaN**, and silently destroy a forward pass — avoidable only with careful loss/activation scaling. **BF16 keeps FP32's full exponent range**, so it cannot overflow unless FP32 would too; it trades a little mantissa precision for stability *by construction*. For inference, that trade is almost always worth it — BF16 is simpler and safer. This is the same BF16 you met in Module 1's number formats, now justified operationally. Use **AMP** (`torch.autocast`) to get BF16 speed on matmuls while keeping FP32 for the numerically sensitive reductions (softmax, layer norm).
+
+</Callout>
+
+Hardware note: all GPUs since Volta have native FP16; A100/H100 have native BF16 (312 / 989 TFLOPS). Running **FP32 on these leaves the 16-bit Tensor Cores idle** — a pure waste.
+
+---
+
+## INT8: The Production Standard
+
+INT8 maps floating-point weights to 8-bit integers — 4× smaller than FP32, 2× smaller than FP16, 2–4× faster on INT8 Tensor Cores, at typically **0.1–1.0% accuracy loss**. The mapping is an affine transform:
+
+<QuantizationMapping caption="A float range [x_min, x_max] is mapped onto the 256 integer levels [−128, 127] via a scale and a zero-point. Dequantize reverses it. Per-tensor uses one scale for the whole matrix; per-channel uses one per output channel — far less error when channels have different ranges." />
+
+<Formula label="Quantize / dequantize" caption="scale and zero_point are the calibration parameters; q lives in [−128, 127].">q = round(x / scale) + zero_point        x̂ = scale · (q − zero_point)</Formula>
+
+Two practical axes:
+
+- **Dynamic vs static PTQ.** *Dynamic* quantizes weights at export time and activations on-the-fly per batch — no calibration, great for NLP. *Static* pre-computes activation scales from a calibration set — no runtime overhead, better throughput.
+- **Per-tensor vs per-channel.** One scale for a whole weight matrix is fast but crude; **per-channel** (one scale per output channel) is always preferred for weights. If channel 0 spans [−0.5, 0.5] and channel 1 spans [−2, 3], a single shared scale costs channel 0 ~5× precision.
+
+<Callout type="pitfall" title="Calibration on the wrong data quietly wrecks accuracy">
+
+Static quantization's activation scale must cover the range seen in **production**. Calibrate a medical-imaging model on random natural images and its scale might cover [−3, 3] while real activations reach [−6, 6] — everything above 3.0 **clips**, half the dynamic range is lost, and accuracy collapses for reasons that won't show up in a generic test. The fix is simple but easy to skip: calibrate on **representative production data** (100–500 samples is plenty; diminishing returns past 1000). The calibration set must match the production *distribution*, not merely the training one.
+
+</Callout>
+
+---
+
+## INT4: GPTQ and AWQ
+
+At 4 bits there are only **16 possible values per weight**, so naive rounding accumulates ruinous error. Two techniques make 4-bit LLMs viable:
+
+- **GPTQ** (Frantar 2022): don't quantize weights independently. Quantize one weight, measure its error, then **adjust the remaining weights to compensate**, column by column. Errors get absorbed downstream instead of piling up — INT4 quality approaching naive-INT8.
+- **AWQ** (Activation-aware Weight Quantization): not all weights matter equally. Weights multiplied by large activations are **high-salience**; AWQ scales them up before quantizing (giving them more range) and scales the matching activations down to compensate. It now leads for LLM INT4 — and is the idea inside GGUF's `Q4_K_M` (Lesson 5.3), AutoAWQ, and vLLM's AWQ backend.
+
+---
+
+## FP8 and the Decision Matrix
+
+**FP8** arrived with the H100 (Hopper, 2022) in two flavours — **E4M3** (more precision, for weights) and **E5M2** (more range, for gradients). H100 hits 3,958 TOPS in FP8 (4× FP16), with accuracy comparable to INT8 but more dynamic range. It needs H100+ and is still maturing in framework support (B200 even adds FP4).
+
+<StatGrid items={[
+  { value: "Vision (ResNet/ViT)", label: "INT8 PTQ per-channel", sub: "<0.5% loss, 4× faster; skip INT4" },
+  { value: "NLP (BERT)", label: "INT8 static", sub: "<0.1% loss, 4× faster" },
+  { value: "LLM serving", label: "BF16 → INT8 → INT4 AWQ", sub: "<1.5% loss at 4-bit, 4× smaller" },
+  { value: "LLM on edge", label: "GGUF Q4_K_M", sub: "best size/quality balance" }
+]} caption="The default ladder: BF16 everywhere, INT8 for 2–4×, INT4/GGUF for memory-constrained edge, FP8 only on H100+. Measure accuracy at each step before shipping it." />
+
+---
+
+## Recap
+
+- Precision is the **first** optimisation — it cuts size, bandwidth, and compute together, and (because batch=1 is bandwidth-bound) **fewer weight bytes means lower latency**.
+- **BF16 beats FP16** for inference: same range as FP32, so it can't silently **overflow to NaN**; use AMP to keep sensitive ops in FP32.
+- **INT8** (4× smaller, ~0.1–1% loss) maps floats via **scale + zero-point**; prefer **per-channel** weights and **calibrate on production data** or activations clip.
+- **INT4** needs **GPTQ** (error compensation) or **AWQ** (protect high-salience weights); **FP8** (E4M3/E5M2) is the H100+ frontier.
+- Choose per task from the **decision matrix** — BF16 default, INT8 for speed, INT4/GGUF for edge — always measuring accuracy at each step.
+
+Next: the stages around the model that often *are* the bottleneck — the **inference data pipeline**.

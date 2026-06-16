@@ -1,0 +1,89 @@
+---
+title: "Model Formats: The Deployment Zoo"
+module: "05"
+moduleTitle: "Inference Systems Fundamentals"
+lesson: "5.3"
+slug: "5-3-model-formats"
+summary: "A trained PyTorch model is in a research format — mutable, Python-bound, graph-unfriendly. Production needs the opposite. The format landscape: PyTorch native and torch.compile, ONNX as the universal graph, TensorRT's GPU-specific compiled engine, GGUF for edge LLMs, SafeTensors for secure weights — and a decision tree for choosing among them."
+prerequisites: ["5.2 Latency vs Throughput"]
+---
+
+## Why Format Matters
+
+A trained `.pth` is designed for research: mutable, Python-dependent, executed eagerly op-by-op. Production wants the reverse — **immutable, hardware-specific, graph-optimised**. The format you choose determines which optimisations are even *possible* and which hardware you can reach. The journey is almost always a one-way pipeline from research to a deployment artifact:
+
+<ModelFormatJourney caption="PyTorch (.pth, research) → ONNX (portable graph) → a hardware-specific engine: TensorRT for NVIDIA, Core ML for Apple, TFLite for Android, GGUF for CPU/edge. Each step trades flexibility for speed and portability for hardware-specificity." />
+
+---
+
+## PyTorch Native — and Why Not to Ship It
+
+`torch.save(model.state_dict())` stores a Python dict of weight tensors. It **requires the original model class** to load, can't run without PyTorch (no C++/Java), and executes Python on every `forward()` with no graph optimisation. Perfect for research and fine-tuning; **never for production**.
+
+Two PyTorch-native steps toward deployment:
+
+- **TorchScript** (`torch.jit.script/trace`) compiles to an intermediate representation loadable *without* the class definition, even in C++ — but offers limited graph optimisation. Largely superseded by ONNX and `torch.compile`.
+- **`torch.compile`** (PyTorch 2.0+) is *not a format* — it's a runtime optimisation that traces the graph on the first few calls and JIT-compiles to **Triton** kernels (the same tech behind Unsloth, Lesson 4.7). First call is slow (30–60 s); subsequent calls run 1.5–2.5× faster. `mode="max-autotune"` searches kernels hardest.
+
+---
+
+## ONNX — The Universal Intermediate
+
+**ONNX** (Open Neural Network Exchange) represents a model as a portable **computation graph** — a protobuf of typed nodes (`Conv`, `MatMul`, `Relu`…), weight initialisers, and full shape information. Defined by Microsoft and Meta, it's supported by essentially every framework and hardware vendor.
+
+Export traces the graph with a dummy input (declare `dynamic_axes` to keep batch size variable). The payoff is **ONNX Runtime (ORT)**: one `.onnx` file runs on many backends via swappable **Execution Providers** — CUDA, TensorRT, CoreML, QNN (Qualcomm), OpenVINO (Intel), DirectML — each handling hardware-specific optimisation.
+
+<Callout type="insight" title="The graph is what unlocks optimisation — and Netron lets you see it">
+
+The reason a *graph* format matters: once a model is a static graph rather than imperative Python, the runtime can rewrite it. ORT automatically applies **constant folding**, **common-subexpression elimination**, **operator fusion** (Conv + BN + ReLU → one CUDA kernel), **memory planning**, and **node elimination** (dead transposes, redundant casts). Inspect any export with **Netron** (`netron model.onnx`) — it draws every node, the shapes flowing between them, and weight sizes. When an export misbehaves or you want to know what *can* be fused, the graph view is where you look. Always verify numerically after export (`np.testing.assert_allclose` vs the PyTorch output) — a silent op mismatch is the classic export bug.
+
+</Callout>
+
+---
+
+## TensorRT — Maximum NVIDIA Performance
+
+**TensorRT** takes an ONNX model and compiles a serialised **engine** that runs *only* on the exact GPU it was built for. It's the fastest option on NVIDIA, and the reason is its compile-time pipeline:
+
+<TensorRTPipeline caption="Parse → fuse layers into single kernels → calibrate precision (INT8/FP8) → auto-tune (benchmark every candidate kernel on THIS GPU and pick the fastest) → plan memory → serialise. The kernel auto-tuning is why compilation takes minutes — it runs thousands of micro-benchmarks." />
+
+The standout step is **kernel auto-tuning**: for each operation NVIDIA ships dozens of kernel implementations tuned for different sizes, dtypes, and layouts; TensorRT benchmarks them on *your* GPU and batch size and keeps the winner. Typical speedups over plain ORT: 1.5–2× (ResNet FP32), 3–4× (ResNet INT8), 2–3× (BERT FP16 with attention fusion).
+
+<Callout type="warning" title="A TensorRT engine is doubly locked — to GPU and to batch size">
+
+The performance comes at the cost of portability: an engine compiled for an A100 **will not run on an RTX 4090**, and one optimised for batch 16 is slower at batch 1. Change the model and you must rebuild. So TensorRT belongs in stable, high-volume NVIDIA deployments where you control the hardware — not in heterogeneous fleets or fast-iterating prototypes (use ONNX Runtime there). For LLMs specifically, prefer **TensorRT-LLM** or **vLLM** (Module 7), which handle the KV cache and continuous batching the generic engine doesn't.
+
+</Callout>
+
+---
+
+## GGUF and SafeTensors — Edge and Security
+
+- **GGUF** is the binary format for **quantised LLM weights** used by **llama.cpp** — header + metadata + tensors in mixed quantised types. Its **k-quant** types (`Q4_K_M`, `Q6_K`, `Q8_0`…) use *different* bit widths for different tensors: `Q4_K_M` keeps 4 bits for most weights but FP16 for quality-critical attention projections, quantised in blocks of 32 each with its own scale. It's how a 1B model runs at ~0.7 GB on a Raspberry Pi.
+
+<StatGrid items={[
+  { value: "Q8_0", label: "8.5 GB · excellent", sub: "nearly lossless, best practical" },
+  { value: "Q6_K", label: "6.1 GB · very good", sub: "high-quality edge" },
+  { value: "Q4_K_M", label: "4.4 GB · good", sub: "the balanced default" },
+  { value: "Q2_K", label: "2.7 GB · poor", sub: "extreme constraint only" }
+]} caption="GGUF quant types for an 8B model. The _K suffix = k-quants (mixed bit widths by tensor sensitivity); _M = medium variant. Q4_K_M is the everyday edge default; quality degrades noticeably below Q3." />
+
+- **SafeTensors** (Hugging Face) is a secure weight format that replaces `torch.save`'s **pickle** — loading a malicious `.pt` can execute arbitrary code, a real supply-chain risk. SafeTensors stores pure tensor data with a validated header, supports **zero-copy mmap loading** and parallel reads, and is now the default on the HuggingFace Hub.
+
+---
+
+## Choosing: The Decision Tree
+
+<FormatDecisionTree caption="Deployment target drives the format: NVIDIA datacenter → TensorRT (max) or ONNX Runtime (flexible); CPU LLM → GGUF + llama.cpp; Apple → Core ML; Android → TFLite; vision/NLP anywhere → ONNX Runtime. LLMs at scale → TensorRT-LLM / vLLM (Module 7)." />
+
+---
+
+## Recap
+
+- Research formats (`.pth`) are mutable, Python-bound, and unoptimised — fine for building, wrong for serving. Deployment wants **immutable, graph-optimised, hardware-specific** artifacts.
+- **ONNX** is the portable computation graph that unlocks fusion/folding and runs on many backends via **Execution Providers**; inspect it with **Netron**, and always verify numerically after export.
+- **TensorRT** compiles a GPU- and batch-specific **engine** via kernel **auto-tuning** for top NVIDIA speed — at the cost of portability (use TensorRT-LLM/vLLM for LLMs).
+- **GGUF** (k-quants) is the edge-LLM standard for llama.cpp; **SafeTensors** is the secure, zero-copy default replacing pickle.
+- Pick from the **decision tree** by deployment target — there is no single best format, only the right one for the hardware.
+
+Next: the single highest-impact knob of all — **numerical precision**.

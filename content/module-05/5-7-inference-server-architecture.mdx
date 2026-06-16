@@ -1,0 +1,71 @@
+---
+title: "Inference Server Architecture"
+module: "05"
+moduleTitle: "Inference Systems Fundamentals"
+lesson: "5.7"
+slug: "5-7-inference-server-architecture"
+summary: "Assembling every lever into a running system — the anatomy of a production inference server (load balancer → async server → dynamic batcher → GPU worker → postprocess), NVIDIA Triton and its model repository, health checks and graceful shutdown for zero-downtime deploys, and the inference engineer's mental model for diagnosing any system."
+prerequisites: ["5.6 Cost Engineering"]
+---
+
+## Anatomy of a Production Inference Server
+
+Everything in this module — paradigm, latency budget, dynamic batching, precision, pipeline, cost — comes together in one architecture. Requests flow down a fixed set of layers:
+
+<InferenceServerStack caption="Clients → load balancer (round-robin/least-connections) → multiple async server instances (validation, auth) → dynamic batcher (accumulate to batch_size or timeout, sort by length) → one GPU worker per GPU (ORT/TensorRT/vLLM backend) → postprocess + serialise → response. A monitoring layer observes everything off the critical path." />
+
+Each layer is a lesson you've already learned: the **load balancer** spreads load across instances sized for 75–80% utilisation (Lesson 5.2); the **async server** overlaps CPU work with GPU compute (Lesson 5.5); the **dynamic batcher** trades latency for throughput via `max_wait_ms` (Lesson 5.2); the **GPU worker** runs the chosen format and precision (Lessons 5.3–5.4). A **monitoring layer** — Prometheus latency histograms, GPU utilisation, distributed traces — runs alongside but never *in* the critical path.
+
+---
+
+## NVIDIA Triton: The Production Standard
+
+You rarely build all of this by hand. **NVIDIA Triton Inference Server** is the open-source, production-grade server that provides the batcher, multi-backend execution, and metrics out of the box:
+
+<TritonServer caption="Triton serves a model repository: each model has a config.pbtxt and versioned weight files. It runs multiple frameworks (TensorRT, ONNX, PyTorch, Python), does built-in dynamic batching, runs several model instances concurrently on one GPU, chains models as ensembles, and exposes HTTP + gRPC with Prometheus metrics." />
+
+The configuration is declarative — a `config.pbtxt` per model declares the backend (`platform`), input/output shapes and dtypes, and the batching and concurrency policy:
+
+<Formula label="The two settings that tune throughput/latency" caption="Dynamic batching delay + concurrent instances — the levers from Lessons 5.2 and 5.5, as config.">dynamic_batching &#123; max_queue_delay_microseconds: 10000 &#125;   ·   instance_group &#123; count: 2, kind: KIND_GPU &#125;</Formula>
+
+`max_queue_delay` is the `max_wait_ms` knob from Lesson 5.2; `instance_group count: 2` runs two copies of the model on one GPU so a second request fills the gaps while the first computes — keeping the GPU busy without extra hardware.
+
+---
+
+## Health Checks and Graceful Shutdown
+
+A production server must manage its own lifecycle so deploys cause **zero dropped requests**:
+
+<Callout type="key" title="The /ready probe is what makes zero-downtime deploys possible">
+
+Two endpoints, two jobs. **`/health`** (liveness) answers "is the process alive?" — if it fails, the orchestrator restarts the pod. **`/ready`** (readiness) answers "should traffic come here *yet*?" — and it returns 503 until the model is fully loaded *and* a test inference actually succeeds on the GPU. This distinction is the whole trick: during a rolling deploy, Kubernetes only routes to a new instance once `/ready` passes, so users never hit a half-loaded model (which takes 10–60 s to load weights). On shutdown, the server flips `model_ready = false` to stop accepting new work, **drains in-flight requests** with a short grace period, then frees GPU memory. Liveness restarts the dead; readiness gates the not-yet-ready; graceful drain protects the in-flight. Skip readiness and every deploy throws a burst of errors.
+
+</Callout>
+
+---
+
+## The Inference Engineer's Mental Model
+
+This module's real deliverable is a diagnostic checklist. Facing any inference system — building, debugging, or optimising — ask these in order:
+
+<StatGrid items={[
+  { value: "1 · Paradigm?", label: "batch / real-time / streaming / edge / serverless", sub: "sets the objective" },
+  { value: "2 · Budget?", label: "decompose latency, profile each stage", sub: "measure, don't guess" },
+  { value: "3 · Bound?", label: "compute vs memory (roofline, M2)", sub: "TFLOPS or bandwidth?" },
+  { value: "4 · Precision?", label: "BF16 → INT8 → INT4/GGUF → FP8", sub: "measure accuracy each step" },
+  { value: "5 · Format?", label: "TensorRT / ONNX / GGUF / Core ML", sub: "by hardware target" },
+  { value: "6 · Utilisation?", label: "Little's Law → 75–80% target", sub: "size the fleet" },
+  { value: "7 · Cost?", label: "precision → smaller → routing", sub: "$/query vs budget" },
+  { value: "8 · Bottleneck?", label: "profile: CPU / GPU / bandwidth / net", sub: "fix the real one" }
+]} caption="The eight questions, in order. Most production inference problems are solved by answering them honestly — and the most common mistake at every step is optimising before profiling." />
+
+---
+
+## Recap
+
+- A production inference server is a fixed stack: **load balancer → async servers → dynamic batcher → GPU worker → postprocess**, with monitoring off the critical path — each layer a lever from earlier in the module.
+- **Triton** provides batching, multi-backend execution, concurrent instances, ensembles, and metrics via a declarative **`config.pbtxt`**; `max_queue_delay` and `instance_group count` are the throughput knobs.
+- **`/health` (liveness)** restarts dead processes; **`/ready` (readiness)** gates traffic until the model is truly loaded — together with graceful drain they enable **zero-downtime deploys**.
+- The module's lasting deliverable is the **eight-question mental model** — paradigm, budget, bound, precision, format, utilisation, cost, bottleneck — always profiling before optimising.
+
+Next: **Module 6 — Model Optimization & Efficient Inference**: quantization pipelines, pruning, distillation, and graph optimisation in depth.

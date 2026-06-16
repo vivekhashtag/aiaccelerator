@@ -1,0 +1,81 @@
+---
+title: "Data Pipelines for Inference"
+module: "05"
+moduleTitle: "Inference Systems Fundamentals"
+lesson: "5.5"
+slug: "5-5-data-pipelines"
+summary: "The model is only one stage. Data must travel from client to GPU and back, transformed at every step — and preprocessing is surprisingly often the real bottleneck. The ten-stage pipeline, why image decode can dwarf inference (and how DALI fixes it), padding vs bucketing waste, async non-blocking I/O, and the three caches that turn the fastest inference into no inference."
+prerequisites: ["5.4 Precision: The Highest-Impact Optimisation"]
+---
+
+## Inference Is More Than the Model
+
+A request doesn't arrive as a tensor. It's raw JPEG bytes or a text string that must be parsed, validated, preprocessed, batched, moved to the GPU, run, moved back, post-processed, and serialised. Each stage can be **the bottleneck** — and for vision models, the preprocessing often dwarfs the inference.
+
+<InferencePipeline caption="Ten stages from client bytes to client response. The GPU forward pass (stage 6) is only one of them — decode/resize (stage 3) or H2D transfer (stage 5) frequently dominate. Profile every stage before optimising any of them." />
+
+The discipline is the same as Lesson 5.1's latency budget: **profile before optimising**. Wrap each stage in a timer, report per-stage average and P99, and find the real bottleneck — it's rarely where intuition says.
+
+---
+
+## Image Preprocessing: The Hidden Bottleneck
+
+For vision models, decoding and resizing a single 4K image on CPU can take **50–200 ms — longer than the GPU inference itself**. The standard PIL path (decode JPEG → resize → crop → normalise) is ~45 ms per image single-threaded. The fixes form a clear ladder:
+
+<StatGrid items={[
+  { value: "~45 ms", label: "PIL, single thread", sub: "the naive default" },
+  { value: "~6 ms", label: "8 CPU workers", sub: "parallelism" },
+  { value: "~2 ms", label: "GPU (DALI)", sub: "decode+resize on GPU" },
+  { value: "~0.3 ms", label: "NVJPEG hardware", sub: "hardware JPEG decode" }
+]} caption="A 150× span for the same operation. NVIDIA DALI decodes JPEGs on the GPU's hardware NVJPEG units and runs resize/crop/normalise as GPU kernels — the output tensor is already in VRAM, so there's no preprocessing H2D transfer at all." />
+
+<Callout type="insight" title="The fastest H2D transfer is the one you delete">
+
+DALI's real win isn't just that resizing is faster on the GPU — it's that the preprocessed tensor is **already in GPU memory**, eliminating the host-to-device copy entirely. This is the memory-hierarchy thinking from Module 2 applied to the pipeline: every byte you don't move is latency you don't pay. The same principle drives the text path — **batch tokenisation** is 10–50× faster than tokenising one string at a time, because it's a single vocabulary pass, one vectorised pad, and one tensor allocation instead of N. Whenever a stage looks slow, ask first whether you can *avoid the data movement*, not just speed it up.
+
+</Callout>
+
+---
+
+## Padding and Bucketing: The Shape Problem
+
+Networks need fixed-shape tensors, but requests have variable lengths. Pad everything to the longest and you waste enormous compute on padding tokens:
+
+<PaddingBucketing caption="Naive padding to the max length wastes ~45% of compute on padding. Bucketing — sort by length, batch similar lengths together, pad within each bucket — cuts the waste to ~19%, a 57% reduction. For LLMs, continuous batching (Module 7) solves the shape problem differently." />
+
+<Formula label="Padding waste is real compute" caption="Every padded position is a full forward pass over nothing.">naive: pad all to 500 → 45% wasted   ·   bucketed: group by length → 19% wasted</Formula>
+
+---
+
+## Asynchronous Inference: Don't Block on the GPU
+
+Synchronous serving blocks a thread per request: at 15 ms inference, one thread does ~67 RPS. **Async** serving (FastAPI + `asyncio`) frees the thread during I/O — reading requests, validating, serialising — so a single event-loop thread juggles thousands of connections.
+
+<Callout type="key" title="Async hides the CPU work behind the GPU's work">
+
+CUDA is synchronous at the kernel level — the GPU itself runs one batch at a time. So what does async actually buy? It overlaps the **CPU-side** work with the GPU's compute: while the GPU processes batch N, the event loop preprocesses batch N+1, accepts new connections, and serialises responses for finished requests. The GPU inference runs in a small thread pool (so it doesn't block the loop), while everything around it happens concurrently. The result is high GPU utilisation without the server stalling on any single request — and it's exactly the structure of the dynamic batcher from Lesson 5.2 and the production server in Lesson 5.7.
+
+</Callout>
+
+---
+
+## Caching: When the Fastest Inference Is No Inference
+
+The cheapest forward pass is the one you never run. Three caches, in increasing sophistication:
+
+<CachingLayers caption="Exact cache: hash the prompt, return a stored response on identical input. Semantic cache: embed the prompt, return a hit if cosine similarity to a past prompt exceeds a threshold. Prefix (KV) cache: precompute the shared system-prompt KV once and reuse it for every request." />
+
+- **Exact cache** (Redis + TTL): hash the prompt, return the stored response on an identical hit. Production LLM APIs see **5–30% hit rates** — a 20% hit rate at 100 RPS frees the equivalent of a whole A100.
+- **Semantic cache**: embed the prompt and return a hit when cosine similarity to a previous prompt clears a threshold (~0.95) — catches paraphrases the exact cache misses (the embedding + FAISS machinery from Lesson 4.8).
+- **Prefix / KV cache**: when many requests share a long system prompt, precompute its **KV cache** once (Module 4) and reuse it, slashing **TTFT** for every request. A 512-token system prompt with a 128-token user message saves ~80% of prefill.
+
+---
+
+## Recap
+
+- Inference is a **ten-stage pipeline**; the GPU forward pass is one stage, and **preprocessing or transfers often dominate** — profile every stage before optimising.
+- **Image preprocessing** can exceed inference time; the fix ladder runs from multi-worker CPU to **DALI/NVJPEG**, whose real win is putting the tensor in VRAM and **deleting the H2D copy**. Batch-tokenise text (10–50×).
+- **Bucketing** (group by length) cuts padding waste from ~45% to ~19%; **async** serving overlaps CPU work with the synchronous GPU to keep utilisation high.
+- The three **caches** — exact, semantic, and **prefix/KV** — turn repeated work into no work; even a 20% hit rate frees a GPU.
+
+Next: turning all these levers into money — **cost engineering**.

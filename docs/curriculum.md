@@ -132,12 +132,13 @@ Goal: implement neural nets from scratch in NumPy, reproduce them in PyTorch, th
 ## Module 6 — Model Optimization & Efficient Inference
 *3 weeks · Laptop + RPi 4 + Google Coral (optional)*
 
-**Topics**
-6.1 Quantization (PTQ, QAT, per-tensor/channel, GPTQ, AWQ)
-6.2 Pruning and sparsity (unstructured, structured, magnitude-based)
-6.3 Knowledge distillation (teacher-student, soft targets, TinyBERT)
-6.4 Graph optimization (operator fusion, constant folding, Netron)
-6.5 Hardware-aware optimization (FlashAttention, memory layout, tiling)
+**Topics** *(built as 6 lessons from `Module06.pdf` — the PDF adds a 6th synthesis topic beyond this 5-topic outline)*
+6.1 Quantization (PTQ, QAT, per-tensor/channel/group, SmoothQuant, GPTQ, AWQ)
+6.2 Pruning and sparsity (unstructured, lottery ticket, NVIDIA 2:4, structured, gradual magnitude)
+6.3 Knowledge distillation (teacher-student, soft targets / dark knowledge, feature distillation, DistilBERT)
+6.4 Graph optimization (operator fusion, constant folding, Flash Attention, CUDA Graphs, torch.compile)
+6.5 Hardware-aware optimization (tile alignment, KV-cache quant, speculative decoding, efficient architectures)
+6.6 The complete optimization pipeline ★ — 5-phase decision flow, benchmarking protocol, ResNet-50 13.2× worked example
 
 **Labs**
 - 6-A PTQ pipeline (ResNet-50 FP32→INT8)

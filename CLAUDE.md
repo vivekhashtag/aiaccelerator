@@ -190,7 +190,10 @@ In rough teaching order:
   (7 lessons: types-of-inference → latency-vs-throughput → model-formats → precision → data-pipelines
   → cost-engineering → inference-server-architecture, +20 SVG diagrams in `diagrams/module-05.tsx`,
   **Amber** accent) built & pushed 2026-06-16 (drafted a prior session; build/wiring fixed this one).
-  **41 lessons total.**
+  **Module 6 — Model Optimization & Efficient Inference** (6 lessons: quantization → pruning-sparsity →
+  knowledge-distillation → graph-optimization → hardware-aware-optimization → optimization-pipeline,
+  +20 SVG diagrams in `diagrams/module-06.tsx`, **Lime** accent) built & pushed 2026-06-16.
+  **47 lessons total.**
   - **Module 4 expansion (2026-06-16):** the 4 new lessons (4.3a diffusion, 4.4a MoE, 4.7a decoding,
     4.9a multimodal) were **inserted in place** via order-preserving slugs (`4-3a-…` sorts between
     `4-3-…` and `4-4-…`) — existing lessons keep their filenames/URLs/numbers. Lessons are
@@ -203,7 +206,8 @@ In rough teaching order:
   `styles/tokens.css` + the palette in `diagrams/_shared.tsx`. Lessons are also fully **mobile
   responsive** (overlay sidebar, hamburger). To revert to dark, restore the prior token/palette
   values (noted in-file).
-- Next concrete steps: continue the same SVG-diagram treatment through **Modules 6–10** (Module 6 =
-  Model Optimization & Efficient Inference — quantization, pruning, distillation, graph/HW-aware opt).
-  PDFs on disk are parsed with `pdftotext -layout` (poppler) — the built-in PDF reader needs
-  `pdftoppm`, which isn't installed.
+- Next concrete steps: continue the same SVG-diagram treatment through **Modules 7–10** (Module 7 =
+  Inference Frameworks & LLM Runtimes — vLLM, llama.cpp, Ollama, TGI; KV cache/PagedAttention,
+  continuous batching, speculative decoding, streaming). PDFs on disk are parsed with `pdftotext
+  -layout` (poppler) — the built-in PDF reader needs `pdftoppm`, which isn't installed. Verify builds
+  with `NEXT_DIST_DIR=.next-verify npx next build`; escape bare `<`/`{` in MDX prose (`&lt;`/`&#123;`).

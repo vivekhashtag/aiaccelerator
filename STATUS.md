@@ -1,6 +1,21 @@
 # Project Status
 
-**Last updated:** 2026-06-16 — **Module 5 completed (7 lessons)** AND **Module 4 expanded to 13 lessons** (+4 new: Diffusion, MoE, Decoding & Sampling, Multimodal). Both pushed to `main` → Vercel deploying. **41 lessons total**, 44 routes, `next build` green. **Next:** continue Modules 6–10.
+**Last updated:** 2026-06-16 — **Module 6 built (6 lessons + 20 SVG diagrams)**; earlier same day: Module 5 completed (7 lessons) and Module 4 expanded to 13 lessons. All pushed to `main` → Vercel deploying. **47 lessons total**, 50 routes, `next build` green. **Next:** Module 7 — Inference Frameworks & LLM Runtimes.
+
+---
+
+## ⚙️ Module 6 built (2026-06-16): Model Optimization & Efficient Inference
+
+**6 lessons** under `content/module-06/`, from `Module06.pdf` (6 topics — the PDF adds a synthesis "Complete Optimization Pipeline" beyond curriculum.md's 5). Image-rich pattern, light theme, module accent = **Lime** (`C.lime` added to `_shared.tsx`). **+20 SVG diagrams** in `diagrams/module-06.tsx` (registered in barrel + `lib/mdx.ts`). `next build` green — **47 lessons total**, 50 routes.
+
+- `6-1-quantization` — optimization hierarchy, affine quant + scale/2 error (INT8 vs INT4), per-tensor/channel/group, PTQ vs QAT + STE, calibration methods, SmoothQuant / GPTQ / AWQ. *(4 diagrams)*
+- `6-2-pruning-sparsity` — unstructured + lottery ticket, why scattered zeros don't speed up dense HW, NVIDIA 2:4, structured (channel/head/layer), gradual magnitude pruning, sparsity×quant. *(4 diagrams)*
+- `6-3-knowledge-distillation` — dark knowledge, temperature loss + T² factor, feature distillation, DistilBERT 40/60/97. *(3 diagrams)*
+- `6-4-graph-optimization` — operator fusion, constant-fold/DCE/CSE/layout, Flash Attention, CUDA Graphs, torch.compile. *(4 diagrams)*
+- `6-5-hardware-aware-optimization` — tile alignment, KV-cache INT8, speculative decoding, architecture-level efficiency. *(3 diagrams)*
+- `6-6-optimization-pipeline` — 5-phase decision flow, benchmarking protocol, ResNet-50 13.2× journey, thresholds, module summary. *(2 diagrams)*
+
+> Accent colors are predefined in `lib/colors.ts` (M6 = Lime #84CC16); home-page card auto-discovers. Verified with `NEXT_DIST_DIR=.next-verify npx next build` (separate dir, dev server untouched). Recurring MDX gotcha: escape bare `<`/`{` in prose (`&lt;`/`&#123;`) — attribute strings are fine.
 
 ---
 
@@ -200,7 +215,9 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 - [x] Updated `docs/curriculum.md` (8-lesson Module 3) + `CLAUDE.md` (§4 phase marker, §10 status, light theme, diagrams reorg) ✓ 2026-06-15
 - [x] Module 4 — Generative AI & LLM Fundamentals (9 lessons, 25 SVG diagrams) ✓ built 2026-06-15 (transformer-block depth added per user request)
 - [x] Module 5 — Inference Systems Fundamentals (7 lessons, 20 SVG diagrams) ✓ built & pushed 2026-06-16 (drafted prior session, wiring/build fixed this session)
-- [ ] **▶ NEXT:** **Expand Module 4** — add new lessons (diffusion models, multimodal, + a few more high-value topics) and diagrams to deepen the Gen-AI module. Then continue Modules 6–10 (prose + SVG diagrams, same pattern). Parse PDFs with `pdftotext -layout` (poppler); the built-in PDF reader needs `pdftoppm`, which isn't installed.
+- [x] Module 4 expansion — +4 lessons (diffusion, MoE, decoding, multimodal) inserted in place ✓ 2026-06-16 (now 13 lessons)
+- [x] Module 6 — Model Optimization & Efficient Inference (6 lessons, 20 SVG diagrams) ✓ built & pushed 2026-06-16
+- [ ] **▶ NEXT:** **Module 7 — Inference Frameworks & LLM Runtimes** (vLLM, llama.cpp, Ollama, TGI; KV cache/PagedAttention, continuous batching, speculative decoding, streaming). PDF: not yet confirmed on disk (M1–6 PDFs are present; check for a Module 7 PDF or use `curriculum.md` Module 7). Parse PDFs with `pdftotext -layout` (poppler); the built-in PDF reader needs `pdftoppm`, which isn't installed.
 
 > The old "Module 1 interactive backlog" (CMOS NAND, live truth tables, bit-flipper, MAC
 > animation, systolic array, etc.) is **shelved** as of the 2026-06-11 direction change. Each is
@@ -216,7 +233,7 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 | Route | `app/modules/[module]/[lesson]/page.tsx` |
 | Lesson shell | `components/lesson/LessonLayout.tsx` |
 | Sidebar | `components/lesson/LessonSidebar.tsx` |
-| **SVG diagrams** | `components/lesson/diagrams/` (~160 figures — 29 M1 + 22 M2 + 30 M3 + 38 M4 + 20 M5 — the course "images"). Split per module: `_shared.tsx` (palette `C`, light-theme + `DiagramFrame`), `module-01/02/03/04/05.tsx`, `index.ts` barrel. |
+| **SVG diagrams** | `components/lesson/diagrams/` (~180 figures — 29 M1 + 22 M2 + 30 M3 + 38 M4 + 20 M5 + 20 M6 — the course "images"). Split per module: `_shared.tsx` (palette `C`, light-theme + `DiagramFrame`), `module-01…06.tsx`, `index.ts` barrel. |
 | MDX content blocks | `components/lesson/LessonBlocks.tsx` (Callout / Formula / Figure / StatGrid) |
 | Prev/next nav | `components/lesson/LessonNav.tsx` |
 | Quiz (unregistered, kept for later) | `components/lesson/QuizBlock.tsx` |

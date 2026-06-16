@@ -484,3 +484,107 @@ export function TensorParallelSplit({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   7.7 — Framework Selection Guide
+   ════════════════════════════════════════════════════════════ */
+
+/* Decision tree: pick a framework by deployment target. */
+export function FrameworkDecisionTree({ caption }: { caption?: string }) {
+  const leaves = [
+    { cond: "GPU · 100+ users", pick: "vLLM", c: SKY },
+    { cond: "GPU · HF / multimodal", pick: "TGI", c: C.gate },
+    { cond: "GPU · quick dev", pick: "Ollama", c: C.violet },
+    { cond: "CPU laptop", pick: "llama.cpp / Ollama", c: C.on },
+    { cond: "Apple Silicon", pick: "Ollama (Metal)", c: C.on },
+    { cond: "Raspberry Pi / edge", pick: "llama.cpp (NEON)", c: C.hole },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 230" width="100%" role="img" aria-label="Framework selection decision tree">
+        <rect x="210" y="14" width="140" height="28" rx="6" fill={C.panel2} stroke={C.line} strokeWidth="1.2" />
+        <text x="280" y="32" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.text}>deployment target?</text>
+        {leaves.map((l, i) => {
+          const y = 58 + i * 28;
+          return (
+            <g key={`dt${i}`}>
+              <line x1="280" y1="42" x2="150" y2={y + 13} stroke={C.line} strokeWidth="0.6" opacity="0.5" />
+              <rect x="40" y={y} width="230" height="24" rx="4" fill={C.panel} stroke={C.line} strokeWidth="0.9" />
+              <text x="52" y={y + 16} fontFamily={mono} fontSize="8" fill={C.muted}>{l.cond}</text>
+              <text x="300" y={y + 16} fontFamily={mono} fontSize="9" fill={C.faint}>→</text>
+              <rect x="320" y={y} width="200" height="24" rx="4" fill={`${l.c}1a`} stroke={l.c} strokeWidth="1.2" />
+              <text x="420" y={y + 16} textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={l.c}>{l.pick}</text>
+            </g>
+          );
+        })}
+        <text x="280" y="224" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>all support OpenAI API + streaming — choice is about scale & ecosystem, not app rewrites</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Performance ladder across frameworks (same A100). */
+export function FrameworkPerfLadder({ caption }: { caption?: string }) {
+  const rows = [
+    { t: "HF naive", users: 1, tps: 120, c: C.off },
+    { t: "HF + pipeline", users: 4, tps: 350, c: C.off },
+    { t: "TGI", users: 16, tps: 980, c: C.gate },
+    { t: "vLLM (FP16)", users: 32, tps: 1400, c: SKY },
+    { t: "vLLM (AWQ INT4)", users: 64, tps: 2200, c: SKY },
+    { t: "vLLM (INT4 + spec)", users: 64, tps: 3100, c: C.on },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 210" width="100%" role="img" aria-label="Framework throughput comparison">
+        <text x="280" y="20" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.muted}>Llama-3-8B · A100 · throughput (tok/s)</text>
+        {rows.map((r, i) => {
+          const y = 32 + i * 28;
+          const w = (r.tps / 3100) * 330;
+          return (
+            <g key={`pl${i}`}>
+              <text x="20" y={y + 15} fontFamily={mono} fontSize="8" fill={C.text}>{r.t}</text>
+              <rect x="170" y={y + 2} width={w} height="18" rx="3" fill={`${r.c}33`} stroke={r.c} strokeWidth="1" />
+              <text x={176 + w} y={y + 15} fontFamily={mono} fontSize="7.5" fontWeight="700" fill={r.c}>{r.tps} · {r.users}u</text>
+            </g>
+          );
+        })}
+        <text x="280" y="200" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>same GPU, ~26× span from naive to vLLM+AWQ+speculative — software, not hardware</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   7.8 — Deploying on Raspberry Pi 4
+   ════════════════════════════════════════════════════════════ */
+
+/* RPi 4 model options: size vs tokens/sec. */
+export function RPiModelOptions({ caption }: { caption?: string }) {
+  const models = [
+    { t: "Llama-3.2-1B", gb: 0.7, tps: "3–5 tok/s", ok: true, note: "practical choice" },
+    { t: "Llama-3.2-3B", gb: 1.8, tps: "1–3 tok/s", ok: true, note: "acceptable" },
+    { t: "Phi-3-Mini 3.8B", gb: 2.3, tps: "1–2 tok/s", ok: false, note: "borderline" },
+    { t: "Llama-3.1-8B", gb: 4.5, tps: "<0.5 tok/s", ok: false, note: "barely usable" },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 190" width="100%" role="img" aria-label="Raspberry Pi 4 model options">
+        <text x="270" y="22" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.muted}>RPi 4 (8 GB, 4× Cortex-A72, NEON) · Q4_K_M</text>
+        {models.map((m, i) => {
+          const y = 36 + i * 34;
+          const c = m.ok ? C.on : C.hole;
+          return (
+            <g key={`rp${i}`}>
+              <text x="20" y={y + 16} fontFamily={mono} fontSize="8" fill={C.text}>{m.t}</text>
+              <rect x="180" y={y + 2} width={m.gb * 50} height="18" rx="3" fill={`${c}30`} stroke={c} strokeWidth="1" />
+              <text x={186 + m.gb * 50} y={y + 16} fontFamily={mono} fontSize="7.5" fill={C.muted}>{m.gb} GB</text>
+              <text x="420" y={y + 16} fontFamily={mono} fontSize="7.5" fontWeight="700" fill={c}>{m.tps}</text>
+              <text x="478" y={y + 16} fontFamily={mono} fontSize="6.8" fill={C.faint}>{m.ok ? "✓" : "✗"} {m.note}</text>
+            </g>
+          );
+        })}
+        <text x="270" y="182" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.faint}>rule: 1–3B models for real-time interaction on a Pi — bigger fits in RAM but is too slow</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

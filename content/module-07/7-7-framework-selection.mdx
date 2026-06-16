@@ -1,0 +1,61 @@
+---
+title: "Framework Selection Guide"
+module: "07"
+moduleTitle: "Inference Frameworks & LLM Runtimes"
+lesson: "7.7"
+slug: "7-7-framework-selection"
+summary: "Choosing the right runtime for any deployment. A decision tree keyed on your target hardware and scale, a same-hardware performance comparison showing the ~26× span from naive serving to vLLM with AWQ and speculative decoding, and the secondary considerations (OpenAI compatibility, streaming, JSON, privacy, memory) that settle the close calls."
+prerequisites: ["7.2 vLLM: PagedAttention & Continuous Batching", "7.3 llama.cpp: LLMs on Any Hardware"]
+---
+
+## Choosing by Target and Scale
+
+You've now met every major runtime. The choice is driven almost entirely by **where you deploy** and **how many users** you serve:
+
+<FrameworkDecisionTree caption="Start from the deployment target. GPU server with many users → vLLM; GPU with HuggingFace/multimodal needs → TGI; GPU for quick experiments → Ollama. No GPU → llama.cpp/Ollama on a laptop, Ollama (Metal) on Apple Silicon, llama.cpp directly on a Raspberry Pi." />
+
+The reassuring part: because all of them speak the **OpenAI API** and all stream, choosing "wrong" is cheap — you can prototype on Ollama and move to vLLM by changing a `base_url`, with no application rewrite.
+
+---
+
+## The Performance Span Is Enormous
+
+It's worth seeing just how much the *software* choice matters on identical hardware:
+
+<FrameworkPerfLadder caption="Llama-3-8B on one A100: naive HuggingFace serves ~120 tok/s for 1 user; vLLM with AWQ INT4 and speculative decoding reaches ~3100 tok/s for 64 users — a ~26× span from the same GPU. None of that is new hardware; it's PagedAttention, continuous batching, quantization, and speculative decoding stacked together." />
+
+<Callout type="insight" title="The whole module in one number">
+
+That ~26× is the thesis of Module 7. The hardware is fixed; everything you gain comes from the ideas you've learned — paging the KV cache, keeping the batch full, shrinking weights with AWQ, and letting a small draft model run ahead. An engineer who understands these turns one GPU into the equivalent of twenty-six naive ones.
+
+</Callout>
+
+---
+
+## The Tie-Breakers
+
+When two options are close, secondary requirements decide:
+
+<StatGrid items={[
+  { value: "Fastest throughput", label: "vLLM + AWQ + spec", sub: "peak GPU serving" },
+  { value: "Lowest memory", label: "llama.cpp Q4_K_M/Q3", sub: "tight edge devices" },
+  { value: "JSON / grammar", label: "vLLM or TGI", sub: "constrained decoding" },
+  { value: "Offline / privacy", label: "llama.cpp / Ollama", sub: "no data leaves the box" }
+]} caption="OpenAI compatibility and SSE streaming are available everywhere, so they rarely decide. The real tie-breakers are peak throughput (vLLM), minimum memory (llama.cpp small quants), built-in JSON grammar (vLLM/TGI), and fully-offline/private operation (llama.cpp/Ollama)." />
+
+<Callout type="key" title="The practical default">
+
+For **production GPU serving**: vLLM with AWQ quantization and prefix caching. For **local development and edge**: Ollama (Mac/Windows/Linux) or llama.cpp directly (Raspberry Pi, embedded). For a **HuggingFace-first stack** or multimodal: TGI. Start there; only deviate when a specific requirement — a model only one framework supports, an unusual hardware target, a strict memory budget — forces it.
+
+</Callout>
+
+---
+
+## Recap
+
+- Pick the runtime by **deployment target + scale**: vLLM (GPU, high throughput), TGI (GPU, HF/multimodal), Ollama (GPU dev / local), llama.cpp (CPU / edge / Raspberry Pi).
+- On the **same A100**, software choice spans **~26×** throughput — from naive HF (~120 tok/s) to vLLM + AWQ + speculative decoding (~3100 tok/s).
+- All frameworks share **OpenAI compatibility + streaming**, so switching is a `base_url` change — choose freely and migrate later.
+- **Tie-breakers**: peak throughput → vLLM; minimum memory → llama.cpp small quants; guaranteed JSON → vLLM/TGI; offline/private → llama.cpp/Ollama.
+
+Next: putting llama.cpp on the smallest target of all — a **Raspberry Pi 4**.

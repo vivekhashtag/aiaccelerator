@@ -1,0 +1,107 @@
+---
+title: "Deploying on Raspberry Pi 4"
+module: "07"
+moduleTitle: "Inference Frameworks & LLM Runtimes"
+lesson: "7.8"
+slug: "7-8-raspberry-pi"
+summary: "Everything in this module, applied to a $75 computer. What an LLM actually does on a Raspberry Pi 4 (and which model sizes are realistic), building llama.cpp with NEON optimisations, running a model and serving it over the network with an OpenAI-compatible endpoint, and the real edge use cases this unlocks."
+prerequisites: ["7.3 llama.cpp: LLMs on Any Hardware"]
+---
+
+## An LLM on a $75 Computer
+
+Module 6 had you buy a Raspberry Pi 4 — here's the payoff. The Pi 4 is a 4-core ARM Cortex-A72 at 1.8 GHz with 8 GB of RAM and **ARM NEON** SIMD (128-bit: 4× FP32 per instruction). No GPU, 25 W of power. With llama.cpp's NEON kernels and Q4_K_M quantization (Lesson 7.3), it runs real language models — slowly, but usefully.
+
+The constraint is **speed**, not memory. Pick the model size accordingly:
+
+<RPiModelOptions caption="A 1B model at ~3–5 tok/s is the practical real-time choice; a 3B is acceptable for non-interactive tasks. An 8B fits in RAM but runs below 0.5 tok/s — too slow to use. On a Pi, model size trades directly against usability." />
+
+---
+
+## Building llama.cpp on the Pi
+
+On Raspberry Pi OS (ARM64), build from source — NEON is enabled automatically on ARM64:
+
+```bash
+# Install build dependencies
+sudo apt-get update
+sudo apt-get install -y cmake build-essential libcurl4-openssl-dev git
+
+# Clone and build llama.cpp
+git clone https://github.com/ggerganov/llama.cpp
+cd llama.cpp
+cmake -B build \
+    -DGGML_NATIVE=ON \          # use native CPU features (NEON auto-enabled on ARM64)
+    -DGGML_BLAS=OFF \           # no BLAS — faster without it on the Pi
+    -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release -j4   # build takes ~10 minutes
+```
+
+**Step by step:**
+
+1. Install the C/C++ toolchain (`cmake`, `build-essential`) and `libcurl` (for downloading models).
+2. `GGML_NATIVE=ON` compiles for the Pi's exact CPU, switching on the **NEON** SIMD kernels that make CPU inference fast (Lesson 7.3).
+3. `GGML_BLAS=OFF` — on the Pi, llama.cpp's own kernels beat a generic BLAS library, so turning BLAS off is faster.
+4. `-j4` uses all 4 cores to compile; the build takes about 10 minutes.
+
+---
+
+## Running and Serving a Model
+
+Download a small GGUF and run it:
+
+```bash
+# Download a 1B model (~0.7 GB)
+wget -O models/llama3.2-1b-q4km.gguf \
+  "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf"
+
+./build/bin/llama-cli \
+    -m models/llama3.2-1b-q4km.gguf \
+    --threads 4 \              # all 4 physical Pi cores
+    --ctx-size 2048 \          # smaller context saves RAM
+    -p "What is a KV cache? Answer in 2 sentences." -n 100
+```
+
+**Step by step:**
+
+1. Grab a **Q4_K_M** 1B model — small enough to leave RAM for the OS and KV cache.
+2. `--threads 4` uses every physical core (the Pi has no hyperthreads).
+3. `--ctx-size 2048` keeps the context (and its KV cache, per 7.1) small to fit the Pi's memory.
+
+To make it a service, run the OpenAI-compatible **server** instead, reachable from other devices on your network:
+
+```bash
+./build/bin/llama-server \
+    -m models/llama3.2-1b-q4km.gguf \
+    --host 0.0.0.0 --port 8080 --threads 4 --ctx-size 2048
+```
+
+```bash
+# From any device on the same network:
+curl http://raspberrypi.local:8080/v1/chat/completions \
+    -H "Content-Type: application/json" \
+    -d '{"model":"llama3.2-1b","messages":[{"role":"user","content":"Hello!"}]}'
+```
+
+**Step by step:**
+
+1. `llama-server` exposes the same **OpenAI-compatible** API as vLLM and Ollama — on a Raspberry Pi.
+2. `--host 0.0.0.0` makes it reachable from other machines (not just localhost); `--port 8080` is where it listens.
+3. Any device can now hit it with a standard OpenAI-style request — the *same* API you'd call against a cloud A100, running on a palm-sized board.
+
+<Callout type="key" title="Why this matters — the edge is real">
+
+The same OpenAI API, from a datacenter A100 down to a $75 board, is the quiet power of this module. It makes genuinely useful **offline, private, always-on** systems possible: a home-automation assistant with no cloud, an offline educational kiosk, a small-business chatbot over private documents (RAG with a local model), or an edge AI prototype to demo before buying real hardware. Latency is modest, but for these use cases *private and always-available* beats *fast*.
+
+</Callout>
+
+---
+
+## Recap
+
+- The Raspberry Pi 4 (ARM Cortex-A72 + **NEON**, no GPU) runs real LLMs via llama.cpp + Q4_K_M — the **speed**, not memory, is the limit.
+- Use **1–3B** models for real-time interaction (~3–5 tok/s for 1B); an 8B fits in RAM but is too slow.
+- Build with `GGML_NATIVE=ON` (NEON) and `GGML_BLAS=OFF`; run with `--threads 4` and a small `--ctx-size`.
+- `llama-server` exposes the **same OpenAI-compatible API** as cloud frameworks — enabling offline, private, always-on edge deployments.
+
+That completes the serving landscape — from one A100 saturating 64 users to a palm-sized board running privately offline. Next module: **FPGA & Hardware Acceleration**, where you implement inference directly in silicon.

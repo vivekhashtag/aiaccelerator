@@ -232,6 +232,11 @@ import {
   ThroughputKnee,
   GrammarConstrained,
   TensorParallelSplit,
+  // 7.7 Framework selection
+  FrameworkDecisionTree,
+  FrameworkPerfLadder,
+  // 7.8 Raspberry Pi
+  RPiModelOptions,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -422,6 +427,9 @@ const components = {
   ThroughputKnee,
   GrammarConstrained,
   TensorParallelSplit,
+  FrameworkDecisionTree,
+  FrameworkPerfLadder,
+  RPiModelOptions,
 };
 
 export async function renderMDX(source: string) {

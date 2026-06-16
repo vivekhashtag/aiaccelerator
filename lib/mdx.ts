@@ -226,6 +226,8 @@ import {
   SplitOffload,
   // 7.4 Ollama
   OllamaStack,
+  // 7.5 TGI
+  TgiArchitecture,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -412,6 +414,7 @@ const components = {
   GgufBlock,
   SplitOffload,
   OllamaStack,
+  TgiArchitecture,
 };
 
 export async function renderMDX(source: string) {

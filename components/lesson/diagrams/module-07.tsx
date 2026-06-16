@@ -351,3 +351,45 @@ export function OllamaStack({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   7.5 — Text Generation Inference (TGI)
+   ════════════════════════════════════════════════════════════ */
+
+/* TGI architecture: Rust router + Python model shards. */
+export function TgiArchitecture({ caption }: { caption?: string }) {
+  const feats = ["continuous batching", "Flash Attention 2", "tensor parallel", "SSE streaming", "JSON grammar", "GPTQ / AWQ"];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 210" width="100%" role="img" aria-label="TGI architecture">
+        {/* client */}
+        <rect x="20" y="80" width="74" height="34" rx="6" fill={C.panel} stroke={C.line} strokeWidth="1" />
+        <text x="57" y="101" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.text}>client</text>
+        {/* rust router */}
+        <rect x="130" y="60" width="150" height="74" rx="8" fill={`${C.gate}14`} stroke={C.gate} strokeWidth="1.5" />
+        <text x="205" y="84" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.gate}>router (Rust)</text>
+        <text x="205" y="100" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>HTTP · batching ·</text>
+        <text x="205" y="112" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>streaming · queue</text>
+        {/* model shards */}
+        {[0, 1].map((i) => (
+          <g key={`sh${i}`}>
+            <rect x="330" y={56 + i * 46} width="140" height="38" rx="6" fill={`${SKY}14`} stroke={SKY} strokeWidth="1.3" />
+            <text x="400" y={73 + i * 46} textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={SKY}>model shard (Python)</text>
+            <text x="400" y={85 + i * 46} textAnchor="middle" fontFamily={mono} fontSize="6.8" fill={C.muted}>GPU {i} · Flash Attn</text>
+          </g>
+        ))}
+        <line x1="94" y1="97" x2="130" y2="97" stroke={C.faint} strokeWidth="1.1" /><polygon points="130,97 123,93 123,101" fill={C.faint} />
+        <line x1="280" y1="90" x2="330" y2="75" stroke={C.faint} strokeWidth="1" />
+        <line x1="280" y1="104" x2="330" y2="119" stroke={C.faint} strokeWidth="1" />
+        {/* feature chips */}
+        {feats.map((f, i) => (
+          <g key={`fe${i}`}>
+            <rect x={30 + (i % 3) * 175} y={154 + Math.floor(i / 3) * 24} width="165" height="18" rx="4" fill={`${C.violet}12`} stroke={C.violet} strokeWidth="0.8" />
+            <text x={112 + (i % 3) * 175} y={166 + Math.floor(i / 3) * 24} textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.violet}>{f}</text>
+          </g>
+        ))}
+        <text x="400" y="150" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.faint}>num_shard = tensor-parallel GPUs</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

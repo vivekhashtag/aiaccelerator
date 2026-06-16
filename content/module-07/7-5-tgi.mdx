@@ -1,0 +1,91 @@
+---
+title: "Text Generation Inference (TGI)"
+module: "07"
+moduleTitle: "Inference Frameworks & LLM Runtimes"
+lesson: "7.5"
+slug: "7-5-tgi"
+summary: "HuggingFace's production serving framework — a Rust router over Python model shards, designed to deploy any model from the HF Hub with one Docker command. Its feature set (continuous batching, Flash Attention, tensor parallelism, grammar-constrained JSON), how to launch and call it, and the practical TGI-vs-vLLM decision."
+prerequisites: ["7.2 vLLM: PagedAttention & Continuous Batching"]
+---
+
+## TGI: The HuggingFace-Native Server
+
+**Text Generation Inference (TGI)** is HuggingFace's production serving stack. Where vLLM is a Python library, TGI is built as a **Rust router** (fast, concurrent HTTP, request queueing, batching, streaming) sitting in front of **Python model shards** that run the forward pass:
+
+<TgiArchitecture caption="The Rust router handles HTTP, continuous batching, queueing, and SSE streaming; Python shards run the model (one per GPU for tensor parallelism). It carries the same core optimizations as vLLM — continuous batching, Flash Attention 2, grammar-constrained JSON, GPTQ/AWQ — with the broadest HuggingFace model coverage." />
+
+Its design goal is **breadth**: deploy *any* model on the HF Hub — Llama, Mistral, Falcon, StarCoder, and vision-language models (LLaVA) — with minimal configuration.
+
+---
+
+## Deploying with TGI
+
+TGI ships as a Docker container — one command loads a model and starts the server:
+
+```bash
+docker run --gpus all -p 8080:80 \
+    -v /path/to/models:/data \
+    ghcr.io/huggingface/text-generation-inference:latest \
+    --model-id meta-llama/Meta-Llama-3.1-8B-Instruct \
+    --dtype bfloat16 \
+    --max-input-length 4096 \
+    --max-total-tokens 8192 \
+    --num-shard 1
+```
+
+**Step by step:**
+
+1. `--gpus all` gives the container the GPUs; `-p 8080:80` maps the server's port out; `-v .../data` is where model weights are cached.
+2. `--model-id` is any HuggingFace Hub repo — TGI downloads and loads it.
+3. `--max-input-length` and `--max-total-tokens` bound the prompt and prompt+output lengths (and thus the KV cache, per 7.1).
+4. `--num-shard N` enables **tensor parallelism** across N GPUs — the one knob to serve a model too big for a single card.
+
+Then call it with HuggingFace's client (it also exposes an OpenAI-compatible route):
+
+```python
+from huggingface_hub import InferenceClient
+
+client = InferenceClient("http://localhost:8080")
+for token in client.text_generation(
+    "Explain continuous batching:",
+    max_new_tokens=200,
+    stream=True,           # stream tokens as they're generated
+):
+    print(token, end="", flush=True)
+```
+
+**Step by step:**
+
+1. `InferenceClient` points at your local TGI server.
+2. `text_generation(...)` sends the prompt and generation settings; `stream=True` yields tokens one at a time over SSE.
+3. The loop prints each token as it arrives — the same word-by-word experience as the vLLM and Ollama clients.
+
+---
+
+## TGI vs vLLM
+
+They overlap heavily — both do continuous batching, Flash Attention, tensor parallelism, and streaming. The differences are about ecosystem and edge features:
+
+<StatGrid items={[
+  { value: "Throughput", label: "vLLM slightly higher", sub: "better PagedAttention" },
+  { value: "Model coverage", label: "TGI broader", sub: "all HF Hub + VLMs" },
+  { value: "Deploy", label: "vLLM pip · TGI Docker", sub: "library vs container" },
+  { value: "JSON grammar", label: "TGI built-in", sub: "vLLM via outlines" }
+]} caption="vLLM edges TGI on raw throughput (its PagedAttention is more mature); TGI wins on model breadth, multimodal support, and a Docker-first, HuggingFace-native workflow with built-in grammar constraints." />
+
+<Callout type="key" title="The three-way rule of thumb">
+
+**Maximum throughput / pure LLM text generation → vLLM.** **HuggingFace ecosystem, multimodal, or Docker-first ops → TGI.** **Local development or no GPU → Ollama / llama.cpp.** All three speak the OpenAI API and all three stream, so the choice is about your stack and scale, not about rewriting your application code.
+
+</Callout>
+
+---
+
+## Recap
+
+- **TGI** is HuggingFace's production server: a **Rust router** (HTTP, batching, streaming) over **Python model shards**, built to deploy any HF Hub model.
+- It carries the same core optimizations as vLLM — continuous batching, Flash Attention 2, tensor parallelism (`--num-shard`), GPTQ/AWQ — plus **built-in grammar-constrained JSON** and strong **multimodal** support.
+- Deploy with one **Docker** command; call it via the HuggingFace `InferenceClient` (or the OpenAI route), with `stream=True` for SSE.
+- **Choose by stack:** vLLM for peak throughput, TGI for HF breadth/multimodal/Docker, Ollama for local — all interchangeable through the OpenAI API.
+
+Next: the cross-cutting practice that applies to all of them — **batching, decoding, structured output, multi-GPU, and monitoring** in production.

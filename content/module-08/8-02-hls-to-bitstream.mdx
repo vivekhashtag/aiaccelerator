@@ -1,0 +1,109 @@
+---
+title: "Programming an FPGA: HLS to Bitstream"
+module: "08"
+moduleTitle: "Hardware Acceleration: FPGA & Edge NPUs"
+lesson: "8.2"
+slug: "8-02-hls-to-bitstream"
+summary: "How a C++ function becomes a circuit. The FPGA design flow (HLS → RTL → netlist → place-and-route → bitstream) and why it takes hours, writing hardware in C++ with High-Level Synthesis, the three pragmas that every FPGA AI design relies on (PIPELINE, UNROLL, ARRAY_PARTITION), and the dataflow/streaming pattern that runs all network layers at once."
+prerequisites: ["8.1 FPGA Architecture: Reconfigurable Logic"]
+---
+
+## You Describe a Circuit, Not Instructions
+
+Programming an FPGA is nothing like programming a CPU. You aren't writing a sequence of instructions for a processor — you're **describing a circuit** that gets physically built in the fabric. That circuit is created by a multi-stage compilation flow:
+
+<FpgaDesignFlow caption="Your HLS C++ is synthesised to RTL (Verilog), mapped to a netlist of LUTs/DSPs/FFs, then placed and routed onto specific die locations — producing a ~10 MB .bit bitstream that configures the fabric. Place-and-route is the slow step; a simple network takes 30–90 minutes to compile, a complex one 4–12 hours." />
+
+<Callout type="why" title="Why FPGA development feels slow">
+
+Each code change → recompile → retest cycle can take **hours**, dominated by place-and-route. That's a completely different rhythm from software's edit-run-in-seconds. It's why good FPGA engineers lean heavily on **C/RTL simulation** — verifying behaviour in a fast software simulator *before* paying for a full synthesis run. Get the logic right in simulation; spend the hours-long build only when you're confident.
+
+</Callout>
+
+---
+
+## Writing Hardware in C++
+
+Traditional FPGA design uses Hardware Description Languages (Verilog/VHDL) where you specify every register and wire — tedious. **High-Level Synthesis (HLS)** lets you write C++ that the tool turns into a circuit. You still think about hardware, but at a far higher level:
+
+```cpp
+#include <ap_int.h>
+typedef ap_int<8>  int8;    // 8-bit integer — exact bit widths, unlike CPU's fixed int
+typedef ap_int<32> int32;   // 32-bit accumulator (prevents overflow, like the MAC unit in M1)
+
+void matrix_multiply(int8 A[4][4], int8 B[4][4], int32 C[4][4]) {
+    #pragma HLS INTERFACE m_axi port=A      // A/B/C arrive over a memory-mapped AXI/DMA bus
+    #pragma HLS INTERFACE m_axi port=B
+    #pragma HLS INTERFACE m_axi port=C
+    #pragma HLS INTERFACE s_axilite port=return   // a control register to start/stop the block
+
+    for (int i = 0; i < 4; i++) {
+        #pragma HLS PIPELINE II=1               // start a new output element every clock cycle
+        for (int j = 0; j < 4; j++) {
+            int32 sum = 0;
+            #pragma HLS UNROLL                  // build 4 parallel multipliers (4 DSPs)
+            for (int k = 0; k < 4; k++)
+                sum += A[i][k] * B[k][j];       // each * = one DSP block
+            C[i][j] = sum;
+        }
+    }
+}
+```
+
+**Step by step:**
+
+1. `ap_int<8>` / `ap_int<32>` are **arbitrary-precision** integer types — on hardware you choose the exact bit width (8-bit inputs, 32-bit accumulator to avoid overflow, exactly as the MAC unit demanded in Module 1).
+2. The `INTERFACE` pragmas describe how this block **wires into the system**: `m_axi` ports stream data in/out over DMA, and `s_axilite` exposes the control register PYNQ wrote `1` to in Lesson 8.1.
+3. `PIPELINE II=1` tells HLS to produce one new result **per clock cycle** instead of waiting for each to finish.
+4. `UNROLL` builds four physical multipliers so the inner dot product runs in parallel — turning a sequential loop into concurrent hardware (at the cost of 4 DSP blocks).
+
+---
+
+## The Three Pragmas Every FPGA AI Design Uses
+
+Those pragmas aren't incidental — they *are* the optimization toolkit:
+
+<HlsPragmas caption="PIPELINE overlaps loop iterations into an assembly line (throughput: 1 result/cycle). UNROLL replicates hardware to process N elements at once (N× DSPs, N× speed). ARRAY_PARTITION splits an array across multiple BRAMs so many weights can be read per cycle. Together they trade DSP/BRAM resources for speed." />
+
+<Callout type="key" title="The three levers, and what they cost">
+
+**PIPELINE** is the single most important — it turns sequential processing into an assembly line, where a new result emerges every `II` (initiation interval) cycles. **UNROLL** spends DSPs to gain parallelism — unroll until you run out of the 220 DSPs. **ARRAY_PARTITION** solves the memory-bandwidth bottleneck: a single BRAM serves one value per cycle, so to feed parallel multipliers you split weights across many BRAMs (or registers). Reading weights from one BRAM is usually *the* bottleneck — partitioning is what unblocks the unrolled multipliers.
+
+</Callout>
+
+---
+
+## Dataflow: Running Every Layer at Once
+
+The most powerful FPGA pattern for neural networks is **dataflow** (streaming). A CPU runs layer 1, then layer 2, then layer 3 — each idle while the others work. An FPGA builds all layers as concurrent hardware stages connected by FIFOs:
+
+<DataflowStreaming caption="In dataflow, all layers run simultaneously on different data — Layer 1 processes pixel 100 while Layer 2 handles pixel 50 and Layer 3 outputs pixel 1. It's a hardware assembly line: throughput equals the slowest stage (not the sum of all stages), and FIFOs absorb rate differences between stages." />
+
+```cpp
+void neural_network(hls::stream<int8> &input, hls::stream<int32> &output) {
+    #pragma HLS DATAFLOW              // run ALL the calls below concurrently
+    hls::stream<int8> c1, r1, c2, r2;   // inter-stage FIFO buffers (in BRAM)
+    conv1(input, c1);                // each stage is its own always-running circuit
+    relu1(c1, r1);
+    conv2(r1, c2);
+    relu2(c2, r2);
+    fc(r2, output);
+}
+```
+
+**Step by step:**
+
+1. `#pragma HLS DATAFLOW` tells HLS the functions below are **concurrent hardware stages**, not sequential calls — each becomes an always-running circuit.
+2. The `hls::stream` objects between stages are **FIFO buffers** in BRAM; a stage reads from its input FIFO and writes to its output FIFO.
+3. Because every stage runs at once on different data, the network's **throughput** is set by its slowest layer, while each input's **latency** is the sum of stage latencies — the classic pipeline trade from Module 1.
+
+---
+
+## Recap
+
+- FPGA programming **describes a circuit**: HLS C++ → RTL → netlist → **place & route** → `.bit` bitstream, a 30-min-to-12-hour compile (P&R is the slow step) — so engineers **simulate first**.
+- **HLS** turns C++ into hardware; arbitrary-precision types (`ap_int<8>`) pick exact bit widths, and `INTERFACE` pragmas wire the block to the AXI bus + control register.
+- The three pragmas are the optimization toolkit: **PIPELINE** (assembly line, 1 result/cycle), **UNROLL** (parallel hardware, more DSPs), **ARRAY_PARTITION** (split BRAM for memory bandwidth).
+- **Dataflow** (`#pragma HLS DATAFLOW`) runs **all layers concurrently** as a FIFO-connected pipeline — throughput = slowest stage; the core FPGA-AI design pattern.
+
+Next: making networks *fit* the fabric — **quantization for FPGA**, where INT8 and binary unlock the DSP budget.

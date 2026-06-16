@@ -242,6 +242,10 @@ import {
   FpgaBuildingBlocks,
   DspPacking,
   ZynqPsPlFlow,
+  // 8.2 HLS to bitstream
+  FpgaDesignFlow,
+  HlsPragmas,
+  DataflowStreaming,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -439,6 +443,9 @@ const components = {
   FpgaBuildingBlocks,
   DspPacking,
   ZynqPsPlFlow,
+  FpgaDesignFlow,
+  HlsPragmas,
+  DataflowStreaming,
 };
 
 export async function renderMDX(source: string) {

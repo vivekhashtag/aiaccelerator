@@ -1,0 +1,94 @@
+---
+title: "Quantization"
+module: "06"
+moduleTitle: "Model Optimization & Efficient Inference"
+lesson: "6.1"
+slug: "6-1-quantization"
+summary: "The single highest-impact inference optimization — representing weights and activations in fewer bits. The quantization math and why INT8 barely hurts but INT4 does, the granularity decision (per-tensor vs per-channel vs per-group), calibration algorithms, PTQ vs QAT with the straight-through estimator, and the LLM-specific methods (SmoothQuant, GPTQ, AWQ) that tame activation outliers and make INT4 serving viable."
+prerequisites: ["5.4 Precision: FP32 to INT4"]
+---
+
+## The Optimization Hierarchy
+
+Module 5 gave you the measurement framework; Module 6 gives you the techniques to move the numbers. Before any single technique, internalise the rule that separates good optimization engineers from the rest: **optimization is never free** — every method trades accuracy, engineering time, or hardware portability for speed, size, or cost. Apply techniques in order of payoff-per-risk:
+
+<StatGrid items={[
+  { value: "1. Algorithm", label: "100–1000×, no loss", sub: "right model + precision" },
+  { value: "2. Quantization", label: "2–8×, 0.1–2% loss", sub: "fewer bytes per weight" },
+  { value: "3. Graph opt", label: "1.1–2×, no loss", sub: "fusion, layout" },
+  { value: "4. Pruning", label: "1.5–4×, 0.5–3% loss", sub: "remove weights" },
+  { value: "5. Distillation", label: "2–10× smaller", sub: "small mimics large" },
+  { value: "6. HW tuning", label: "1.1–1.5×, no loss", sub: "FlashAttn, CUDA graphs" }
+]} caption="Always start at the top. Most teams reach for distillation (step 5) and wonder why they get 2× when they needed 10× — because they skipped the cheaper, safer wins above it." />
+
+This lesson covers step 2 — **quantization**, the first tool to reach for and the most impactful.
+
+---
+
+## What Quantization Does
+
+Quantization maps a continuous float to a discrete integer. It works because network weights and activations aren't spread uniformly across the float range — they **cluster near zero** (roughly Gaussian/Laplace), so a handful of integer levels captures almost all the useful information. Given a tensor with range `[x_min, x_max]`:
+
+<Formula label="Affine quantization" caption="scale sets the step size; zero_point aligns float-zero to an integer. Quantize then dequantize to recover an approximate float.">scale = (x_max − x_min) / (q_max − q_min);  Q(x) = clip(round(x/scale) + zero_point, q_min, q_max)</Formula>
+
+The error from this rounding is bounded by **half a step**, and that single fact explains why INT8 is nearly free while INT4 is hard:
+
+<QuantizationLevels caption="INT8 gives 256 levels — max error ≈ 0.2% of the range, below the noise floor of most networks. INT4 gives only 16 levels — error ≈ 6.7%, 17× coarser. That's why INT4 needs the smarter methods (GPTQ/AWQ) covered below, while INT8 often works with a one-liner." />
+
+---
+
+## Granularity: the Most Important Calibration Choice
+
+A single scale for an entire weight matrix (**per-tensor**) is wasteful: one channel with a wide range forces a coarse scale on every other channel. Using **one scale per output channel** (per-channel), or per small **group** of weights, lets each region use its own optimal step:
+
+<QuantGranularity caption="Per-tensor: one scale for everything (coarse). Per-channel: one scale per row — the INT8 default, ~4× lower error than per-tensor on ResNet-50. Per-group (G=32 or 128): one scale per small block — essential for INT4 (GPTQ/AWQ/GGUF Q4_K_M), at a tiny overhead of ~0.5 extra bits/weight." />
+
+<Callout type="why" title="Symmetric vs asymmetric — and where each fits">
+
+**Symmetric** quantization pins `zero_point = 0` (the int range is centred on zero); **asymmetric** lets zero_point float so the full integer range covers an off-centre distribution. The rule of thumb PyTorch uses: **symmetric for weights** (they're roughly zero-centred, so symmetry wastes nothing and a zero-point-free matmul is cheaper) and **asymmetric for activations** (post-ReLU activations live in `[0, x_max]`, so symmetry would throw away half the levels).
+
+</Callout>
+
+---
+
+## PTQ vs QAT
+
+There are two ways to get a quantized model. **Post-Training Quantization (PTQ)** quantizes a finished model — no retraining, seconds to minutes, just a small **calibration set** to measure activation ranges. **Quantization-Aware Training (QAT)** simulates quantization *during* fine-tuning so the model learns to be robust to rounding before it ever runs in INT8:
+
+<PTQvsQAT caption="PTQ is the default — fast, no training, and usually within 0.5% for INT8. When that's not enough, QAT inserts 'fake-quantize' nodes into the training loop so weights migrate away from quantization boundaries; it recovers most of the lost accuracy at the cost of a 5–15 epoch fine-tune." />
+
+<Callout type="key" title="The straight-through estimator makes QAT possible">
+
+`round()` has zero gradient almost everywhere — backprop through it would kill all learning. The **straight-through estimator (STE)** simply pretends `round()` is the identity on the backward pass (`∂y/∂x ≈ 1`). It's mathematically "wrong" but works: the gradient still points the right way, so the model learns to push weights into the centre of quantization bins where rounding hurts least. Use a learning rate of ~0.1–1% of the original — too high and the model forgets its FP32 knowledge.
+
+</Callout>
+
+**Calibration matters as much as the algorithm.** The calibration set establishes activation ranges; if it isn't representative, ranges are miscalibrated and production inputs get clipped. The method also matters: **MinMax** is simple but one outlier widens the range for everything; **percentile** clips the tail (e.g. 99.9th); **KL-divergence** (TensorRT's default) finds the clipping threshold that best preserves the distribution; **MSE** directly minimises reconstruction error. 100–500 samples is plenty.
+
+---
+
+## The LLM Problem: Activation Outliers
+
+Standard INT8 *fails* on large transformers because of **activation outliers** — a tiny fraction of channels (~1%) consistently produce huge values (up to ±150 while the rest sit in ±1). A per-tensor scale forced to cover ±150 leaves the normal channels with **under one usable INT8 level** — catastrophic.
+
+<SmoothQuantShift caption="SmoothQuant rewrites Y = X·W as Y = (X/s)·(W·s) — mathematically identical, but the per-channel factor s pulls the activation outliers down and pushes the difficulty into the weights, which are easy to quantize offline. On LLaMA-2-13B it takes naive-INT8's 41% MMLU back to 54.3%, within 0.5% of FP16." />
+
+For **INT4** LLM weights, two methods dominate:
+
+<Callout type="key" title="GPTQ vs AWQ — INT4 that actually works">
+
+**GPTQ** quantizes weights column-by-column and, after each column, **compensates** by nudging the remaining unquantized weights to absorb the error (using the layer's Hessian from calibration data). Accurate, but slow (Cholesky + column sweeps) and memory-heavy (stores the Hessian). **AWQ** instead *prevents* error: it identifies the ~1% of **high-salience weights** (those multiplied by large activations) and scales them up to get more INT4 resolution, scaling the matching activations down to keep the output unchanged. AWQ is far faster (just per-channel scaling), has a fused dequant+matmul kernel, and edges GPTQ on downstream tasks. **Practical default for 2025: AWQ — Q4_K_M (GGUF) for CPU/edge, AWQ + vLLM for GPU.**
+
+</Callout>
+
+---
+
+## Recap
+
+- **Quantization is the highest-impact inference optimization** — INT8 typically costs &lt;0.5% accuracy for 2–4× speed and memory; reach for it first.
+- It maps floats to integers with `Q(x) = round(x/scale) + zero_point`; rounding error is **≈ scale/2**, which is why INT8 (256 levels) is nearly free but INT4 (16 levels) is 17× coarser and needs smarter methods.
+- **Granularity** is the key calibration knob: per-channel (INT8 default) and per-group (INT4 essential) beat per-tensor by giving each region its own scale; use symmetric for weights, asymmetric for activations.
+- **PTQ** is fast and usually enough; **QAT** (via the **STE**) recovers accuracy when PTQ falls short. Calibration data and method (KL/MSE/percentile) matter.
+- LLMs need extra care: **SmoothQuant** migrates activation outliers into the weights for viable INT8; **GPTQ** (error compensation) and **AWQ** (salience-aware scaling) make INT4 serving practical.
+
+Next: the complementary axis — removing parameters entirely with **pruning and sparsity**.

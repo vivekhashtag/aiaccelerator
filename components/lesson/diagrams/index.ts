@@ -6,3 +6,4 @@ export * from "./module-02";
 export * from "./module-03";
 export * from "./module-04";
 export * from "./module-05";
+export * from "./module-06";

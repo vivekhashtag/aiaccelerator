@@ -184,6 +184,12 @@ import {
   // 5.7 Inference server architecture
   InferenceServerStack,
   TritonServer,
+  // Module 6 — Model Optimization & Efficient Inference
+  // 6.1 Quantization
+  QuantizationLevels,
+  QuantGranularity,
+  PTQvsQAT,
+  SmoothQuantShift,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -335,6 +341,11 @@ const components = {
   BudgetLadder,
   InferenceServerStack,
   TritonServer,
+  // Module 6
+  QuantizationLevels,
+  QuantGranularity,
+  PTQvsQAT,
+  SmoothQuantShift,
 };
 
 export async function renderMDX(source: string) {

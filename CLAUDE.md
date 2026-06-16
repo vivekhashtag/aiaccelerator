@@ -51,7 +51,7 @@ Do not introduce new heavy dependencies without flagging the tradeoff first.
 
 > **CURRENT PHASE: Phase 2 (content scaling)** ← update this marker as we progress.
 > Phase 0 is complete and live; **Phase 1 (Supabase auth + saved progress) is intentionally deferred** —
-> by user direction we are scaling content first (Modules 1–3 built; marching through 4–10).
+> by user direction we are scaling content first (Modules 1–5 built; marching through 6–10).
 >
 > Hard rule: do not build features from a later phase unless the current phase is complete and I have explicitly moved the marker. If you think a later-phase feature is needed early, say so and ask — do not just build it.
 
@@ -181,22 +181,29 @@ In rough teaching order:
   - **Self-check quizzes removed** from all lessons (see §6). `QuizBlock` is unregistered (file kept).
 - **Content progress (Phase 2):** Module 1 (7 lessons), Module 2 — Computer Architecture &
   Accelerators (6 lessons), Module 3 — AI & Deep Learning Foundations (8 lessons; 3.2 Classical
-  ML and 3.8 Audio added by decision), and Module 4 — Generative AI & LLM Fundamentals (9 lessons:
-  autoencoders → VAEs → GANs → transformers → pre-training → fine-tuning → Unsloth → RAG →
-  prompting, +24 SVG diagrams in `diagrams/module-04.tsx`, **Rose** accent) are all built. Modules
-  1–2 + the light theme are live on Vercel; Modules 3–4 + the diagrams reorg committed and pushed
-  (Module 3 + reorg 2026-06-15; Module 4 same session). **Module 5 — Inference Systems Fundamentals**
+  ML and 3.8 Audio added by decision), and Module 4 — Generative AI & LLM Fundamentals (**13 lessons**:
+  autoencoders → VAEs → GANs → **diffusion** → transformers → **MoE** → pre-training → fine-tuning →
+  Unsloth → **decoding & sampling** → RAG → prompting → **multimodal**; +38 SVG diagrams in
+  `diagrams/module-04.tsx`, **Rose** accent) are all built. Modules 1–2 + the light theme are live on
+  Vercel; Modules 3–4 + the diagrams reorg committed and pushed (Module 3 + reorg 2026-06-15; Module 4
+  built 2026-06-15, **expanded +4 lessons 2026-06-16**). **Module 5 — Inference Systems Fundamentals**
   (7 lessons: types-of-inference → latency-vs-throughput → model-formats → precision → data-pipelines
   → cost-engineering → inference-server-architecture, +20 SVG diagrams in `diagrams/module-05.tsx`,
   **Amber** accent) built & pushed 2026-06-16 (drafted a prior session; build/wiring fixed this one).
-  **37 lessons total.**
+  **41 lessons total.**
+  - **Module 4 expansion (2026-06-16):** the 4 new lessons (4.3a diffusion, 4.4a MoE, 4.7a decoding,
+    4.9a multimodal) were **inserted in place** via order-preserving slugs (`4-3a-…` sorts between
+    `4-3-…` and `4-4-…`) — existing lessons keep their filenames/URLs/numbers. Lessons are
+    directory-discovered and sidebar-ordered by JS filename `.sort()`; `lesson:`/`prerequisites` are
+    cosmetic strings. Verify builds with `NEXT_DIST_DIR=.next-verify npx next build` (never `rm -rf
+    .next` while `next dev` runs — it 500s the dev server).
 - **DECISION (2026-06-12) — light reading theme.** Lesson content flipped from the dark
   "engineering instrument" theme to a **light reading theme** (white surfaces, dark text) for
   legibility; the home page stays dark (it uses hardcoded hex, not tokens). Driven by
   `styles/tokens.css` + the palette in `diagrams/_shared.tsx`. Lessons are also fully **mobile
   responsive** (overlay sidebar, hamburger). To revert to dark, restore the prior token/palette
   values (noted in-file).
-- Next concrete steps: **expand Module 4** (new lessons — diffusion models, multimodal, + a few more
-  high-value Gen-AI topics — and supporting diagrams), then continue the same SVG-diagram treatment
-  through **Modules 6–10**. PDFs on disk are parsed with `pdftotext -layout` (poppler) — the built-in
-  PDF reader needs `pdftoppm`, which isn't installed.
+- Next concrete steps: continue the same SVG-diagram treatment through **Modules 6–10** (Module 6 =
+  Model Optimization & Efficient Inference — quantization, pruning, distillation, graph/HW-aware opt).
+  PDFs on disk are parsed with `pdftotext -layout` (poppler) — the built-in PDF reader needs
+  `pdftoppm`, which isn't installed.

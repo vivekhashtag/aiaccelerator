@@ -1,6 +1,19 @@
 # Project Status
 
-**Last updated:** 2026-06-16 — **Module 5 (Inference Systems Fundamentals, 7 lessons + 20 SVG diagrams) completed & pushed**. The prior session drafted M5 but disconnected before wiring/build; this session fixed the build (3 MDX `<`-escapes in 5-1, `{}`-escape in 5-7, registered the 20 diagrams in `lib/mdx.ts`), verified `next build` green (40 routes), committed & pushed to `main`. **Next:** expand Module 4 (new lessons — diffusion, multimodal, + more — and diagrams).
+**Last updated:** 2026-06-16 — **Module 5 completed (7 lessons)** AND **Module 4 expanded to 13 lessons** (+4 new: Diffusion, MoE, Decoding & Sampling, Multimodal). Both pushed to `main` → Vercel deploying. **41 lessons total**, 44 routes, `next build` green. **Next:** continue Modules 6–10.
+
+---
+
+## 🧩 Module 4 expanded (2026-06-16): +4 lessons, now 13
+
+Four high-value lessons **inserted in place** (order-preserving slugs, no existing lesson renamed/renumbered — `lesson:`/`prerequisites`/filenames are cosmetic; sidebar order = JS filename `.sort()`). Each = MDX (standard pattern) + new SVG diagrams in `diagrams/module-04.tsx` + registered in `lib/mdx.ts` (import + components map) + neighbour's "Next:" line repointed. **+14 new diagrams.**
+
+- `4-3a-diffusion-models` (after GANs) — forward/reverse process, noise-prediction DDPM objective, U-Net + classifier-free guidance, latent diffusion (Stable Diffusion), DDPM-vs-DDIM sampling. *(4 diagrams)*
+- `4-4a-mixture-of-experts` (after Transformers) — dense-vs-sparse, router + top-k gating, load-balancing/router-collapse, compute-for-memory tradeoff (Mixtral/DeepSeek). *(3 diagrams)*
+- `4-7a-decoding-sampling` (after Unsloth) — greedy/beam + beam-search curse, temperature, top-k vs top-p (nucleus), repetition penalties, task recipes. *(4 diagrams)*
+- `4-9a-multimodal-models` (after Prompting, capstone) — CLIP contrastive alignment, ViT (image-as-tokens), VLMs (LLaVA/GPT-4V: frozen ViT + projector + frozen LLM). *(3 diagrams)*
+
+> **Build workflow note:** verification builds now run as `NEXT_DIST_DIR=.next-verify npx next build` (env-gated `distDir` in `next.config.ts`, default still `.next`). This stops a production build from clobbering a running `next dev` server's `.next` — do **not** `rm -rf .next` while dev is running.
 
 ---
 
@@ -203,7 +216,7 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 | Route | `app/modules/[module]/[lesson]/page.tsx` |
 | Lesson shell | `components/lesson/LessonLayout.tsx` |
 | Sidebar | `components/lesson/LessonSidebar.tsx` |
-| **SVG diagrams** | `components/lesson/diagrams/` (106 figures — 29 M1 + 22 M2 + 30 M3 + 25 M4 — the course "images"). Split per module: `_shared.tsx` (palette `C`, light-theme + `DiagramFrame`), `module-01/02/03/04.tsx`, `index.ts` barrel. |
+| **SVG diagrams** | `components/lesson/diagrams/` (~160 figures — 29 M1 + 22 M2 + 30 M3 + 38 M4 + 20 M5 — the course "images"). Split per module: `_shared.tsx` (palette `C`, light-theme + `DiagramFrame`), `module-01/02/03/04/05.tsx`, `index.ts` barrel. |
 | MDX content blocks | `components/lesson/LessonBlocks.tsx` (Callout / Formula / Figure / StatGrid) |
 | Prev/next nav | `components/lesson/LessonNav.tsx` |
 | Quiz (unregistered, kept for later) | `components/lesson/QuizBlock.tsx` |

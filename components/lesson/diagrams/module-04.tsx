@@ -858,3 +858,194 @@ export function SelfConsistency({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   4.3a — Diffusion Models
+   ════════════════════════════════════════════════════════════ */
+
+/* Fixed grid of dot offsets (deterministic — no Math.random). */
+const NOISE_DOTS = [
+  [12, 14], [40, 20], [22, 38], [50, 44], [16, 52],
+  [44, 12], [30, 28], [54, 30], [10, 30], [38, 50],
+  [26, 16], [48, 56], [18, 24], [34, 42], [56, 18],
+  [14, 44], [42, 34], [24, 54], [52, 22], [32, 12],
+];
+
+/* Forward (add noise) → reverse (denoise) Markov chain. */
+export function DiffusionForwardReverse({ caption }: { caption?: string }) {
+  const tiles = [0, 1, 2, 3, 4]; // noise level 0..4
+  const tx = (i: number) => 24 + i * 104;
+  const labels = ["x₀  data", "x₁", "x₂", "x₃", "x_T  noise"];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 218" width="100%" role="img" aria-label="Forward and reverse diffusion process">
+        {tiles.map((i) => {
+          const x = tx(i);
+          const signal = 1 - i / 4; // signal strength fades as noise grows
+          const dots = i * 5; // noise dots accumulate
+          return (
+            <g key={`tile${i}`}>
+              <rect x={x} y="58" width="64" height="64" rx="6" fill={C.panel} stroke={C.line} strokeWidth="1" />
+              {/* the underlying signal: a fading filled disc */}
+              <circle cx={x + 32} cy="90" r="17" fill={ROSE} opacity={0.18 + 0.55 * signal} />
+              <circle cx={x + 32} cy="90" r="9" fill={ROSE} opacity={0.3 + 0.6 * signal} />
+              {/* accumulating Gaussian noise */}
+              {NOISE_DOTS.slice(0, dots).map(([dx, dy], k) => (
+                <circle key={`n${i}-${k}`} cx={x + 4 + dx} cy={62 + dy} r="1.6" fill={C.text} opacity="0.5" />
+              ))}
+              <text x={x + 32} y="138" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight={i === 0 || i === 4 ? "700" : "400"} fill={i === 0 ? C.on : i === 4 ? C.text : C.muted}>{labels[i]}</text>
+            </g>
+          );
+        })}
+        {/* forward arrows (top): add noise */}
+        {[0, 1, 2, 3].map((i) => (
+          <g key={`fwd${i}`}>
+            <line x1={tx(i) + 66} y1="44" x2={tx(i) + 102} y2="44" stroke={C.faint} strokeWidth="1.3" />
+            <polygon points={`${tx(i) + 102},44 ${tx(i) + 95},40 ${tx(i) + 95},48`} fill={C.faint} />
+          </g>
+        ))}
+        <text x="280" y="26" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>forward q(xₜ | xₜ₋₁) — add a little Gaussian noise · FIXED, no learning</text>
+        {/* reverse arrows (bottom): denoise */}
+        {[0, 1, 2, 3].map((i) => (
+          <g key={`rev${i}`}>
+            <line x1={tx(i) + 102} y1="160" x2={tx(i) + 66} y2="160" stroke={ROSE} strokeWidth="1.5" />
+            <polygon points={`${tx(i) + 66},160 ${tx(i) + 73},156 ${tx(i) + 73},164`} fill={ROSE} />
+          </g>
+        ))}
+        <text x="280" y="184" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={ROSE}>reverse p_θ(xₜ₋₁ | xₜ) — a neural net LEARNS to remove it, one step at a time</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* U-Net denoiser: ε_θ(xₜ, t) with skip connections + conditioning. */
+export function UNetDenoiser({ caption }: { caption?: string }) {
+  // encoder blocks (down) and mirrored decoder blocks (up)
+  const enc = [
+    { x: 60, y: 44, w: 64, h: 26, t: "64²" },
+    { x: 96, y: 92, w: 52, h: 24, t: "32²" },
+    { x: 132, y: 138, w: 42, h: 22, t: "16²" },
+  ];
+  const dec = [
+    { x: 386, y: 138, w: 42, h: 22 },
+    { x: 412, y: 92, w: 52, h: 24 },
+    { x: 436, y: 44, w: 64, h: 26 },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 250" width="100%" role="img" aria-label="U-Net denoiser with skip connections">
+        {/* skip connections (drawn first, behind blocks) */}
+        {[0, 1, 2].map((i) => (
+          <line key={`skip${i}`} x1={enc[i].x + enc[i].w} y1={enc[i].y + enc[i].h / 2} x2={dec[2 - i].x} y2={dec[2 - i].y + dec[2 - i].h / 2} stroke={C.violet} strokeWidth="1" strokeDasharray="4 3" opacity="0.7" />
+        ))}
+        {/* encoder */}
+        {enc.map((b, i) => (
+          <g key={`enc${i}`}>
+            <rect x={b.x} y={b.y} width={b.w} height={b.h} rx="4" fill={`${C.blue}1a`} stroke={C.blue} strokeWidth="1.2" />
+            <text x={b.x + b.w / 2} y={b.y + b.h / 2 + 3.5} textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.blue}>{b.t}</text>
+          </g>
+        ))}
+        {/* bottleneck */}
+        <rect x="232" y="182" width="96" height="30" rx="6" fill={`${ROSE}16`} stroke={ROSE} strokeWidth="1.4" />
+        <text x="280" y="201" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={ROSE}>bottleneck + attn</text>
+        {/* decoder */}
+        {dec.map((b, i) => (
+          <g key={`dec${i}`}>
+            <rect x={b.x} y={b.y} width={b.w} height={b.h} rx="4" fill={`${C.on}1a`} stroke={C.on} strokeWidth="1.2" />
+          </g>
+        ))}
+        {/* down/up connecting paths */}
+        <path d="M92 70 L122 92 M148 116 L153 138 M174 160 L232 192" fill="none" stroke={C.faint} strokeWidth="1" />
+        <path d="M328 192 L386 160 M407 138 L412 116 M438 92 L468 70" fill="none" stroke={C.faint} strokeWidth="1" />
+        {/* input / output */}
+        <text x="60" y="36" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.text}>noisy xₜ →</text>
+        <text x="500" y="36" textAnchor="end" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={ROSE}>→ ε predicted noise</text>
+        {/* conditioning inputs */}
+        <rect x="208" y="226" width="64" height="18" rx="4" fill={`${C.gate}16`} stroke={C.gate} strokeWidth="1" />
+        <text x="240" y="238" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={C.gate}>timestep t</text>
+        <rect x="288" y="226" width="80" height="18" rx="4" fill={`${C.violet}16`} stroke={C.violet} strokeWidth="1" />
+        <text x="328" y="238" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={C.violet}>text (x-attn)</text>
+        <line x1="240" y1="226" x2="270" y2="212" stroke={C.gate} strokeWidth="0.9" />
+        <line x1="328" y1="226" x2="300" y2="212" stroke={C.violet} strokeWidth="0.9" />
+        <text x="280" y="24" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.faint}>same weights called at every t — skips (⋯) carry fine detail across the U</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Latent diffusion (Stable Diffusion) pipeline. */
+export function LatentDiffusionPipeline({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={580}>
+      <svg viewBox="0 0 580 250" width="100%" role="img" aria-label="Latent diffusion pipeline">
+        {/* text branch */}
+        <rect x="20" y="30" width="96" height="30" rx="6" fill={C.panel} stroke={C.line} strokeWidth="1" />
+        <text x="68" y="49" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.text}>"a cat, oil paint"</text>
+        <rect x="20" y="78" width="96" height="30" rx="6" fill={`${C.violet}16`} stroke={C.violet} strokeWidth="1.3" />
+        <text x="68" y="93" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.violet}>CLIP text enc</text>
+        <text x="68" y="103" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>conditioning</text>
+        <line x1="68" y1="60" x2="68" y2="78" stroke={C.faint} strokeWidth="1.1" />
+        <polygon points="68,78 64,71 72,71" fill={C.faint} />
+        {/* latent diffusion box */}
+        <rect x="150" y="40" width="240" height="150" rx="10" fill={`${ROSE}0c`} stroke={ROSE} strokeWidth="1.5" strokeDasharray="5 3" />
+        <text x="270" y="58" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={ROSE}>LATENT SPACE — 64×64×4 (≈48× fewer pixels)</text>
+        {/* noise latent */}
+        <rect x="168" y="86" width="56" height="56" rx="4" fill={C.panel2} stroke={C.line} strokeWidth="1" />
+        {NOISE_DOTS.map(([dx, dy], k) => (
+          <circle key={`ld${k}`} cx={171 + dx * 0.85} cy={89 + dy * 0.85} r="1.4" fill={C.text} opacity="0.5" />
+        ))}
+        <text x="196" y="158" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>z_T noise</text>
+        {/* denoise loop */}
+        <rect x="248" y="86" width="120" height="56" rx="6" fill={`${C.blue}14`} stroke={C.blue} strokeWidth="1.3" />
+        <text x="308" y="110" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.blue}>U-Net denoise</text>
+        <text x="308" y="124" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.blue}>× T steps ↻</text>
+        <text x="308" y="158" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>z₀ clean latent</text>
+        <line x1="224" y1="114" x2="248" y2="114" stroke={C.faint} strokeWidth="1.1" />
+        <polygon points="248,114 241,110 241,118" fill={C.faint} />
+        {/* conditioning arrow into unet */}
+        <line x1="116" y1="93" x2="150" y2="100" stroke={C.violet} strokeWidth="1.1" strokeDasharray="3 2" />
+        {/* VAE decoder → image */}
+        <line x1="390" y1="114" x2="420" y2="114" stroke={C.faint} strokeWidth="1.1" />
+        <polygon points="420,114 413,110 413,118" fill={C.faint} />
+        <rect x="422" y="86" width="56" height="56" rx="6" fill={`${C.on}16`} stroke={C.on} strokeWidth="1.3" />
+        <text x="450" y="110" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.on}>VAE</text>
+        <text x="450" y="122" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.on}>decode</text>
+        <rect x="496" y="80" width="68" height="68" rx="6" fill={C.panel} stroke={C.line} strokeWidth="1" />
+        <circle cx="530" cy="114" r="20" fill={ROSE} opacity="0.55" />
+        <circle cx="530" cy="114" r="10" fill={ROSE} opacity="0.8" />
+        <line x1="478" y1="114" x2="496" y2="114" stroke={C.faint} strokeWidth="1.1" />
+        <polygon points="496,114 489,110 489,118" fill={C.faint} />
+        <text x="530" y="162" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={C.text}>512×512 image</text>
+        <text x="290" y="214" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.faint}>denoise in the cheap latent, decode once at the end — the trick that put image-gen on consumer GPUs</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Sampling speed/quality tradeoff: DDPM vs DDIM. */
+export function DiffusionSampling({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 200" width="100%" role="img" aria-label="DDPM versus DDIM sampling steps">
+        {/* endpoints */}
+        <text x="34" y="20" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.text}>noise</text>
+        <text x="506" y="20" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.on}>image</text>
+        {/* DDPM track: many steps */}
+        <text x="20" y="62" fontFamily={mono} fontSize="9" fontWeight="700" fill={ROSE}>DDPM</text>
+        <line x1="70" y1="58" x2="470" y2="58" stroke={C.line} strokeWidth="1.1" />
+        {Array.from({ length: 33 }, (_, i) => (
+          <line key={`ddpm${i}`} x1={70 + i * 12.5} y1="52" x2={70 + i * 12.5} y2="64" stroke={ROSE} strokeWidth="1.1" />
+        ))}
+        <text x="270" y="82" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.muted}>~1000 tiny steps · highest quality · slow (every step = one U-Net call)</text>
+        {/* DDIM track: few steps */}
+        <text x="20" y="132" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.blue}>DDIM</text>
+        <line x1="70" y1="128" x2="470" y2="128" stroke={C.line} strokeWidth="1.1" />
+        {Array.from({ length: 6 }, (_, i) => (
+          <line key={`ddim${i}`} x1={70 + i * 80} y1="122" x2={70 + i * 80} y2="134" stroke={C.blue} strokeWidth="1.6" />
+        ))}
+        <text x="270" y="152" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.muted}>~20–50 larger deterministic steps · near-identical quality · 20–50× faster</text>
+        <text x="270" y="184" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.faint}>iterative sampling is diffusion's cost — the entire research race is "fewer steps, same quality"</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

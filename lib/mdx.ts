@@ -138,6 +138,11 @@ import {
   // 4.9 Prompting
   PromptingLadder,
   SelfConsistency,
+  // 4.3a Diffusion models
+  DiffusionForwardReverse,
+  UNetDenoiser,
+  LatentDiffusionPipeline,
+  DiffusionSampling,
   // Module 5 — Inference Systems Fundamentals
   // 5.1 Types of inference
   InferenceParadigms,
@@ -282,6 +287,10 @@ const components = {
   RAGASMetrics,
   PromptingLadder,
   SelfConsistency,
+  DiffusionForwardReverse,
+  UNetDenoiser,
+  LatentDiffusionPipeline,
+  DiffusionSampling,
   // Module 5
   InferenceParadigms,
   StreamingTTFT,

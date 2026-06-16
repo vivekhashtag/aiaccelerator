@@ -1,0 +1,123 @@
+---
+title: "Diffusion Models"
+module: "04"
+moduleTitle: "Generative AI & LLM Fundamentals"
+lesson: "4.3a"
+slug: "4-3a-diffusion-models"
+summary: "The generative paradigm that dethroned GANs — destroy an image with noise, then train a network to reverse the destruction one step at a time. The fixed forward process, the learned reverse process and why it predicts noise, the U-Net denoiser and conditioning, classifier-free guidance, and latent diffusion (Stable Diffusion) — the trick that put photorealistic image generation on a consumer GPU."
+prerequisites: ["4.3 Generative Adversarial Networks (GANs)"]
+---
+
+## The Denoising Idea
+
+GANs make sharp images but are temperamental — a moving adversarial target with no stable loss curve (4.3). **Diffusion models** reach even higher fidelity *and* train with a plain, stable regression loss. They get there with a counter-intuitive move: instead of learning to generate in one shot, they learn to **undo noise**.
+
+The recipe has two halves:
+
+- A **forward process** that gradually destroys a real image by adding small amounts of Gaussian noise over many steps, until nothing but noise remains. This half is **fixed** — there is no learning in it at all.
+- A **reverse process** that learns to walk that chain backwards: given a noisy image, predict the noise that was added, subtract a bit of it, and repeat. Run it from pure noise and a brand-new image emerges.
+
+<DiffusionForwardReverse caption="Forward: a fixed Markov chain corrupts the data into Gaussian noise. Reverse: a neural network learns the one thing the forward process can't be solved for analytically — how to step back toward the data. Generation is just running the learned reverse chain from random noise." />
+
+<Callout type="insight" title="Why split a hard problem into many tiny ones">
+
+Generating a coherent 512×512 image in a single forward pass (as a GAN does) is a brutally hard mapping. Diffusion replaces it with ~1000 **trivially easy** problems: "this image is slightly noisy — what's the noise?" Each step asks the network to remove only a whisker of corruption, so each step is learnable and the errors don't compound the way a one-shot generator's do. The price is paid at sampling time: you must run the network hundreds of times (the central cost, addressed below).
+
+</Callout>
+
+---
+
+## The Forward Process — Fixed, No Learning
+
+At each step the forward process adds Gaussian noise scaled by a small **variance schedule** `β_t`:
+
+<Formula label="One forward step" caption="Each step nudges the image toward noise; βₜ grows from ~1e-4 to ~0.02 over T steps.">q(xₜ | xₜ₋₁) = 𝒩( √(1 − βₜ)·xₜ₋₁ ,  βₜ·I )</Formula>
+
+The crucial algebraic gift: because each step is Gaussian, you can jump to **any** noise level `t` in closed form without simulating the chain. With `αₜ = 1 − βₜ` and `ᾱₜ = ∏ αₛ`:
+
+<Formula label="Jump straight to step t" caption="One ε sample gives xₜ directly — this is what makes training cheap.">xₜ = √(ᾱₜ)·x₀ + √(1 − ᾱₜ)·ε,    ε ~ 𝒩(0, I)</Formula>
+
+This is why training is fast: pick a random image `x₀`, pick a random timestep `t`, draw one noise sample `ε`, and you instantly have the training pair `(xₜ, ε)` — no need to roll the chain forward step by step.
+
+---
+
+## The Reverse Process — Predict the Noise
+
+The network `ε_θ(xₜ, t)` is trained to look at a noisy image and its timestep and **predict the noise that was added**. The loss is astonishingly simple — just mean-squared error between the true and predicted noise:
+
+<Formula label="The DDPM training objective" caption="Sample x₀, t, and ε; corrupt; ask the net to recover ε. Plain regression — no adversary, no discriminator.">L = 𝔼[ ‖ ε − ε_θ( √(ᾱₜ)·x₀ + √(1−ᾱₜ)·ε ,  t ) ‖² ]</Formula>
+
+<Callout type="why" title="Why predict the noise instead of the clean image?">
+
+You could train the net to output the denoised image `x₀` directly, and some formulations do. But predicting the **noise** `ε` works far better in practice: the target has a fixed unit scale at every timestep, which keeps the loss well-conditioned across the whole schedule, and it ties the objective to a clean theoretical result — minimising this MSE is equivalent (up to weighting) to learning the **score** ∇ log p(xₜ), the direction toward higher data density. Same network, a much friendlier optimisation landscape.
+
+</Callout>
+
+To **sample**, start from pure Gaussian noise `x_T` and iterate the learned reverse step — predict the noise, remove a calibrated fraction, add back a touch of stochasticity — from `t = T` down to `0`. The final `x₀` is your generated image.
+
+---
+
+## The Denoiser Is a U-Net
+
+`ε_θ` is almost always a **U-Net**: a convolutional encoder that downsamples to a low-resolution bottleneck, a decoder that upsamples back, and **skip connections** that hand fine spatial detail straight across. Predicting per-pixel noise needs both global structure (from the bottleneck) and pixel-accurate detail (from the skips) — the U-Net delivers both.
+
+<UNetDenoiser caption="The same U-Net weights are invoked at every one of the hundreds of denoising steps. The timestep t enters as a sinusoidal embedding (so the net knows how much noise to expect); text or class conditioning enters via cross-attention so the denoising can be steered." />
+
+Two extra inputs make it controllable:
+
+- **Timestep `t`** — encoded as a sinusoidal embedding and injected into every block, so one network can handle every noise level.
+- **Conditioning** — a text prompt (encoded by CLIP), a class label, or another image — fed in through **cross-attention** so the denoiser pulls the output toward what you asked for.
+
+<Callout type="key" title="Classifier-free guidance — the realism dial">
+
+Modern text-to-image quality hinges on **classifier-free guidance (CFG)**. During training the model randomly drops the text condition ~10% of the time, so it learns *both* a conditioned predictor `ε_θ(xₜ, c)` and an unconditional one `ε_θ(xₜ, ∅)`. At sampling you extrapolate along the difference:
+
+`ε̂ = ε_θ(xₜ, ∅) + w · ( ε_θ(xₜ, c) − ε_θ(xₜ, ∅) )`
+
+The guidance scale `w` (typically 5–12) is the knob users feel as "how hard does it follow the prompt." Too low → vague, off-prompt images; too high → over-saturated, fried-looking ones. It's the single most important sampling hyperparameter.
+
+</Callout>
+
+---
+
+## Latent Diffusion — Why Stable Diffusion Runs on Your Laptop
+
+Running the full reverse chain in **pixel space** at 512×512 is ruinously expensive — hundreds of U-Net passes over 786,432 values. **Latent Diffusion Models (LDM)** — the architecture behind **Stable Diffusion** — fix this by doing all the diffusion in the compact latent space of a pretrained VAE (4.2):
+
+<LatentDiffusionPipeline caption="A VAE compresses the image to a 64×64×4 latent (≈48× fewer values); diffusion runs entirely in that cheap space; the VAE decoder reconstructs pixels just once at the very end. Text conditioning enters the latent U-Net via cross-attention." />
+
+The payoff is enormous: ~48× fewer values per denoising step turns a datacenter job into something that fits on a single consumer GPU, with almost no loss in perceptual quality. This one design choice is most of why image generation went mainstream in 2022.
+
+<Callout type="pitfall" title="Sampling speed is diffusion's Achilles' heel">
+
+Every denoising step is a full network call, so a 1000-step **DDPM** sampler is slow. The entire sampler-research race is "fewer steps, same quality": **DDIM** reframes sampling as a deterministic process that skips steps (~20–50), and distillation methods (progressive / consistency / latent-consistency models) push toward **1–4 step** generation. Knowing your sampler and step count is the practical lever between a 5-second and a 50-second image.
+
+</Callout>
+
+<DiffusionSampling caption="DDPM takes ~1000 tiny stochastic steps for top quality; DDIM takes ~20–50 larger deterministic steps for near-identical results 20–50× faster. Step count is the dial between latency and fidelity." />
+
+---
+
+## Diffusion vs GAN vs VAE
+
+The three generative families trade off along the same axes — and diffusion wins on most of them, paying only in sampling speed:
+
+<StatGrid items={[
+  { value: "VAE", label: "fast 1-shot, stable train", sub: "but blurry (averaged latents)" },
+  { value: "GAN", label: "sharp, fast 1-shot", sub: "but unstable + mode collapse" },
+  { value: "Diffusion", label: "sharp + full diversity, stable MSE loss", sub: "but slow (iterative sampling)" }
+]} caption="Diffusion keeps GAN-level sharpness, recovers the diversity GANs lose to mode collapse, and trains with a plain regression loss — at the cost of many sampling steps. Beyond images: audio (TTS), video, and molecule generation now use the same machinery." />
+
+The architecture also generalises past images. The latest systems swap the U-Net for a **transformer backbone** (a **DiT** — Diffusion Transformer), which is what scales today's frontier image and video models — directly reusing the attention machinery from the next lesson.
+
+---
+
+## Recap
+
+- Diffusion **destroys** data with a fixed Gaussian forward process, then learns a **reverse** process to undo it one small step at a time — turning one hard generation problem into many easy denoising problems.
+- The forward step `q(xₜ|xₜ₋₁)` is fixed and has a closed form `xₜ = √(ᾱₜ)x₀ + √(1−ᾱₜ)ε`, so training pairs are free to sample.
+- The network `ε_θ(xₜ, t)` **predicts the noise** under a plain **MSE** loss — stable, no adversary — which is equivalent to learning the data **score**.
+- The denoiser is a **U-Net** (skips for detail) conditioned on the timestep and, via **cross-attention**, on text; **classifier-free guidance** is the prompt-adherence dial.
+- **Latent diffusion** runs the whole chain in a VAE's compact latent space — the trick that made **Stable Diffusion** run on consumer hardware. The remaining cost is **iterative sampling**, which DDIM and distillation attack.
+
+Next: the architecture that powers every modern LLM — and, as a **DiT**, the newest diffusion models too — the **Transformer** and its attention mechanism.

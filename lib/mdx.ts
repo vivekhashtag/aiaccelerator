@@ -199,6 +199,11 @@ import {
   DarkKnowledge,
   DistillationLoss,
   FeatureDistillation,
+  // 6.4 Graph optimization
+  OperatorFusion,
+  FlashAttention,
+  CudaGraphs,
+  TorchCompileFlow,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -362,6 +367,10 @@ const components = {
   DarkKnowledge,
   DistillationLoss,
   FeatureDistillation,
+  OperatorFusion,
+  FlashAttention,
+  CudaGraphs,
+  TorchCompileFlow,
 };
 
 export async function renderMDX(source: string) {

@@ -1,0 +1,81 @@
+---
+title: "Graph Optimization & Operator Fusion"
+module: "06"
+moduleTitle: "Model Optimization & Efficient Inference"
+lesson: "6.4"
+slug: "6-4-graph-optimization"
+summary: "Making the same model faster with zero accuracy loss by transforming its computation graph. Operator fusion and why memory roundtrips dominate, the classic graph passes (constant folding, dead-code and common-subexpression elimination, memory layout), Flash Attention as the must-have LLM optimization, CUDA Graphs for launch overhead, and how torch.compile() applies most of these automatically."
+prerequisites: ["6.1 Quantization"]
+---
+
+## The Graph Is the Program
+
+A network's forward pass is a **computation graph** — a sequence of tensor operations. Frameworks (PyTorch, ONNX Runtime, TensorRT) rewrite that graph into an equivalent one that runs faster, using **no approximation** — the math is identical, so there's **zero accuracy risk**. This is the safest category of optimization, and you should apply it before touching precision.
+
+The reason it works comes straight from the roofline model (Module 2): most inference ops are **memory-bound**, not compute-bound. The bottleneck isn't the arithmetic — it's shuttling tensors between VRAM and the compute units.
+
+---
+
+## Operator Fusion
+
+The flagship transformation. A `Conv → BatchNorm → ReLU` sequence run naively is **three kernel launches**, each reading its input from VRAM and writing its output back:
+
+<OperatorFusion caption="Three separate kernels mean three VRAM roundtrips and three sync points. Fused into one kernel, BatchNorm and ReLU are computed inline as the convolution streams its output — the intermediate tensors never leave registers/L1. One launch, no intermediate VRAM traffic." />
+
+Since the intermediate results never hit VRAM, fusion attacks exactly the memory-bound bottleneck. It's why a fused kernel can be several times faster than the sum of its parts despite doing the same arithmetic.
+
+<Callout type="key" title="The classic graph passes">
+
+Beyond fusion, every graph compiler applies a standard toolkit: **constant folding** pre-computes subgraphs whose inputs are all fixed (weights), e.g. collapsing `x·scale/2 + bias` into a single multiply-add; **dead-code elimination** drops ops whose outputs are never used (training-only branches); **common-subexpression elimination** computes a repeated expression once (the attention mask reused across every transformer layer); and **memory-layout optimization** transposes tensors to each backend's preferred order (NCHW for NVIDIA conv kernels, NHWC for ARM/Edge-TPU) — a 20–40% win with no model change. **LayerNorm fusion** collapses its four passes (mean, variance, normalize, scale) into one.
+
+</Callout>
+
+---
+
+## Flash Attention — the LLM Must-Have
+
+Standard self-attention has a memory disaster hiding in it: it materialises the full `N×N` attention matrix `S = QKᵀ` in HBM, then reads it back for softmax, then again for the `@V` product. At `N = 4096` that's ~768 MB of VRAM traffic per attention — pure memory-bound waste.
+
+**Flash Attention** (Dao et al., 2022) rewrites the computation to never materialise `S`:
+
+<FlashAttention caption="Flash Attention processes attention in tiles small enough to live in on-chip SRAM, keeping a running ('online') softmax so each tile is consumed immediately. The N×N matrix never touches HBM — memory drops from O(N²) to O(N), and despite identical FLOPs it runs 2–4× faster (more at long context)." />
+
+<Callout type="why" title="Why Flash Attention is non-negotiable">
+
+It's a pure win: same numerics, same FLOPs, dramatically less memory traffic, *and* it slashes the memory that previously made long context impossible (the N×N matrix was the wall). Flash Attention 2 improved warp-level work partitioning (~72% of A100 peak); Flash Attention 3 targets H100's FP8 and async tensor cores. In practice you enable it with one line — PyTorch 2's `scaled_dot_product_attention` selects it automatically, or `attn_implementation="flash_attention_2"` in HuggingFace. Enable it **first** for any transformer.
+
+</Callout>
+
+---
+
+## CUDA Graphs — Killing Launch Overhead
+
+Every GPU op requires a CUDA kernel launch (CPU→GPU submission, scheduling, driver work) costing ~10 µs. A BERT forward pass fires ~150 kernels — at batch=1 that's ~1.5 ms of pure overhead on a ~5 ms inference, **~30% wasted on launches alone**:
+
+<CudaGraphs caption="CUDA Graphs record a fixed kernel sequence once, then replay the whole thing with a single CPU call (~10 µs total). They give 10–30% on small models / small batches where launch overhead dominates — but require fixed input shapes and no data-dependent control flow." />
+
+---
+
+## torch.compile() — Most of This, Automatically
+
+You rarely apply these by hand. PyTorch 2's `torch.compile()` captures the graph (**TorchDynamo**), builds forward+backward (**AOTAutograd**), and generates fused, optimized kernels (**TorchInductor** → Triton on GPU, C++/OpenMP on CPU):
+
+<TorchCompileFlow caption="One decorator runs the whole pipeline. max-autotune mode benchmarks multiple Triton implementations per fused op and keeps the fastest for your exact hardware and shapes. Typical: 1.5–2.5× on transformer inference, with zero accuracy loss and zero manual kernel work." />
+
+<Callout type="pitfall" title="Small models amortise compilation poorly">
+
+`torch.compile()` and CUDA Graphs shine at **batch ≥ several**; at batch=1 on a small model the fusion/launch savings are tiny (1.05–1.2×) and the one-time compilation/capture cost can dominate a short-lived process. As always: measure with the Module 5 protocol. For maximum GPU-specific gains beyond `torch.compile()`, **TensorRT** compilation goes further — at the cost of portability.
+
+</Callout>
+
+---
+
+## Recap
+
+- Graph optimization rewrites the computation graph into a faster but **mathematically identical** one — **zero accuracy risk**, apply it first.
+- **Operator fusion** (e.g. Conv+BN+ReLU → one kernel) eliminates intermediate **VRAM roundtrips**, attacking the memory-bound bottleneck; classic passes add constant folding, DCE, CSE, and layout optimization.
+- **Flash Attention** never materialises the `N×N` matrix — it tiles attention through SRAM with an online softmax, cutting memory from O(N²) to O(N) for a 2–4× speedup. Enable it first on any transformer.
+- **CUDA Graphs** replay a fixed kernel sequence in one call, saving 10–30% of launch overhead at small batch/fixed shapes.
+- **torch.compile()** applies most of these automatically (Dynamo → AOTAutograd → Inductor → Triton) for 1.5–2.5×; TensorRT goes further at the cost of portability.
+
+Next: squeezing the last gains by matching the model to the silicon — **hardware-aware optimization**.

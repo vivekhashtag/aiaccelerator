@@ -392,3 +392,125 @@ export function FeatureDistillation({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   6.4 — Graph Optimization & Operator Fusion
+   ════════════════════════════════════════════════════════════ */
+
+/* Operator fusion: Conv+BN+ReLU as 3 kernels vs 1. */
+export function OperatorFusion({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 210" width="100%" role="img" aria-label="Operator fusion of Conv BatchNorm ReLU">
+        {/* unfused */}
+        <text x="20" y="32" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.hole}>unfused — 3 kernels, 3 VRAM roundtrips</text>
+        {["Conv2d", "BatchNorm", "ReLU"].map((op, i) => (
+          <g key={`uf${i}`}>
+            <rect x={30 + i * 160} y="44" width="86" height="30" rx="5" fill={`${C.blue}16`} stroke={C.blue} strokeWidth="1.2" />
+            <text x={73 + i * 160} y="63" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.blue}>{op}</text>
+            {i < 2 && (
+              <g>
+                <line x1={116 + i * 160} y1="59" x2={190 + i * 160} y2="59" stroke={C.hole} strokeWidth="1.1" />
+                <text x={153 + i * 160} y="54" textAnchor="middle" fontFamily={mono} fontSize="6.5" fill={C.hole}>VRAM</text>
+                <polygon points={`${190 + i * 160},59 ${183 + i * 160},55 ${183 + i * 160},63`} fill={C.hole} />
+              </g>
+            )}
+          </g>
+        ))}
+        <text x="280" y="92" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>each op: read from VRAM → compute → write to VRAM (memory-bound)</text>
+        {/* fused */}
+        <text x="20" y="140" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.on}>fused — 1 kernel, intermediates stay in registers</text>
+        <rect x="160" y="152" width="240" height="34" rx="6" fill={`${LIME}16`} stroke={LIME} strokeWidth="1.5" />
+        <text x="280" y="173" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={LIME}>FusedConvBnReLU</text>
+        <text x="280" y="202" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.faint}>one launch, no intermediate VRAM traffic — BN + ReLU computed inline as conv outputs stream</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Flash Attention: tiling avoids materializing the N×N matrix in HBM. */
+export function FlashAttention({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 220" width="100%" role="img" aria-label="Flash Attention tiling versus standard attention">
+        {/* standard */}
+        <text x="140" y="26" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.hole}>standard attention</text>
+        <rect x="60" y="44" width="160" height="80" rx="6" fill={`${C.hole}10`} stroke={C.hole} strokeWidth="1.2" />
+        <text x="140" y="72" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.hole}>S = QKᵀ (N×N)</text>
+        <text x="140" y="88" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>written to HBM</text>
+        <text x="140" y="102" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>softmax → HBM → @V</text>
+        <text x="140" y="146" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={C.hole}>O(N²) HBM · 768 MB traffic</text>
+        {/* divider */}
+        <line x1="280" y1="36" x2="280" y2="160" stroke={C.line} strokeWidth="1" strokeDasharray="4 3" />
+        {/* flash */}
+        <text x="420" y="26" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.on}>Flash Attention (tiled)</text>
+        {[0, 1, 2].map((i) =>
+          [0, 1, 2].map((j) => (
+            <rect key={`ft-${i}-${j}`} x={350 + j * 30} y={44 + i * 22} width="26" height="18" rx="2"
+              fill={i === j ? `${LIME}40` : `${C.on}14`} stroke={C.on} strokeWidth="0.8" />
+          ))
+        )}
+        <text x="470" y="60" fontFamily={mono} fontSize="7" fill={C.muted}>tiles in</text>
+        <text x="470" y="70" fontFamily={mono} fontSize="7" fill={C.muted}>SRAM</text>
+        <text x="470" y="80" fontFamily={mono} fontSize="7" fill={C.muted}>(online</text>
+        <text x="470" y="90" fontFamily={mono} fontSize="7" fill={C.muted}>softmax)</text>
+        <text x="420" y="146" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={C.on}>O(N) HBM · S never materialised</text>
+        <text x="280" y="184" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.faint}>compute attention in SRAM-sized tiles, keep a running softmax — the N×N matrix never touches HBM</text>
+        <text x="280" y="204" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.faint}>same FLOPs, far less memory traffic → 2–4× faster, the non-negotiable LLM optimization</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* CUDA Graphs: collapse many kernel launches into one replay. */
+export function CudaGraphs({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 180" width="100%" role="img" aria-label="CUDA Graphs eliminate kernel launch overhead">
+        {/* without */}
+        <text x="20" y="34" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.hole}>without — ~150 launches × ~10 µs CPU overhead</text>
+        {Array.from({ length: 16 }, (_, i) => (
+          <g key={`kl${i}`}>
+            <rect x={30 + i * 30} y="46" width="16" height="22" rx="2" fill={`${C.blue}33`} stroke={C.blue} strokeWidth="0.8" />
+            <rect x={46 + i * 30} y="52" width="10" height="10" rx="1" fill={`${C.hole}40`} stroke={C.hole} strokeWidth="0.6" />
+          </g>
+        ))}
+        <text x="270" y="86" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>red = per-kernel CPU launch gap → ~30% of a small-batch forward pass</text>
+        {/* with */}
+        <text x="20" y="124" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.on}>with CUDA Graphs — record once, replay in one CPU call</text>
+        <rect x="30" y="136" width="476" height="22" rx="4" fill={`${LIME}1a`} stroke={LIME} strokeWidth="1.3" />
+        <text x="268" y="151" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={LIME}>graph.replay() — entire kernel sequence, ~10 µs total · fixed shapes only</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* torch.compile pipeline. */
+export function TorchCompileFlow({ caption }: { caption?: string }) {
+  const stages = [
+    { t: "Python model", s: "eager", c: C.off },
+    { t: "TorchDynamo", s: "trace graph", c: C.blue },
+    { t: "AOTAutograd", s: "fwd + bwd", c: C.violet },
+    { t: "TorchInductor", s: "fuse + Triton", c: C.gate },
+    { t: "compiled kernel", s: "1.5–2.5×", c: LIME },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 150" width="100%" role="img" aria-label="torch.compile pipeline">
+        {stages.map((s, i) => {
+          const x = 12 + i * 110;
+          return (
+            <g key={`tc${i}`}>
+              <rect x={x} y="50" width="96" height="46" rx="7" fill={`${s.c}14`} stroke={s.c} strokeWidth="1.4" />
+              <text x={x + 48} y="72" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={s.c}>{s.t}</text>
+              <text x={x + 48} y="86" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>{s.s}</text>
+              {i < 4 && <g><line x1={x + 96} y1="73" x2={x + 110} y2="73" stroke={C.faint} strokeWidth="1.2" /><polygon points={`${x + 110},73 ${x + 103},69 ${x + 103},77`} fill={C.faint} /></g>}
+            </g>
+          );
+        })}
+        <text x="280" y="30" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>torch.compile() — one decorator applies fusion + codegen automatically</text>
+        <text x="280" y="122" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>max-autotune benchmarks several Triton kernels per op and keeps the fastest for your hardware</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

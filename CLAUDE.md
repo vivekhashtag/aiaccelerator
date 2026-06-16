@@ -51,7 +51,7 @@ Do not introduce new heavy dependencies without flagging the tradeoff first.
 
 > **CURRENT PHASE: Phase 2 (content scaling)** ← update this marker as we progress.
 > Phase 0 is complete and live; **Phase 1 (Supabase auth + saved progress) is intentionally deferred** —
-> by user direction we are scaling content first (Modules 1–5 built; marching through 6–10).
+> by user direction we are scaling content first (Modules 1–7 built; Module 8 in progress; then 9–10).
 >
 > Hard rule: do not build features from a later phase unless the current phase is complete and I have explicitly moved the marker. If you think a later-phase feature is needed early, say so and ask — do not just build it.
 
@@ -195,7 +195,12 @@ In rough teaching order:
   +20 SVG diagrams in `diagrams/module-06.tsx`, **Lime** accent) built & pushed 2026-06-16.
   **Module 7 — Inference Frameworks & LLM Runtimes** (8 lessons: serving-problem → vLLM → llama.cpp →
   Ollama → TGI → optimization-in-practice → framework-selection → raspberry-pi, ~17 SVG diagrams in
-  `diagrams/module-07.tsx`, **Sky** accent) built & pushed 2026-06-16. **55 lessons total.**
+  `diagrams/module-07.tsx`, **Sky** accent) built & pushed 2026-06-16. **Module 8 — Hardware
+  Acceleration: FPGA + Edge NPUs** (expanded module, **13 lessons planned**, **Orange** accent,
+  zero-padded filenames `8-01`…`8-13`) is **IN PROGRESS — 9/13 done (8.1–8.9): the FPGA half (8.1–8.7,
+  from `module-08.pdf`) + TinyML landscape + Arm substrate. Remaining 8.10–8.13 = STM32 N6, NXP i.MX RT,
+  Renesas RA, others+TFLite-Micro (edge-MCU content authored from domain knowledge, no PDF). See
+  STATUS.md "RESUME HERE".** **64 lessons total so far.**
   - **DECISION (2026-06-16) — hands-on modules include inline code.** From **Module 7** on, lessons
     embed **code snippets with step-by-step explanations** (not diagrams-only — that still holds for
     the conceptual modules 1–6). New `CodeBlock`/`Pre` in `LessonBlocks.tsx` styles fenced ```lang
@@ -213,9 +218,8 @@ In rough teaching order:
   `styles/tokens.css` + the palette in `diagrams/_shared.tsx`. Lessons are also fully **mobile
   responsive** (overlay sidebar, hamburger). To revert to dark, restore the prior token/palette
   values (noted in-file).
-- Next concrete steps: continue through **Modules 8–10** (Module 8 = FPGA & Hardware Acceleration —
-  PYNQ-Z2, HLS, on-chip inference; **fully code-heavy**, use the Module 7 `CodeBlock` infra). A
-  possible **edge-microcontroller** lesson/module (STM32 N6 Neural-ART, NXP i.MX RT, Renesas RA AI) is
-  under discussion — see STATUS.md. PDFs on disk are parsed with `pdftotext -layout` (poppler) — the
-  built-in PDF reader needs `pdftoppm`. Verify builds with `NEXT_DIST_DIR=.next-verify npx next build`;
-  in **prose** escape bare `<`/`{` (`&lt;`/`&#123;`), but inside fenced ```code``` blocks they're fine.
+- Next concrete steps: **finish Module 8** (lessons 8.10–8.13: STM32 N6, NXP i.MX RT, Renesas RA,
+  others+TFLite-Micro — see STATUS.md "RESUME HERE"), then **Modules 9–10** (9 = Agentic AI, 10 =
+  End-to-End/Capstone). PDFs on disk are parsed with `pdftotext -layout` (poppler) — the built-in PDF
+  reader needs `pdftoppm`. Verify builds with `NEXT_DIST_DIR=.next-verify npx next build`; in **prose**
+  escape bare `<`/`{` (`&lt;`/`&#123;`), but inside fenced ```code``` blocks they're fine.

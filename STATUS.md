@@ -1,6 +1,17 @@
 # Project Status
 
-**Last updated:** 2026-06-16 — **Module 7 built (8 lessons + ~17 SVG diagrams + inline code)**; same day: Module 6 (6 lessons), Module 5 (7), Module 4 expanded to 13. All pushed to `main` → Vercel deploying. **55 lessons total**, 58 routes, `next build` green. **NEW:** hands-on modules (7+) embed **inline code snippets with step-by-step explanations** (new `CodeBlock` infra). **Next:** Module 8 — FPGA & Hardware Acceleration (code-heavy).
+**Last updated:** 2026-06-16 — **Module 8 IN PROGRESS** (expanded "Hardware Acceleration: FPGA + Edge NPUs", 13 lessons planned). **9 of 13 lessons live & pushed** (8.1–8.9); **4 remaining** (8.10–8.13). 67 routes, `next build` green. Earlier same day: Modules 4 (expanded→13), 5, 6, 7 all completed. **⏸️ PAUSED for a break here.**
+
+## ▶ RESUME HERE — Module 8 remaining lessons (8.10–8.13)
+
+Module 8 = **13 lessons**, zero-padded filenames `8-01`…`8-13` (so `8-10` sorts after `8-09`; JS `.sort()`). Orange accent. FPGA half (8.1–8.7) done; MCU/edge half started (8.8–8.9 done). **Still to build:**
+
+- **8.10 STM32 N6 / Neural-ART** — ⚠️ **diagrams already written & committed** (`Stm32N6Block`, `StEdgeAiFlow`, + reusable `McuSoc`/`VendorFlow` helpers in `module-08.tsx`) but **NOT yet registered in `lib/mdx.ts` and the lesson MDX is NOT written.** Finish: register the 2 diagrams (import + components map), write `content/module-08/8-10-stm32-n6.mdx`.
+- **8.11 NXP i.MX RT / eIQ Neutron NPU** (eIQ toolkit). Reuse `McuSoc`/`VendorFlow` helpers.
+- **8.12 Renesas RA / DRP-AI / e-AI**. Reuse the helpers.
+- **8.13 Other edge accelerators** (Coral Edge TPU, ESP32-S3, Kendryte K210) **+ the TFLite-Micro deploy flow** (train → INT8 → convert → flash) — the module capstone.
+
+MCU content is **authored from domain knowledge** (no PDF — it's the user's expansion). Each: inline code + numbered step explanations, 2–3 diagrams, build-verify with `NEXT_DIST_DIR=.next-verify`, one commit/push per lesson. After 8.13: update STATUS/CLAUDE/curriculum, home-page M8 title already updated.
 
 ---
 
@@ -18,6 +29,23 @@
 - `7-8-raspberry-pi` — NEON build, model-size choices, llama-server (OpenAI API on a Pi), edge use cases.
 
 > **Code-block infra (reusable for Module 8):** `CodeBlock` + `Pre` in `LessonBlocks.tsx`, registered as `pre` in `lib/mdx.ts`. Author code as Markdown fenced blocks (```lang) — MDX treats them as literal so `{ < }` need NO escaping. Inline `code` polished in `globals.css`. **Always explain each snippet in numbered steps.**
+
+---
+
+## 🔶 Module 8 in progress (2026-06-16): Hardware Acceleration — FPGA + Edge NPUs
+
+**Expanded module** (FPGA from `module-08.pdf` + new edge-MCU content). **Orange** accent (`C.orange`). Diagrams in `diagrams/module-08.tsx`; reusable `McuSoc`/`VendorFlow` helpers for the vendor lessons. Inline code + step-by-step explanations throughout. **9/13 lessons live:**
+
+- ✅ `8-01-fpga-architecture` — LUT/FF/DSP/BRAM, DSP=MAC budget + precision packing, Zynq PS+PL, PYNQ Python driver.
+- ✅ `8-02-hls-to-bitstream` — design flow, HLS C++, the 3 pragmas (PIPELINE/UNROLL/ARRAY_PARTITION), dataflow streaming.
+- ✅ `8-03-fpga-quantization` — DSP constraint, BNN (XNOR-popcount, 0 DSPs), FINN, Brevitas.
+- ✅ `8-04-fpga-vs-gpu-vs-cpu` — 3 philosophies, determinism/jitter, power efficiency, decision matrix.
+- ✅ `8-05-nn-on-pynq` — what fits, MNIST flow (Brevitas→FINN→PYNQ), HLS streaming conv.
+- ✅ `8-06-vitis-ai` — FINN-vs-Vitis, the DPU systolic engine, pynq_dpu deploy.
+- ✅ `8-07-fpga-in-practice` — streaming pipeline, resource calculator, energy/inference, FPGA→ASIC, PYNQ setup. *(FPGA half = 7 lessons done)*
+- ✅ `8-08-tinyml-landscape` — TinyML, flash+SRAM budget, what fits, micro-NPU wave.
+- ✅ `8-09-arm-substrate` — Cortex-M tiers, Helium, CMSIS-NN, Ethos-U + Vela op-splitting.
+- ⏳ `8-10`–`8-13` REMAINING (see "RESUME HERE" at top): STM32 N6, NXP i.MX RT, Renesas RA, others+TFLite-Micro.
 
 ---
 
@@ -235,7 +263,7 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 - [x] Module 4 expansion — +4 lessons (diffusion, MoE, decoding, multimodal) inserted in place ✓ 2026-06-16 (now 13 lessons)
 - [x] Module 6 — Model Optimization & Efficient Inference (6 lessons, 20 SVG diagrams) ✓ built & pushed 2026-06-16
 - [x] Module 7 — Inference Frameworks & LLM Runtimes (8 lessons, ~17 diagrams, **inline code + step explanations**) ✓ built & pushed 2026-06-16
-- [ ] **▶ NEXT:** **Module 8 — FPGA & Hardware Acceleration for AI** (PYNQ-Z2 board; HLS, dataflow, on-chip inference — **fully code-heavy** per the curriculum). PDF: check disk for a Module 8 PDF (`Module08.pdf`/`module-08.pdf`); none confirmed yet — else use `curriculum.md` Module 8. Use the `CodeBlock` infra + step-by-step explanations established in Module 7. Parse PDFs with `pdftotext -layout` (poppler).
+- [~] **▶ IN PROGRESS:** **Module 8 — Hardware Acceleration: FPGA + Edge NPUs** (13 lessons; expanded from `module-08.pdf` + new edge-MCU content). **9/13 done (8.1–8.9)**; remaining **8.10–8.13** = STM32 N6, NXP i.MX RT, Renesas RA, others+TFLite-Micro (see RESUME HERE at top of file). Paused for a break.
 
 > The old "Module 1 interactive backlog" (CMOS NAND, live truth tables, bit-flipper, MAC
 > animation, systolic array, etc.) is **shelved** as of the 2026-06-11 direction change. Each is
@@ -251,7 +279,7 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 | Route | `app/modules/[module]/[lesson]/page.tsx` |
 | Lesson shell | `components/lesson/LessonLayout.tsx` |
 | Sidebar | `components/lesson/LessonSidebar.tsx` |
-| **SVG diagrams** | `components/lesson/diagrams/` (~197 figures — 29 M1 + 22 M2 + 30 M3 + 38 M4 + 20 M5 + 20 M6 + ~17 M7 — the course "images"). Split per module: `_shared.tsx` (palette `C`, light-theme + `DiagramFrame`), `module-01…07.tsx`, `index.ts` barrel. |
+| **SVG diagrams** | `components/lesson/diagrams/` (~220 figures — 29 M1 + 22 M2 + 30 M3 + 38 M4 + 20 M5 + 20 M6 + ~17 M7 + ~24 M8 so far — the course "images"). Split per module: `_shared.tsx` (palette `C`, light-theme + `DiagramFrame`), `module-01…08.tsx`, `index.ts` barrel. M8 has reusable `McuSoc`/`VendorFlow` helpers for vendor lessons. |
 | **Code blocks (M7+)** | `CodeBlock` + `Pre` in `components/lesson/LessonBlocks.tsx`; fenced ```lang blocks render with editor chrome (registered as `pre` in `lib/mdx.ts`). |
 | MDX content blocks | `components/lesson/LessonBlocks.tsx` (Callout / Formula / Figure / StatGrid) |
 | Prev/next nav | `components/lesson/LessonNav.tsx` |

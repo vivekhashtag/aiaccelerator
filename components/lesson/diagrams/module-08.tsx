@@ -718,3 +718,83 @@ export function EthosUStack({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* Generic AI-MCU SoC block: M-core + NPU + memory + I/O. Reused by vendor lessons. */
+function McuSoc({
+  title, accent, cpu, npu, npuSpec, extras,
+}: {
+  title: string; accent: string; cpu: string; npu: string; npuSpec: string; extras: string[];
+}) {
+  return (
+    <svg viewBox="0 0 560 180" width="100%" role="img" aria-label={title}>
+      <rect x="20" y="28" width="520" height="120" rx="10" fill={`${accent}08`} stroke={accent} strokeWidth="1.5" />
+      <text x="280" y="22" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={accent}>{title}</text>
+      {/* CPU */}
+      <rect x="40" y="48" width="150" height="50" rx="7" fill={`${C.blue}14`} stroke={C.blue} strokeWidth="1.3" />
+      <text x="115" y="70" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.blue}>CPU</text>
+      <foreignObject x="44" y="74" width="142" height="22"><div style={{ fontFamily: mono, fontSize: "7px", color: C.muted, textAlign: "center", lineHeight: 1.15 }}>{cpu}</div></foreignObject>
+      {/* NPU */}
+      <rect x="210" y="48" width="180" height="50" rx="7" fill={`${accent}1a`} stroke={accent} strokeWidth="1.6" />
+      <text x="300" y="70" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={accent}>{npu}</text>
+      <foreignObject x="214" y="74" width="172" height="22"><div style={{ fontFamily: mono, fontSize: "7px", color: C.text, textAlign: "center", lineHeight: 1.15, fontWeight: 700 }}>{npuSpec}</div></foreignObject>
+      {/* memory/IO */}
+      <rect x="410" y="48" width="110" height="50" rx="7" fill={`${C.violet}14`} stroke={C.violet} strokeWidth="1.2" />
+      <text x="465" y="70" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.violet}>memory + I/O</text>
+      <foreignObject x="414" y="74" width="102" height="22"><div style={{ fontFamily: mono, fontSize: "6.6px", color: C.muted, textAlign: "center", lineHeight: 1.1 }}>{extras[0]}</div></foreignObject>
+      {/* bus + extras */}
+      <line x1="190" y1="73" x2="210" y2="73" stroke={C.faint} strokeWidth="1.2" />
+      <line x1="390" y1="73" x2="410" y2="73" stroke={C.faint} strokeWidth="1.2" />
+      <text x="280" y="120" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>{extras[1]}</text>
+      <text x="280" y="138" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.faint}>{extras[2]}</text>
+    </svg>
+  );
+}
+
+/* Generic toolchain flow: model → vendor tool → C → flash. Reused by vendor lessons. */
+function VendorFlow({ accent, tool, toolSub }: { accent: string; tool: string; toolSub: string }) {
+  const stages = [
+    { t: "trained model", s: "TFLite / ONNX / Keras", c: C.blue },
+    { t: tool, s: toolSub, c: accent },
+    { t: "optimized C", s: "weights + NPU schedule", c: C.violet },
+    { t: "flash + run", s: "on the MCU", c: C.on },
+  ];
+  return (
+    <svg viewBox="0 0 560 110" width="100%" role="img" aria-label={`${tool} flow`}>
+      {stages.map((s, i) => {
+        const x = 16 + i * 138;
+        return (
+          <g key={`vf${i}`}>
+            <rect x={x} y="34" width="120" height="44" rx="7" fill={`${s.c}14`} stroke={s.c} strokeWidth="1.4" />
+            <text x={x + 60} y="54" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={s.c}>{s.t}</text>
+            <foreignObject x={x + 4} y="58" width="112" height="18"><div style={{ fontFamily: mono, fontSize: "6.6px", color: C.muted, textAlign: "center", lineHeight: 1.1 }}>{s.s}</div></foreignObject>
+            {i < 3 && <g><line x1={x + 120} y1="56" x2={x + 138} y2="56" stroke={C.faint} strokeWidth="1.2" /><polygon points={`${x + 138},56 ${x + 131},52 ${x + 131},60`} fill={C.faint} /></g>}
+          </g>
+        );
+      })}
+      <text x="280" y="22" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.muted}>import a standard model → vendor tool quantizes + maps to the NPU → C you compile in</text>
+      <text x="280" y="98" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.faint}>same shape across vendors — the differences are the NPU and the tool name</text>
+    </svg>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   8.10 — STM32 N6 / Neural-ART
+   ════════════════════════════════════════════════════════════ */
+
+export function Stm32N6Block({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <McuSoc title="STM32N6 — first STM32 with an NPU" accent={ORANGE}
+        cpu="Cortex-M55 @ 800 MHz + Helium" npu="Neural-ART NPU" npuSpec="~600 GOPS INT8"
+        extras={["4.2 MB SRAM", "+ image signal processor (ISP) → camera, H.264, audio", "real-time edge vision/audio at ~milliwatts"]} />
+    </DiagramFrame>
+  );
+}
+
+export function StEdgeAiFlow({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <VendorFlow accent={ORANGE} tool="ST Edge AI" toolSub="Cube.AI / X-CUBE-AI" />
+    </DiagramFrame>
+  );
+}

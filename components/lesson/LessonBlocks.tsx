@@ -151,6 +151,64 @@ export function Figure({
   );
 }
 
+/* Styled code block — dark "editor" chrome on the light reading page.
+   Authored as Markdown fenced blocks (```lang) which MDX treats as
+   literal, so { < } inside need no escaping. Rendered via the `pre`
+   override (see Pre + lib/mdx.ts). No syntax highlighter dependency —
+   clean light-on-dark monospace with a language label. */
+export function CodeBlock({
+  lang,
+  title,
+  children,
+}: {
+  lang?: string;
+  title?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className="not-prose my-7 rounded-xl overflow-hidden"
+      style={{
+        border: "1px solid var(--border-strong)",
+        boxShadow: "0 10px 30px rgba(2,6,23,0.30)",
+      }}
+    >
+      <div
+        className="flex items-center justify-between px-4 py-2"
+        style={{ background: "#0b1120", borderBottom: "1px solid rgba(148,163,184,0.16)" }}
+      >
+        <span
+          className="text-[10px] font-mono uppercase tracking-widest"
+          style={{ color: "var(--accent-light)" }}
+        >
+          {title ?? lang ?? "code"}
+        </span>
+        <span className="flex gap-1.5" aria-hidden>
+          {["#f87171", "#fbbf24", "#34d399"].map((c) => (
+            <span key={c} className="w-2.5 h-2.5 rounded-full" style={{ background: c, opacity: 0.7 }} />
+          ))}
+        </span>
+      </div>
+      <pre
+        className="font-mono text-[12.5px] leading-relaxed m-0 px-4 py-4 overflow-x-auto"
+        style={{ background: "#0f172a", color: "#e2e8f0" }}
+      >
+        <code style={{ background: "transparent", color: "inherit", padding: 0 }}>{children}</code>
+      </pre>
+    </div>
+  );
+}
+
+/* `pre` override: MDX renders a fenced block as <pre><code class="language-x">…</code></pre>.
+   Extract the language + code string from the child <code> and render CodeBlock. */
+export function Pre({ children }: { children?: ReactNode }) {
+  const codeEl = children as { props?: { className?: string; children?: ReactNode } } | undefined;
+  const className = codeEl?.props?.className ?? "";
+  const lang = /language-(\w+)/.exec(className)?.[1];
+  const code = codeEl?.props?.children ?? children;
+  return <CodeBlock lang={lang}>{code}</CodeBlock>;
+}
+
 export function StatGrid({
   items = [],
   caption,

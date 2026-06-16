@@ -25,6 +25,7 @@ export const C = {
   teal: "#0d9488", // module-1 accent
   blue: "#2563eb", // module-2 accent / "why it matters"
   lime: "#65a30d", // module-6 accent (optimization) — dark lime for white cards
+  sky: "#0284c7", // module-7 accent (serving / runtimes) — dark sky for white cards
   violet: "#7c3aed", // secondary accent (memory / model parallel)
   hole: "#e11d48", // holes / P-type
   ink: "#eef2f7", // deepest fill (lightest gray)

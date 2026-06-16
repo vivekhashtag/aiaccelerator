@@ -1,0 +1,115 @@
+---
+title: "The LLM Serving Problem"
+module: "07"
+moduleTitle: "Inference Frameworks & LLM Runtimes"
+lesson: "7.1"
+slug: "7-1-llm-serving-problem"
+summary: "Before any framework, the problem they all solve. Why serving an LLM is fundamentally harder than serving a vision model, the two phases of generation (compute-bound prefill vs memory-bound decode), the decode throughput ceiling that no software can beat, and the KV cache — the single most important concept in LLM serving — including the memory formula that explains why long context is so expensive."
+prerequisites: ["5.2 Latency vs Throughput", "6.5 Hardware-Aware Optimization"]
+---
+
+## The Central Question
+
+You have a fine-tuned Llama-3-8B from Module 4. You want **100 users** to chat with it at once. If you naively loop over `model.generate()`:
+
+```python
+# The naive approach — DON'T serve this way
+responses = []
+for request in incoming_requests:        # 100 users queued up
+    output = model.generate(              # user N waits for users 1..N-1
+        request.prompt, max_new_tokens=512
+    )
+    responses.append(output)
+# User 100 waits 100 × inference_time = minutes. The GPU sits idle
+# between requests, and every request's context is handled in isolation.
+```
+
+This is unusable: serial requests, an idle GPU between them, and wasted memory. The frameworks in this module — **vLLM, llama.cpp, Ollama, TGI** — exist to fix exactly this. To understand *how*, we first have to understand *why* LLM serving is uniquely hard.
+
+---
+
+## Why LLM Serving ≠ Vision Serving
+
+Serving ResNet-50 is easy: every image is the same shape, one forward pass produces the answer, and batching 10 images gives ~10× throughput at nearly the same latency. LLM serving breaks every one of those assumptions:
+
+<VisionVsLLMServing caption="Vision inference is one fixed-shape forward pass. LLM generation is autoregressive — N sequential passes for N tokens, with a KV cache that grows every step and prompts that vary from 5 to 5000 tokens. That asymmetry is the whole difficulty." />
+
+---
+
+## The Two Phases: Prefill and Decode
+
+Every generation request runs in two phases with *opposite* compute profiles:
+
+<PrefillDecode caption="Prefill processes the whole prompt in one parallel pass (compute-bound, tensor cores busy). Decode then emits one token per pass, each requiring the GPU to reload all model weights for a single token's work — deeply memory-bandwidth-bound." />
+
+The decode phase sets a hard ceiling. Each token requires reading every weight byte from VRAM, so single-stream speed is capped by memory bandwidth ÷ model size — and **no software can exceed it**:
+
+<Formula label="Decode throughput ceiling" caption="A hardware physics limit. For Llama-3-8B (16 GB, BF16) on an A100 (2 TB/s): 2,000,000 / 16,000 ≈ 125 tok/s for a single stream.">TGS_max = Memory_bandwidth / Model_size_bytes</Formula>
+
+<Callout type="key" title="This is why batching is everything">
+
+A single decode stream wastes the GPU — it loads 16 GB of weights to compute *one* token. But those same weights, once loaded, can serve **many** requests' tokens in the same pass. Batching amortises the weight-loading cost across requests, which is the only way to turn a memory-bound decode into high *aggregate* throughput. Every framework innovation in this module is, at heart, a better way to batch.
+
+</Callout>
+
+---
+
+## The KV Cache
+
+The most important concept in LLM serving — nothing else makes sense without it. To generate token N, attention needs the keys and values of all previous tokens. Recomputing them every step is quadratic:
+
+<KVCacheGrowth caption="Without a cache, generating token N recomputes K,V for all N−1 prior tokens — O(N²). The KV cache stores each token's K,V once and appends the new one each step, dropping decode to O(N). It trades VRAM for compute." />
+
+That trade is why decode is fast — but it moves the cost to **memory**. The KV cache size is exact and worth memorising:
+
+<Formula label="KV cache size" caption="The 2 is for K and V. For Llama-3-8B: n_layers=32, n_kv_heads=8, d_head=128, BF16=2 bytes.">bytes = 2 × n_layers × n_kv_heads × seq_len × d_head × bytes_per_elem</Formula>
+
+A quick calculator makes the scaling visceral:
+
+```python
+def kv_cache_bytes(seq_len, n_layers=32, n_kv_heads=8, d_head=128, dtype_bytes=2):
+    # 2 = one tensor each for K and V
+    return 2 * n_layers * n_kv_heads * seq_len * d_head * dtype_bytes
+
+per_token = kv_cache_bytes(1)            # 131,072 bytes = 128 KB / token
+print(per_token / 1024, "KB per token")  # 128.0 KB per token
+
+for ctx in (4096, 8192, 131072):
+    gb = kv_cache_bytes(ctx) / 1e9
+    print(f"{ctx:>7} tokens -> {gb:>6.2f} GB per request")
+# 4096   tokens ->   0.54 GB
+# 8192   tokens ->   1.07 GB
+# 131072 tokens ->  17.18 GB  <- one request fills an entire A100!
+```
+
+At 128K context, the KV cache for **one** request fills an entire A100 — which is exactly why long-context serving needs the KV-cache INT8 quantization from Module 6 and the paging system we meet in the next lesson.
+
+---
+
+## The Memory Budget in Practice
+
+For Llama-3-8B serving concurrent requests at 4096 context, VRAM splits three ways — and the KV cache is what actually limits concurrency:
+
+<StatGrid items={[
+  { value: "16 GB", label: "model weights", sub: "fixed, loaded once" },
+  { value: "0.5 GB", label: "KV cache / request", sub: "× concurrent users" },
+  { value: "~1.5 GB", label: "activations + overhead", sub: "small at decode" }
+]} caption="On a 24 GB RTX 4090: 16 GB weights leave 8 GB → only ~16 requests at 4K context, or 4 requests at 16K. The KV cache, not the weights, caps how many users you can serve — the scaling wall every framework attacks." />
+
+<Callout type="why" title="The three constraints that define the module">
+
+Every framework innovation ahead targets one of these: **(1)** decode is always memory-bandwidth-bound, **(2)** the KV cache grows with every generated token, and **(3)** requests have wildly variable lengths. vLLM's PagedAttention and continuous batching, llama.cpp's quantized CPU kernels, speculative decoding — each is an answer to one of these three facts you just derived from first principles.
+
+</Callout>
+
+---
+
+## Recap
+
+- Naive `for`-loop serving is unusable — serial requests, idle GPU, wasted memory. Frameworks exist to fix this.
+- LLM serving is harder than vision serving: **variable-length** prompts, **N sequential** passes, and a **growing KV cache**.
+- Generation has two phases: **prefill** (compute-bound, whole prompt in parallel) and **decode** (memory-bandwidth-bound, one token per pass).
+- The **decode ceiling** = bandwidth ÷ model size (~125 tok/s for an 8B model on A100) is a physics limit; **batching** is the only way to high aggregate throughput.
+- The **KV cache** trades VRAM for compute (O(N²) → O(N)); at **128 KB/token** it grows to fill an entire GPU at long context — the scaling wall the rest of the module attacks.
+
+Next: how **vLLM** shatters that wall with **PagedAttention** and **continuous batching**.

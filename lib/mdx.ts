@@ -1,5 +1,5 @@
 import { compileMDX } from "next-mdx-remote/rsc";
-import { Callout, Formula, Figure, StatGrid } from "@/components/lesson/LessonBlocks";
+import { Callout, Formula, Figure, StatGrid, CodeBlock, Pre } from "@/components/lesson/LessonBlocks";
 import {
   // 1.1
   ConductivitySpectrum,
@@ -211,6 +211,11 @@ import {
   // 6.6 The complete optimization pipeline
   OptimizationPipeline,
   ResNet50Journey,
+  // Module 7 — Inference Frameworks & LLM Runtimes
+  // 7.1 The LLM serving problem
+  VisionVsLLMServing,
+  PrefillDecode,
+  KVCacheGrowth,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -218,6 +223,9 @@ const components = {
   Formula,
   Figure,
   StatGrid,
+  CodeBlock,
+  // Style fenced ```code``` blocks with editor chrome (Modules 7+ are code-heavy).
+  pre: Pre,
   // Hand-drawn SVG diagrams (the course "images")
   ConductivitySpectrum,
   SiliconLattice,
@@ -383,6 +391,10 @@ const components = {
   SpeculativeDecoding,
   OptimizationPipeline,
   ResNet50Journey,
+  // Module 7
+  VisionVsLLMServing,
+  PrefillDecode,
+  KVCacheGrowth,
 };
 
 export async function renderMDX(source: string) {

@@ -1,0 +1,72 @@
+---
+title: "The Arm Substrate: Cortex-M, Helium, CMSIS-NN, Ethos-U"
+module: "08"
+moduleTitle: "Hardware Acceleration: FPGA & Edge NPUs"
+lesson: "8.9"
+slug: "8-09-arm-substrate"
+summary: "The common foundation under almost every AI microcontroller. The Cortex-M tiers and where ML capability appears, the Helium vector extension (SIMD for MCUs), the CMSIS-NN kernel library that accelerates TinyML on the CPU, and the Ethos-U micro-NPU that offloads the heavy layers — plus how TFLite Micro dispatches a model across NPU and CPU."
+prerequisites: ["8.8 Edge AI Microcontrollers & TinyML"]
+---
+
+## One Substrate Under Many Vendors
+
+The three flagship AI MCUs ahead — STM32, NXP, Renesas — look like competitors, but most TinyML hardware sits on a **shared Arm foundation**. Understanding it once means the vendor parts become variations on a theme rather than three things to learn from scratch.
+
+<CortexMTiers caption="Cortex-M tiers by ML capability: M0/M0+ are control-only; M4/M7 add a DSP extension (single-cycle MAC); M55/M85 add Helium vector instructions; and pairing an M55/M85 with an Ethos-U micro-NPU adds a dedicated MAC engine. Most AI MCUs are an M-core plus a vendor or Arm NPU." />
+
+---
+
+## Helium: SIMD for Microcontrollers
+
+Module 2 covered NEON (Arm's SIMD for big application cores) and AVX (x86). **Helium** (officially M-profile Vector Extension, MVE) is the same idea shrunk for microcontrollers: 128-bit vector registers on Cortex-M55/M85 that process **multiple INT8 values per instruction**, with dot-product instructions tuned for neural-network inner loops. It's what lets a CPU-only MCU do meaningful ML before any NPU is involved — typically a 4–15× speedup on quantized kernels versus scalar code.
+
+---
+
+## CMSIS-NN: The Optimized Kernel Library
+
+You don't hand-write Helium assembly. **CMSIS-NN** is Arm's free library of hand-optimized neural-network kernels (conv, fully-connected, pooling, activations) for Cortex-M. TFLite Micro calls into it automatically, getting **2–5×** over the reference C kernels on M4/M7 and far more on Helium-capable cores:
+
+```c
+// CMSIS-NN INT8 fully-connected kernel (called under the hood by TFLite Micro)
+arm_fully_connected_s8(
+    &ctx,            // scratch buffer
+    &fc_params,      // zero-points + clamping range
+    &quant_params,   // per-tensor multiplier & shift (the INT8 scale from Module 6)
+    &input_dims,  input_data,    // INT8 activations
+    &filter_dims, weight_data,   // INT8 weights (from flash)
+    &bias_dims,   bias_data,     // INT32 bias
+    &output_dims, output_data    // INT8 output
+);
+```
+
+**Step by step:**
+
+1. The kernel takes **INT8** inputs and weights and an **INT32** bias — exactly the quantized MAC structure from Modules 1 and 6 (8-bit operands, wider accumulator).
+2. `quant_params` carries the per-tensor **multiplier and shift** that requantize the INT32 accumulator back to INT8 — the fixed-point version of the dequantize step.
+3. You rarely call this directly; **TFLite Micro dispatches to it** for you. The point is that "running on the CPU" already means running these tuned kernels, not naive loops — Helium makes them faster still.
+
+---
+
+## Ethos-U: The Micro-NPU
+
+When the CPU isn't fast or efficient enough, Arm's **Ethos-U** (U55, U85) is a licensable **micro-NPU** — a small fixed MAC array (256–512 MACs/cycle) that pairs with a Cortex-M55/M85. It's the IP many vendors integrate or benchmark against. The model is split between the NPU and the CPU at compile time:
+
+<EthosUStack caption="Arm's Vela compiler splits a quantized TFLite model: layers the Ethos-U supports (conv, FC, pooling) run on the NPU for the 10–100× speedup; anything unsupported falls back to the Cortex-M with CMSIS-NN (Helium-accelerated). The NPU computes, the CPU orchestrates and handles the rest — the same split as the Zynq, at milliwatts." />
+
+<Callout type="key" title="How the pieces stack">
+
+Picture three layers. **TFLite Micro** is the runtime that holds your INT8 model and walks its operators. For each operator it dispatches to the fastest available target: the **Ethos-U NPU** if the op is supported (compiled in via Arm's **Vela** tool), otherwise **CMSIS-NN** kernels on the **Cortex-M** core (accelerated by **Helium** if present). Same model, same TFLite Micro API — the hardware underneath decides how fast it runs. This is why the vendor chapters are mostly about *which NPU* and *which SDK*, not a new programming model each time.
+
+</Callout>
+
+---
+
+## Recap
+
+- Most AI MCUs share an **Arm Cortex-M** substrate: M0/M0+ (control), M4/M7 (DSP/MAC), M55/M85 (**Helium** vectors), optionally **+ Ethos-U** micro-NPU.
+- **Helium (MVE)** is SIMD for microcontrollers — multiple INT8 ops per instruction, the CPU-side ML accelerator.
+- **CMSIS-NN** is Arm's optimized INT8 kernel library (conv/FC/pool); **TFLite Micro** calls it automatically for a 2–5×+ speedup.
+- **Ethos-U** is a licensable micro-NPU; the **Vela** compiler splits a model so supported ops run on the NPU (10–100×) and the rest fall back to CMSIS-NN on the CPU.
+- The stack — **TFLite Micro → Ethos-U or CMSIS-NN/Helium** — is the same across vendors; only the NPU and SDK change.
+
+Next: the first flagship — **STMicro's STM32 N6 and its Neural-ART accelerator**.

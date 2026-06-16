@@ -266,6 +266,9 @@ import {
   // 8.8 TinyML landscape
   TinyMlSpectrum,
   McuMemoryBudget,
+  // 8.9 Arm substrate
+  CortexMTiers,
+  EthosUStack,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -480,6 +483,8 @@ const components = {
   FpgaToAsic,
   TinyMlSpectrum,
   McuMemoryBudget,
+  CortexMTiers,
+  EthosUStack,
 };
 
 export async function renderMDX(source: string) {

@@ -655,3 +655,66 @@ export function McuMemoryBudget({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   8.9 — The Arm Substrate
+   ════════════════════════════════════════════════════════════ */
+
+/* Cortex-M tiers by ML capability. */
+export function CortexMTiers({ caption }: { caption?: string }) {
+  const tiers = [
+    { t: "M0/M0+", d: "tiny control — no DSP", c: C.off },
+    { t: "M4 / M7", d: "DSP extension (MAC instr)", c: C.violet },
+    { t: "M55 / M85", d: "+ Helium (MVE) vectors", c: ORANGE },
+    { t: "M55/M85 + Ethos-U", d: "+ micro-NPU", c: C.on },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 140" width="100%" role="img" aria-label="Cortex-M tiers by ML capability">
+        {tiers.map((t, i) => {
+          const x = 14 + i * 137;
+          return (
+            <g key={`cm${i}`}>
+              <rect x={x} y="44" width="124" height="54" rx="7" fill={`${t.c}14`} stroke={t.c} strokeWidth="1.4" />
+              <text x={x + 62} y="66" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={t.c}>{t.t}</text>
+              <foreignObject x={x + 4} y="72" width="116" height="24">
+                <div style={{ fontFamily: mono, fontSize: "7px", color: C.muted, textAlign: "center", lineHeight: 1.2 }}>{t.d}</div>
+              </foreignObject>
+              {i < 3 && <text x={x + 128} y="74" fontFamily={mono} fontSize="9" fill={C.faint}>→</text>}
+            </g>
+          );
+        })}
+        <text x="280" y="28" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>increasing ML throughput → (the common substrate under most TinyML MCUs)</text>
+        <text x="280" y="124" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>Helium = SIMD for microcontrollers (NEON's little sibling); Ethos-U = a licensable micro-NPU</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Ethos-U + Cortex-M: ops split between NPU and CPU. */
+export function EthosUStack({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 180" width="100%" role="img" aria-label="Ethos-U NPU offload with CMSIS-NN fallback">
+        <rect x="20" y="30" width="150" height="34" rx="6" fill={`${C.blue}14`} stroke={C.blue} strokeWidth="1.3" />
+        <text x="95" y="48" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.blue}>TFLite Micro model</text>
+        <text x="95" y="59" textAnchor="middle" fontFamily={mono} fontSize="6.8" fill={C.muted}>INT8 .tflite</text>
+        <rect x="20" y="84" width="150" height="34" rx="6" fill={`${C.gate}14`} stroke={C.gate} strokeWidth="1.3" />
+        <text x="95" y="102" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.gate}>Vela compiler</text>
+        <text x="95" y="113" textAnchor="middle" fontFamily={mono} fontSize="6.8" fill={C.muted}>splits the graph</text>
+        <line x1="95" y1="64" x2="95" y2="84" stroke={C.faint} strokeWidth="1.1" /><polygon points="95,84 91,77 99,77" fill={C.faint} />
+        {/* NPU path */}
+        <rect x="240" y="40" width="290" height="50" rx="8" fill={`${C.on}10`} stroke={C.on} strokeWidth="1.4" />
+        <text x="385" y="60" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.on}>Ethos-U NPU — heavy ops (Conv, FC, pooling)</text>
+        <text x="385" y="76" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>256–512 MAC/cycle · the 10–100× speedup</text>
+        {/* CPU path */}
+        <rect x="240" y="104" width="290" height="46" rx="8" fill={`${ORANGE}10`} stroke={ORANGE} strokeWidth="1.3" />
+        <text x="385" y="124" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={ORANGE}>Cortex-M + CMSIS-NN — fallback ops</text>
+        <text x="385" y="139" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>unsupported layers run on the CPU (Helium-accelerated)</text>
+        <line x1="170" y1="101" x2="240" y2="65" stroke={C.on} strokeWidth="1.1" />
+        <line x1="170" y1="101" x2="240" y2="126" stroke={ORANGE} strokeWidth="1.1" />
+        <text x="280" y="172" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>the NPU runs what it can; the CPU handles the rest — the CPU-orchestrates / accelerator-computes split, in milliwatts</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

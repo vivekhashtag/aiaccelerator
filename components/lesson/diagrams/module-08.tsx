@@ -203,3 +203,80 @@ export function DataflowStreaming({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   8.3 — Quantization for FPGA
+   ════════════════════════════════════════════════════════════ */
+
+/* Binary MAC = XNOR + popcount, no multiplier. */
+export function XnorPopcount({ caption }: { caption?: string }) {
+  const rows = [
+    { w: "+1", x: "+1", prod: "+1", xnor: "1" },
+    { w: "+1", x: "−1", prod: "−1", xnor: "0" },
+    { w: "−1", x: "+1", prod: "−1", xnor: "0" },
+    { w: "−1", x: "−1", prod: "+1", xnor: "1" },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 200" width="100%" role="img" aria-label="Binary MAC as XNOR plus popcount">
+        <text x="150" y="24" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={ORANGE}>binary MAC: w·x for w,x ∈ &#123;−1,+1&#125;</text>
+        {/* header */}
+        <text x="60" y="48" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.muted}>w</text>
+        <text x="110" y="48" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.muted}>x</text>
+        <text x="170" y="48" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.muted}>w·x</text>
+        <text x="240" y="48" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.on}>XNOR(bits)</text>
+        {rows.map((r, i) => {
+          const y = 64 + i * 26;
+          return (
+            <g key={`xp${i}`}>
+              <text x="60" y={y} fontFamily={mono} fontSize="8.5" fill={C.text}>{r.w}</text>
+              <text x="110" y={y} fontFamily={mono} fontSize="8.5" fill={C.text}>{r.x}</text>
+              <text x="170" y={y} fontFamily={mono} fontSize="8.5" fontWeight="700" fill={r.prod === "+1" ? C.on : C.hole}>{r.prod}</text>
+              <text x="255" y={y} fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.on}>{r.xnor}</text>
+            </g>
+          );
+        })}
+        {/* right side: formula */}
+        <rect x="330" y="50" width="190" height="110" rx="8" fill={`${ORANGE}10`} stroke={ORANGE} strokeWidth="1.3" />
+        <text x="425" y="74" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={ORANGE}>dot product =</text>
+        <text x="425" y="94" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.text}>2·popcount(XNOR) − N</text>
+        <text x="425" y="120" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>no multiply — just</text>
+        <text x="425" y="133" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>bitwise XNOR + bit count</text>
+        <text x="425" y="150" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={C.on}>0 DSPs — runs in LUTs</text>
+        <text x="270" y="186" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>binary nets need ZERO DSPs → ~50–100× more parallelism than INT8 on the same FPGA</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* FINN pipeline: Brevitas model → FINN compiler → bitstream. */
+export function FinnPipeline({ caption }: { caption?: string }) {
+  const stages = [
+    { t: "Brevitas", s: "train quantized (PyTorch)", c: C.hole },
+    { t: "FINN-ONNX", s: "export", c: C.violet },
+    { t: "FINN compiler", s: "fold BN · map layers · gen RTL", c: ORANGE },
+    { t: "Vivado", s: "synth + P&R", c: C.gate },
+    { t: "PYNQ", s: "overlay.execute()", c: C.on },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 150" width="100%" role="img" aria-label="FINN deployment pipeline">
+        {stages.map((s, i) => {
+          const x = 10 + i * 111;
+          return (
+            <g key={`fp${i}`}>
+              <rect x={x} y="50" width="98" height="46" rx="7" fill={`${s.c}14`} stroke={s.c} strokeWidth="1.4" />
+              <text x={x + 49} y="71" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={s.c}>{s.t}</text>
+              <foreignObject x={x + 4} y="76" width="90" height="18">
+                <div style={{ fontFamily: mono, fontSize: "6.6px", color: C.muted, textAlign: "center", lineHeight: 1.15 }}>{s.s}</div>
+              </foreignObject>
+              {i < 4 && <g><line x1={x + 98} y1="73" x2={x + 111} y2="73" stroke={C.faint} strokeWidth="1.2" /><polygon points={`${x + 111},73 ${x + 104},69 ${x + 104},77`} fill={C.faint} /></g>}
+            </g>
+          );
+        })}
+        <text x="280" y="30" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>FINN turns a quantized PyTorch net into a streaming-dataflow FPGA accelerator</text>
+        <text x="280" y="124" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>generates per-layer streaming blocks (StreamingFCLayer, Thresholding) wired by AXI-Stream FIFOs</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

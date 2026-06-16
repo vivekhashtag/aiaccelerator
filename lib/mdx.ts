@@ -246,6 +246,9 @@ import {
   FpgaDesignFlow,
   HlsPragmas,
   DataflowStreaming,
+  // 8.3 FPGA quantization
+  XnorPopcount,
+  FinnPipeline,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -446,6 +449,8 @@ const components = {
   FpgaDesignFlow,
   HlsPragmas,
   DataflowStreaming,
+  XnorPopcount,
+  FinnPipeline,
 };
 
 export async function renderMDX(source: string) {

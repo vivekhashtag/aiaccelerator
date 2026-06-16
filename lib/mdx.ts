@@ -220,6 +220,10 @@ import {
   KVFragmentation,
   PagedAttentionBlocks,
   ContinuousBatching,
+  // 7.3 llama.cpp
+  GgufQuantLadder,
+  GgufBlock,
+  SplitOffload,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -402,6 +406,9 @@ const components = {
   KVFragmentation,
   PagedAttentionBlocks,
   ContinuousBatching,
+  GgufQuantLadder,
+  GgufBlock,
+  SplitOffload,
 };
 
 export async function renderMDX(source: string) {

@@ -231,3 +231,92 @@ export function ContinuousBatching({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   7.3 — llama.cpp
+   ════════════════════════════════════════════════════════════ */
+
+/* GGUF quant ladder: size vs quality, Q4_K_M as the sweet spot. */
+export function GgufQuantLadder({ caption }: { caption?: string }) {
+  const types = [
+    { t: "F16", gb: 13, q: 100, c: C.off },
+    { t: "Q8_0", gb: 7.2, q: 99.9, c: C.blue },
+    { t: "Q6_K", gb: 5.5, q: 99.6, c: C.violet },
+    { t: "Q5_K_M", gb: 4.8, q: 99.4, c: C.on },
+    { t: "Q4_K_M", gb: 4.4, q: 99.0, c: SKY },
+    { t: "Q3_K_M", gb: 3.4, q: 98.2, c: C.gate },
+    { t: "Q2_K", gb: 2.7, q: 97.5, c: C.hole },
+  ];
+  const bx = (i: number) => 50 + i * 68;
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 210" width="100%" role="img" aria-label="GGUF quantization types by size and quality">
+        <line x1="40" y1="150" x2="520" y2="150" stroke={C.line} strokeWidth="1" />
+        {types.map((t, i) => {
+          const h = t.gb * 8.5;
+          const sweet = t.t === "Q4_K_M";
+          return (
+            <g key={`gq${i}`}>
+              <rect x={bx(i)} y={150 - h} width="42" height={h} rx="3" fill={`${t.c}${sweet ? "55" : "26"}`} stroke={t.c} strokeWidth={sweet ? 2 : 1} />
+              <text x={bx(i) + 21} y={150 - h - 16} textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={t.c}>{t.gb}GB</text>
+              <text x={bx(i) + 21} y={150 - h - 5} textAnchor="middle" fontFamily={mono} fontSize="6.8" fill={C.muted}>{t.q}%</text>
+              <text x={bx(i) + 21} y="164" textAnchor="middle" fontFamily={mono} fontSize="7" fontWeight={sweet ? "700" : "400"} fill={sweet ? SKY : C.muted}>{t.t}</text>
+            </g>
+          );
+        })}
+        <text x="155" y="186" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={SKY}>↑ Q4_K_M: ~99% quality at ~28% of FP16 size</text>
+        <text x="400" y="186" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.faint}>Llama-3-8B (7B-class) sizes shown</text>
+        <text x="280" y="202" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>Q{"{bits}"}_K_{"{S/M/L}"} — k-quants store a scale per 32-weight block; M is the quality/size sweet spot</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Q4_K_M block memory layout. */
+export function GgufBlock({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 160" width="100%" role="img" aria-label="Q4_K_M block memory layout">
+        <text x="270" y="26" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={SKY}>Q4_K_M block — 32 weights in 20 bytes</text>
+        <rect x="40" y="44" width="70" height="40" rx="4" fill={`${C.gate}26`} stroke={C.gate} strokeWidth="1.2" />
+        <text x="75" y="62" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.gate}>scale</text>
+        <text x="75" y="76" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>FP16 · 2B</text>
+        <rect x="116" y="44" width="70" height="40" rx="4" fill={`${C.violet}26`} stroke={C.violet} strokeWidth="1.2" />
+        <text x="151" y="62" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.violet}>delta</text>
+        <text x="151" y="76" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>FP16 · 2B</text>
+        <rect x="192" y="44" width="308" height="40" rx="4" fill={`${SKY}26`} stroke={SKY} strokeWidth="1.2" />
+        <text x="346" y="62" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={SKY}>32 × 4-bit quantized weights</text>
+        <text x="346" y="76" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>16 bytes</text>
+        <text x="270" y="108" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.text}>(4 + 0.5 + 0.5) ≈ 4.5 effective bits per weight</text>
+        <text x="270" y="132" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>dequantized inline during the dot product (fused) — no separate dequant pass, so CPU stays fast</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Split offloading: layers across GPU + CPU. */
+export function SplitOffload({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={520}>
+      <svg viewBox="0 0 520 180" width="100%" role="img" aria-label="llama.cpp split offloading across GPU and CPU">
+        <rect x="40" y="40" width="200" height="70" rx="8" fill={`${C.on}10`} stroke={C.on} strokeWidth="1.3" />
+        <text x="140" y="34" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.on}>GPU (6 GB)</text>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <rect key={`gl${i}`} x={54 + i * 37} y="56" width="30" height="38" rx="3" fill={`${C.on}33`} stroke={C.on} strokeWidth="0.9" />
+        ))}
+        <text x="140" y="104" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>early layers (--n-gpu-layers 20)</text>
+        <rect x="280" y="40" width="200" height="70" rx="8" fill={`${C.gate}10`} stroke={C.gate} strokeWidth="1.3" />
+        <text x="380" y="34" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.gate}>CPU (RAM)</text>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <rect key={`cl${i}`} x={294 + i * 37} y="56" width="30" height="38" rx="3" fill={`${C.gate}33`} stroke={C.gate} strokeWidth="0.9" />
+        ))}
+        <text x="380" y="104" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>remaining layers</text>
+        <line x1="240" y1="75" x2="280" y2="75" stroke={C.faint} strokeWidth="1.2" />
+        <polygon points="280,75 273,71 273,79" fill={C.faint} />
+        <text x="260" y="68" textAnchor="middle" fontFamily={mono} fontSize="6.5" fill={C.faint}>activations</text>
+        <text x="260" y="130" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.faint}>only small activations cross the PCIe bus, not the big weights — so the split is cheap</text>
+        <text x="260" y="150" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.faint}>run models bigger than your VRAM by spilling layers to CPU</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

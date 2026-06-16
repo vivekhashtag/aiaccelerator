@@ -1,0 +1,101 @@
+---
+title: "llama.cpp: LLMs on Any Hardware"
+module: "07"
+moduleTitle: "Inference Frameworks & LLM Runtimes"
+lesson: "7.3"
+slug: "7-3-llama-cpp"
+summary: "The C++ runtime that put LLMs on laptops, phones, and Raspberry Pis. How it runs fast on a CPU (hand-written SIMD kernels, GGUF k-quant formats, and split CPU/GPU offloading), how to read the GGUF quantization names so you pick the right one (Q4_K_M is almost always the answer), and the command-line flags that tune performance."
+prerequisites: ["7.1 The LLM Serving Problem", "6.1 Quantization"]
+---
+
+## Why llama.cpp Matters
+
+vLLM is the GPU answer; **llama.cpp** (Georgi Gerganov, 2023) is the *everywhere* answer — a C++ library that runs LLMs on a plain CPU, with optional GPU acceleration. It's the engine inside Ollama, LM Studio, and most local-LLM tools.
+
+<StatGrid items={[
+  { value: "14 GB → 4 GB", label: "RAM needed", sub: "FP16 GPU → Q4_K_M" },
+  { value: "GPU → any CPU", label: "hardware", sub: "laptop, Mac, Pi" },
+  { value: "CUDA → none", label: "setup", sub: "no GPU stack" }
+]} caption="Before llama.cpp, a 7B model meant 14 GB of VRAM and a CUDA setup. After, it's a 3.8 GB quantized file on any laptop. This is what democratised local inference." />
+
+---
+
+## How It Runs Fast on a CPU
+
+Three techniques do the heavy lifting.
+
+**1. SIMD vectorisation.** Modern CPUs have wide registers that multiply many numbers per instruction — Intel **AVX2** (8× FP32), AVX-512 (16×), ARM **NEON** (4× FP32). llama.cpp ships hand-written SIMD matrix-multiply kernels (the GGML library) that keep those lanes saturated — the same data-parallel idea as a GPU's SIMT, applied to CPU vector units (Module 2).
+
+**2. GGUF k-quant formats.** Models ship in **GGUF** files using block-quantized types designed for *fast CPU dequantization*:
+
+<GgufBlock caption="A Q4_K_M block packs 32 weights into 20 bytes: a 2-byte scale, a 2-byte delta, and 16 bytes of 4-bit weights — ~4.5 effective bits/weight. The key: weights are dequantized inline inside the dot product, so there's no separate dequant pass to slow the CPU down." />
+
+**3. Split offloading.** If a model doesn't fit in VRAM, llama.cpp runs some layers on the GPU and the rest on the CPU:
+
+<SplitOffload caption="The --n-gpu-layers flag puts the first N layers on the GPU and the rest on the CPU. Only small activation tensors cross the PCIe bus between them (never the big weights), so you can run a model larger than your VRAM at a modest speed cost." />
+
+---
+
+## Reading GGUF Quantization Names
+
+Every GGUF download asks you to pick a quantization. The name `Q{bits}_K_{variant}` decodes simply: **bits** per weight, **K** = k-quants (a scale per 32-weight block), **variant** = S/M/L for small/medium/large (quality):
+
+<GgufQuantLadder caption="More bits = bigger file + higher quality. Q4_K_M sits at the knee: ~99% of FP16 quality at ~28% of the size, fitting an 8B model in 4.4 GB. It's also llama.cpp's most-optimised kernel path — the default choice for almost everything." />
+
+<Callout type="key" title="The one rule: Q4_K_M unless you have a reason">
+
+**Q4_K_M** is the answer for ~90% of deployments — 99% quality, fits an 8B model in 4.4 GB (runs on an 8 GB machine), and fast enough for real-time chat (3–8 tok/s on a modern CPU). Step **up** to **Q6_K** only when you have RAM to spare and need the last bit of reasoning/code quality; step **down** to **Q3_K_M / Q2_K** only when memory is truly tight (and accept the quality drop). Don't agonise — start at Q4_K_M.
+
+</Callout>
+
+---
+
+## Running and Tuning llama.cpp
+
+Once built, the CLI runs a model with a prompt. The flags are where the performance lives:
+
+```bash
+./llama-cli -m llama-3-8b-q4_k_m.gguf -p "What is a KV cache?" -n 200 \
+    --threads 8         `# CPU threads — match PHYSICAL cores, not hyperthreads` \
+    --ctx-size 4096     `# context window (bigger = more RAM)` \
+    --n-gpu-layers 20   `# offload first 20 layers to GPU (0 = pure CPU)` \
+    --flash-attn        `# enable Flash Attention (big win on long contexts)`
+```
+
+**Step by step:**
+
+1. `-m` is the GGUF model file, `-p` the prompt, `-n` the number of tokens to generate.
+2. `--threads` should equal your **physical** core count — hyperthreads add contention, not speed, for this memory-bound workload.
+3. `--ctx-size` sets the context window; larger means more KV-cache RAM (the formula from 7.1).
+4. `--n-gpu-layers` is the split-offload knob from above: `0` = CPU-only, a number = that many layers on GPU, `99` = all on GPU. On Apple Silicon, `99` uses the Metal backend over unified memory with **no transfer overhead**.
+5. `--flash-attn` turns on the tiled attention from Lesson 6.4 — a large speedup at long context.
+
+To measure speed, llama.cpp prints timings you can read directly:
+
+```text
+llama_print_timings: eval time = 42000 ms / 100 tokens
+                                 (2.38 ms per token, 420 tokens per second)
+```
+
+**Step by step:**
+
+1. `eval time` is the total decode time; `/ 100 tokens` is how many it generated.
+2. The bracket gives the two numbers that matter: **ms per token** (latency) and **tokens per second** (throughput) — exactly the TGS metric from Lesson 5.1.
+3. Compare this number against the decode ceiling from 7.1: if you're far below `bandwidth ÷ model_size`, there's tuning headroom (threads, offload); if you're near it, you've hit the hardware wall.
+
+<Callout type="why" title="Real-world numbers (Q4_K_M)">
+
+The same Llama-3-8B file runs at very different speeds by hardware: **RTX 4090 ~150 tok/s**, **Apple M2 Pro ~35 tok/s** (Metal + unified memory), **Intel i9 ~12 tok/s** (AVX2), **Raspberry Pi 4 ~3–5 tok/s** for a 1B model (NEON). The pattern matches the decode ceiling from 7.1 — speed tracks memory bandwidth ÷ model size, which is why quantizing the model smaller (Q4 vs F16) directly buys tokens/sec on every device.
+
+</Callout>
+
+---
+
+## Recap
+
+- **llama.cpp** runs LLMs on any CPU (with optional GPU), and underlies Ollama, LM Studio, and most local tools — it democratised local inference.
+- It's fast on CPU via three tricks: **SIMD** kernels (AVX2/NEON), **GGUF k-quant** formats with **inline dequantization**, and **split offloading** (`--n-gpu-layers`) to run models bigger than VRAM.
+- **GGUF names** read as `Q{bits}_K_{S/M/L}`; **Q4_K_M** (~99% quality, ~28% size) is the default choice — step up to Q6_K for quality, down to Q3/Q2 for tight memory.
+- Tune with `--threads` (physical cores), `--ctx-size`, `--n-gpu-layers`, and `--flash-attn`; read the printed **tokens/second** and compare it to the decode ceiling.
+
+Next: wrapping llama.cpp in a one-command experience — **Ollama**.

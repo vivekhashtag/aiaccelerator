@@ -143,6 +143,10 @@ import {
   UNetDenoiser,
   LatentDiffusionPipeline,
   DiffusionSampling,
+  // 4.4a Mixture of experts
+  MoELayer,
+  ExpertLoadBalancing,
+  SparseVsDenseParams,
   // Module 5 — Inference Systems Fundamentals
   // 5.1 Types of inference
   InferenceParadigms,
@@ -291,6 +295,9 @@ const components = {
   UNetDenoiser,
   LatentDiffusionPipeline,
   DiffusionSampling,
+  MoELayer,
+  ExpertLoadBalancing,
+  SparseVsDenseParams,
   // Module 5
   InferenceParadigms,
   StreamingTTFT,

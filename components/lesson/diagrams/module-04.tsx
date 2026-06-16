@@ -1049,3 +1049,106 @@ export function DiffusionSampling({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   4.4a — Mixture of Experts
+   ════════════════════════════════════════════════════════════ */
+
+/* MoE layer: router picks top-2 of N expert FFNs per token. */
+export function MoELayer({ caption }: { caption?: string }) {
+  const experts = [0, 1, 2, 3, 4, 5];
+  const picked = new Set([1, 4]); // top-2 for this token
+  const ey = (i: number) => 30 + i * 33;
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 230" width="100%" role="img" aria-label="Mixture-of-experts layer with top-2 routing">
+        {/* token input */}
+        <rect x="20" y="98" width="64" height="30" rx="6" fill={C.panel} stroke={C.line} strokeWidth="1" />
+        <text x="52" y="117" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.text}>token x</text>
+        {/* router */}
+        <rect x="112" y="86" width="70" height="54" rx="6" fill={`${C.gate}16`} stroke={C.gate} strokeWidth="1.4" />
+        <text x="147" y="108" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.gate}>router</text>
+        <text x="147" y="122" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>softmax</text>
+        <line x1="84" y1="113" x2="112" y2="113" stroke={C.faint} strokeWidth="1.2" />
+        <polygon points="112,113 105,109 105,117" fill={C.faint} />
+        {/* experts */}
+        {experts.map((i) => {
+          const on = picked.has(i);
+          return (
+            <g key={`exp${i}`}>
+              <line x1="182" y1="113" x2="300" y2={ey(i) + 11} stroke={on ? C.on : C.line} strokeWidth={on ? 1.6 : 0.7} strokeDasharray={on ? "0" : "3 2"} />
+              <rect x="300" y={ey(i)} width="92" height="22" rx="4" fill={on ? `${C.on}1a` : C.panel} stroke={on ? C.on : C.line} strokeWidth={on ? 1.4 : 1} />
+              <text x="346" y={ey(i) + 14.5} textAnchor="middle" fontFamily={mono} fontSize="7.8" fontWeight={on ? "700" : "400"} fill={on ? C.on : C.muted}>expert {i + 1}{on ? `  g=${i === 1 ? "0.7" : "0.3"}` : ""}</text>
+            </g>
+          );
+        })}
+        {/* weighted combine */}
+        {[1, 4].map((i) => (
+          <line key={`out${i}`} x1="392" y1={ey(i) + 11} x2="450" y2="113" stroke={C.on} strokeWidth="1.5" />
+        ))}
+        <rect x="450" y="98" width="86" height="30" rx="6" fill={`${ROSE}14`} stroke={ROSE} strokeWidth="1.4" />
+        <text x="493" y="112" textAnchor="middle" fontFamily={mono} fontSize="7.8" fontWeight="700" fill={ROSE}>Σ gᵢ·Eᵢ(x)</text>
+        <text x="493" y="123" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>output</text>
+        <text x="280" y="208" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.faint}>N experts stored, only top-2 run per token — total params ≫ active params</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Load balancing: collapsed vs balanced expert utilisation. */
+export function ExpertLoadBalancing({ caption }: { caption?: string }) {
+  // dots stacked per expert; index = expert, value = token count
+  const collapsed = [0, 7, 0, 1, 0, 0];
+  const balanced = [3, 2, 3, 2, 3, 2];
+  const panel = (ox: number, counts: number[], title: string, good: boolean) => (
+    <g key={title}>
+      <text x={ox + 120} y="30" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={good ? C.on : C.hole}>{title}</text>
+      {counts.map((n, e) => (
+        <g key={`${title}-e${e}`}>
+          <rect x={ox + e * 40} y="120" width="30" height="20" rx="3" fill={C.panel} stroke={C.line} strokeWidth="1" />
+          <text x={ox + e * 40 + 15} y="134" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>E{e + 1}</text>
+          {Array.from({ length: n }, (_, k) => (
+            <circle key={`${title}-d${e}-${k}`} cx={ox + e * 40 + 15} cy={112 - k * 12} r="4" fill={good ? C.on : C.hole} opacity="0.8" />
+          ))}
+        </g>
+      ))}
+    </g>
+  );
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 200" width="100%" role="img" aria-label="Expert load balancing collapsed versus balanced">
+        {panel(20, collapsed, "collapsed (router favourite)", false)}
+        {panel(290, balanced, "balanced (aux loss)", true)}
+        <line x1="270" y1="24" x2="270" y2="160" stroke={C.line} strokeWidth="1" strokeDasharray="4 3" />
+        <text x="270" y="184" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.faint}>without a load-balancing loss the router collapses onto a few experts — the rest of the params are dead weight</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Total vs active parameters: dense vs MoE (Mixtral-style). */
+export function SparseVsDenseParams({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={520}>
+      <svg viewBox="0 0 520 220" width="100%" role="img" aria-label="Dense versus MoE active parameters">
+        {/* dense */}
+        <text x="120" y="28" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.blue}>DENSE 13B</text>
+        <rect x="80" y="40" width="80" height="130" rx="4" fill={`${C.blue}26`} stroke={C.blue} strokeWidth="1.4" />
+        <text x="120" y="110" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.blue}>13B</text>
+        <text x="120" y="186" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>all active / token</text>
+        {/* moe */}
+        <text x="360" y="28" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={ROSE}>MoE 47B total</text>
+        <rect x="320" y="40" width="80" height="130" rx="4" fill={C.panel} stroke={ROSE} strokeWidth="1.4" />
+        <text x="360" y="60" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>47B stored</text>
+        {/* active slice */}
+        <rect x="320" y="134" width="80" height="36" rx="4" fill={`${ROSE}30`} stroke={ROSE} strokeWidth="1.4" />
+        <text x="360" y="156" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={ROSE}>~13B active</text>
+        <text x="360" y="186" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>top-2 of 8 / token</text>
+        {/* arrow / equivalence */}
+        <text x="240" y="100" textAnchor="middle" fontFamily={mono} fontSize="14" fill={C.faint}>≈</text>
+        <text x="240" y="116" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>compute</text>
+        <text x="260" y="208" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.faint}>~3.6× the knowledge at dense-13B compute cost — but you must hold all 47B in VRAM</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

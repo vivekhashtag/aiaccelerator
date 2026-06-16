@@ -111,3 +111,123 @@ export function KVCacheGrowth({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   7.2 — vLLM
+   ════════════════════════════════════════════════════════════ */
+
+/* KV cache fragmentation: reserved-but-empty contiguous blocks. */
+export function KVFragmentation({ caption }: { caption?: string }) {
+  // each request reserves a max-length slot; only part is used
+  const reqs = [
+    { used: 5, c: SKY }, { used: 10, c: C.violet }, { used: 3, c: C.gate },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 200" width="100%" role="img" aria-label="KV cache fragmentation from contiguous allocation">
+        <text x="270" y="24" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.hole}>contiguous allocation — reserve max length per request</text>
+        {reqs.map((r, i) => {
+          const y = 40 + i * 42;
+          return (
+            <g key={`frag${i}`}>
+              <text x="20" y={y + 18} fontFamily={mono} fontSize="8" fill={C.muted}>req {String.fromCharCode(65 + i)}</text>
+              {Array.from({ length: 16 }, (_, k) => (
+                <rect key={`f-${i}-${k}`} x={70 + k * 28} y={y} width="26" height="26" rx="2"
+                  fill={k < r.used ? `${r.c}33` : C.panel} stroke={k < r.used ? r.c : C.line} strokeWidth="0.8"
+                  strokeDasharray={k < r.used ? "0" : "2 2"} opacity={k < r.used ? 1 : 0.5} />
+              ))}
+            </g>
+          );
+        })}
+        <text x="270" y="184" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.hole}>dashed = reserved but EMPTY → 60–80% of KV memory wasted (internal fragmentation)</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* PagedAttention: logical positions map to scattered physical blocks. */
+export function PagedAttentionBlocks({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 210" width="100%" role="img" aria-label="PagedAttention block mapping like OS virtual memory">
+        {/* logical */}
+        <text x="80" y="24" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={SKY}>logical (request view)</text>
+        {[0, 1, 2].map((i) => (
+          <g key={`lo${i}`}>
+            <rect x="30" y={40 + i * 34} width="100" height="26" rx="3" fill={`${SKY}1a`} stroke={SKY} strokeWidth="1" />
+            <text x="80" y={57 + i * 34} textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={SKY}>tokens [{i * 16}–{i * 16 + 15}]</text>
+          </g>
+        ))}
+        {/* block table */}
+        <text x="280" y="24" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.gate}>block table</text>
+        <rect x="210" y="40" width="140" height="94" rx="6" fill={`${C.gate}10`} stroke={C.gate} strokeWidth="1.2" />
+        {[["0", "7"], ["1", "2"], ["2", "11"]].map(([l, p], i) => (
+          <text key={`bt${i}`} x="280" y={60 + i * 26} textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.text}>logical {l} → block {p}</text>
+        ))}
+        {/* physical */}
+        <text x="470" y="24" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.on}>physical VRAM blocks</text>
+        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((b) => {
+          const used = b === 7 || b === 2 || b === 11;
+          const col = b === 7 ? 0 : b === 2 ? 1 : b === 11 ? 2 : -1;
+          return (
+            <g key={`ph${b}`}>
+              <rect x={400 + (b % 4) * 38} y={40 + Math.floor(b / 4) * 30} width="34" height="26" rx="3"
+                fill={used ? `${SKY}33` : C.panel} stroke={used ? SKY : C.line} strokeWidth="0.9" />
+              <text x={417 + (b % 4) * 38} y={57 + Math.floor(b / 4) * 30} textAnchor="middle" fontFamily={mono} fontSize="7" fill={used ? SKY : C.faint}>{used ? col : b}</text>
+            </g>
+          );
+        })}
+        {/* arrows */}
+        <line x1="130" y1="53" x2="210" y2="60" stroke={C.faint} strokeWidth="1" />
+        <line x1="350" y1="70" x2="400" y2="70" stroke={C.faint} strokeWidth="1" />
+        <text x="280" y="170" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.faint}>exactly OS virtual memory: contiguous logical pages → scattered physical pages via a page table</text>
+        <text x="280" y="188" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.on}>blocks allocated on demand → &lt;5% waste (only the last partial block)</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Static vs continuous batching timeline. */
+export function ContinuousBatching({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 220" width="100%" role="img" aria-label="Static versus continuous batching">
+        {/* static */}
+        <text x="20" y="26" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.hole}>static batching — wait for the whole batch</text>
+        {[
+          { r: "A", w: 60 }, { r: "B", w: 200 }, { r: "C", w: 200 }, { r: "D", w: 140 },
+        ].map((s, i) => (
+          <g key={`st${i}`}>
+            <text x="24" y={50 + i * 20} fontFamily={mono} fontSize="8" fill={C.muted}>{s.r}</text>
+            <rect x="44" y={40 + i * 20} width={s.w} height="14" rx="2" fill={`${SKY}33`} stroke={SKY} strokeWidth="0.8" />
+            {s.w < 200 && <rect x={44 + s.w} y={40 + i * 20} width={200 - s.w} height="14" rx="2" fill={C.panel} stroke={C.line} strokeWidth="0.8" strokeDasharray="2 2" />}
+          </g>
+        ))}
+        <text x="150" y="138" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>A done early but its slot sits idle (dashed) — new requests WAIT</text>
+        {/* continuous */}
+        <text x="300" y="26" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.on}>continuous batching — refill instantly</text>
+        {[
+          { r: "A", segs: [["A", 60, SKY], ["E", 140, C.on]] },
+          { r: "B", segs: [["B", 200, SKY]] },
+          { r: "C", segs: [["C", 200, SKY]] },
+          { r: "D", segs: [["D", 140, SKY], ["F", 60, C.on]] },
+        ].map((row, i) => {
+          let x = 320;
+          return (
+            <g key={`co${i}`}>
+              <text x="300" y={50 + i * 20} fontFamily={mono} fontSize="8" fill={C.muted}>{row.r}</text>
+              {row.segs.map((seg, k) => {
+                const rect = <rect key={`cs-${i}-${k}`} x={x} y={40 + i * 20} width={seg[1] as number} height="14" rx="2" fill={`${seg[2]}33`} stroke={seg[2] as string} strokeWidth="0.8" />;
+                x += seg[1] as number;
+                return rect;
+              })}
+            </g>
+          );
+        })}
+        <text x="420" y="138" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>A finishes → E joins immediately; the batch is always full</text>
+        <text x="280" y="170" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.faint}>PagedAttention + continuous batching → near-100% GPU use → up to ~16–24× naive throughput</text>
+        <text x="280" y="194" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>green = a new request slotted into a freed sequence slot mid-flight (no waiting for the batch)</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

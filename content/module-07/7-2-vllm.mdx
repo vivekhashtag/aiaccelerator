@@ -1,0 +1,163 @@
+---
+title: "vLLM: PagedAttention & Continuous Batching"
+module: "07"
+moduleTitle: "Inference Frameworks & LLM Runtimes"
+lesson: "7.2"
+slug: "7-2-vllm"
+summary: "The production standard for GPU LLM serving. Two innovations that together give 16–24× the throughput of naive serving: PagedAttention, which borrows OS virtual-memory paging to eliminate KV-cache fragmentation, and continuous batching, which refills the batch the instant a request finishes. Plus the practical vLLM API — offline batch inference, an OpenAI-compatible server, and the config knobs that matter."
+prerequisites: ["7.1 The LLM Serving Problem"]
+---
+
+## The Fragmentation Problem
+
+In Lesson 7.1 we saw the KV cache is what limits concurrency. Early serving systems made it worse by allocating each request a **contiguous** chunk of VRAM sized for the *maximum* context length — even if the request only uses a fraction of it:
+
+<KVFragmentation caption="Each request reserves a max-length slot, but real requests are short or mid-length, so 60–80% of the reserved KV memory sits empty. This 'internal fragmentation' is the same problem operating systems had before virtual memory — and vLLM borrowed the OS solution." />
+
+---
+
+## PagedAttention: Paging for the KV Cache
+
+**vLLM** (Kwon et al., 2023) splits the KV cache into fixed-size **blocks** (e.g. 16 tokens each) and maps a request's logical token positions to scattered **physical** blocks through a **block table** — exactly how an OS maps a process's virtual pages to physical RAM:
+
+<PagedAttentionBlocks caption="A request thinks it has a contiguous KV cache; physically its blocks are scattered across VRAM and looked up via a block table, just like OS page tables. Blocks are allocated on demand as tokens are generated, so waste drops from 60–80% to under 5% (only the last partial block)." />
+
+<Callout type="analogy" title="The OS paging analogy, line for line">
+
+Virtual memory: a process sees contiguous RAM; physical RAM is fragmented; a **page table** maps virtual → physical; pages are allocated on demand and freed on exit. PagedAttention: a request sees a contiguous KV cache; physical VRAM blocks are fragmented; a **block table** maps token-position → block; blocks are allocated as tokens generate and freed when the request completes. Same problem, same solution — which is why it works so well.
+
+</Callout>
+
+The payoff: with fragmentation gone, the freed memory holds **3–4× more concurrent requests** on the same GPU.
+
+---
+
+## Continuous Batching
+
+PagedAttention fixes memory; **continuous batching** fixes utilisation. Naive ("static") batching runs a fixed batch until *every* request in it finishes — so a short request's GPU slot sits idle while the long ones catch up:
+
+<ContinuousBatching caption="Static batching wastes the slots of early-finishing requests. Continuous batching adds a new request to the batch the instant a slot frees — at every decode step the batch is full, keeping GPU utilisation near 100% even with wildly variable request lengths." />
+
+Together, PagedAttention and continuous batching are what give vLLM its headline number:
+
+<StatGrid items={[
+  { value: "0.3", label: "HF naive (req/s)", sub: "1× baseline" },
+  { value: "2.1", label: "continuous batch only", sub: "~7×" },
+  { value: "4.8", label: "vLLM (PA + cont.)", sub: "~16×" }
+]} caption="Llama-3-8B on A100, ShareGPT benchmark: ~16× more requests per second than naive serving on the same hardware — purely from better memory and scheduling." />
+
+---
+
+## Using vLLM: Offline Batch Inference
+
+Enough theory — here's the code. For processing a fixed set of prompts (no live users), `LLM.generate()` runs them all through PagedAttention and continuous batching automatically:
+
+```python
+from vllm import LLM, SamplingParams
+
+# 1. Load the model — vLLM picks PagedAttention + optimal layout for you
+llm = LLM(
+    model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+    dtype="bfloat16",
+    max_model_len=8192,           # max context (prompt + output)
+    gpu_memory_utilization=0.9,   # use 90% of VRAM for weights + KV cache
+)
+
+# 2. Set how tokens are sampled (the decoding knobs from Lesson 4.7a)
+params = SamplingParams(temperature=0.7, top_p=0.9, max_tokens=512)
+
+# 3. Hand vLLM the whole list at once — it batches them internally
+prompts = ["Explain entanglement.", "Merge two sorted lists in Python."]
+outputs = llm.generate(prompts, params)
+
+for out in outputs:
+    print(out.outputs[0].text)
+```
+
+**Step by step:**
+
+1. `LLM(...)` loads the weights and **reserves a KV-cache pool** — `gpu_memory_utilization=0.9` tells it to use 90% of VRAM (higher → more concurrent requests, but OOM risk if too high).
+2. `max_model_len` caps context length, which bounds the KV-cache size per request.
+3. `SamplingParams` are the exact decoding controls from Lesson 4.7a — temperature, top-p, max tokens.
+4. You pass the **entire list** of prompts to `generate()`; vLLM schedules them with continuous batching rather than looping one at a time. That's the whole difference from the naive loop in 7.1.
+
+---
+
+## Using vLLM: An OpenAI-Compatible Server
+
+For live users, vLLM ships a server that speaks the **OpenAI API** — so any OpenAI client works unchanged. Launch it from the shell:
+
+```bash
+python -m vllm.entrypoints.openai.api_server \
+    --model meta-llama/Meta-Llama-3.1-8B-Instruct \
+    --dtype bfloat16 \
+    --max-model-len 8192 \
+    --gpu-memory-utilization 0.9 \
+    --port 8000
+```
+
+Then point the standard OpenAI SDK at it and stream tokens back:
+
+```python
+from openai import OpenAI
+
+# Point the OpenAI client at your local vLLM server instead of api.openai.com
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="not-needed")
+
+stream = client.chat.completions.create(
+    model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+    messages=[{"role": "user", "content": "Explain the KV cache in 2 sentences."}],
+    stream=True,                  # get tokens as they're generated (SSE)
+)
+for chunk in stream:
+    print(chunk.choices[0].delta.content or "", end="", flush=True)
+```
+
+**Step by step:**
+
+1. The first command starts a web server that loads the model once and serves many users via continuous batching.
+2. Because it's **OpenAI-compatible**, you change only the `base_url` — existing GPT-4 code becomes a self-hosted call (a drop-in replacement, no app rewrite).
+3. `stream=True` returns tokens **as they're produced** (Server-Sent Events), so the user sees the answer appear word-by-word instead of waiting for the whole thing — the TTFT-vs-total-time idea from Lesson 5.1.
+
+---
+
+## The Config Knobs That Matter
+
+A few `LLM(...)` parameters decide throughput, memory, and latency. These are the ones you actually tune in production:
+
+```python
+LLM(
+    model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+    gpu_memory_utilization=0.9,   # ↑ = more KV cache = more concurrent users (watch OOM)
+    max_model_len=8192,           # caps context → caps KV cache per request
+    quantization="awq",           # AWQ INT4 weights (Module 6) → 2× users, 1.8× speed
+    tensor_parallel_size=2,       # split the model across 2 GPUs (for models > 1 GPU)
+    enable_prefix_caching=True,   # reuse KV for a shared system prompt across requests
+    block_size=16,                # PagedAttention block size (tokens per block)
+)
+```
+
+**Step by step:**
+
+1. `gpu_memory_utilization` and `max_model_len` together set how many requests fit — more VRAM for cache and smaller per-request cache both raise concurrency.
+2. `quantization="awq"` loads INT4 weights (Module 6) — the model is smaller, so more VRAM is left for KV cache *and* decode is faster.
+3. `tensor_parallel_size=N` shards each weight matrix across N GPUs for models too big for one (covered in 7.6).
+4. `enable_prefix_caching` computes a shared prefix's KV **once** and reuses it — a huge win when every request carries the same long system prompt or RAG context.
+
+<Callout type="key" title="Prefix caching & speculative decoding — built in">
+
+Two more vLLM wins worth knowing. **Prefix caching** (`enable_prefix_caching=True`): if 100 requests share a 500-token system prompt, vLLM computes its KV state once and every later request reuses it — zero prefill compute for the shared part, cutting TTFT by up to 80–95% for RAG-style workloads. **Speculative decoding** (`speculative_model="meta-llama/Llama-3.2-1B"`): the lossless 2–3× decode trick from Lesson 6.5, here as one config line — vLLM's scheduler handles the variable accept counts across the continuous batch.
+
+</Callout>
+
+---
+
+## Recap
+
+- Early serving wasted **60–80%** of KV memory to **fragmentation** (contiguous max-length reservations).
+- **PagedAttention** applies **OS virtual-memory paging** to the KV cache — fixed blocks + a block table — dropping waste below 5% and fitting **3–4× more requests**.
+- **Continuous batching** refills the batch the instant a request finishes, keeping the GPU near 100% utilised; together they give **~16×** naive throughput.
+- The vLLM API is small: `LLM.generate()` for **offline** batches, and an **OpenAI-compatible server** for live users (drop-in `base_url` swap, `stream=True` for SSE).
+- Key knobs: `gpu_memory_utilization`, `max_model_len`, `quantization="awq"`, `tensor_parallel_size`, and `enable_prefix_caching` — plus built-in prefix caching and speculative decoding.
+
+Next: serving without a GPU at all — **llama.cpp** and the trick that runs a 7B model on a laptop.

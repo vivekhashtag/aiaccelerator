@@ -216,6 +216,10 @@ import {
   VisionVsLLMServing,
   PrefillDecode,
   KVCacheGrowth,
+  // 7.2 vLLM
+  KVFragmentation,
+  PagedAttentionBlocks,
+  ContinuousBatching,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -395,6 +399,9 @@ const components = {
   VisionVsLLMServing,
   PrefillDecode,
   KVCacheGrowth,
+  KVFragmentation,
+  PagedAttentionBlocks,
+  ContinuousBatching,
 };
 
 export async function renderMDX(source: string) {

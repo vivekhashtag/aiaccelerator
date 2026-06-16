@@ -1,0 +1,81 @@
+---
+title: "Hardware-Aware Optimization"
+module: "06"
+moduleTitle: "Model Optimization & Efficient Inference"
+lesson: "6.5"
+slug: "6-5-hardware-aware-optimization"
+summary: "Matching the model's compute pattern to the silicon's strengths. Tile alignment and why dimensions should be multiples of 64, KV-cache quantization for long-context LLMs, speculative decoding for lossless 2–3× decode throughput, and the architecture-level swaps (depthwise-separable convs, GQA, sliding-window attention) that bake efficiency into the model itself."
+prerequisites: ["6.1 Quantization", "5.2 Latency vs Throughput"]
+---
+
+## Optimizing for the Silicon
+
+The previous lessons compressed the model independent of where it runs. This one is the opposite: the **same model** can be far faster if its shapes and operations are matched to the hardware's strengths. Different accelerators — NVIDIA Tensor Cores, Apple's ANE, Qualcomm DSPs — want different things, and small design choices make a large difference.
+
+---
+
+## Tile Alignment
+
+Modern accelerators process data in fixed-size **tiles**. If a tensor dimension isn't a multiple of the tile size, the hardware silently **pads with zeros** — you pay for compute you don't use:
+
+<TileAlignment caption="A layer with hidden dim 100 gets padded to 128 for FP16 Tensor Cores, wasting 28% of throughput on zeros. The fix costs almost nothing: make hidden/channel dimensions multiples of 64 or 128 (NVIDIA) — or 32 (ARM NEON) — when you design the model." />
+
+<Callout type="key" title="The alignment rules">
+
+For NVIDIA Tensor Cores: FP16/INT8 want dimensions that are **multiples of 16** (minimum) and ideally **64 or 128** for full occupancy; INT4 wants multiples of 32. A `dim=100` layer rounded up to 128 adds a few parameters but can be meaningfully faster. This is a *free* design-time decision that beginners routinely leave on the table.
+
+</Callout>
+
+---
+
+## KV-Cache Quantization
+
+For LLM inference the **KV cache** is a top memory and bandwidth consumer — it grows with sequence length and is re-read every decode step. Quantizing K and V to INT8 as they're cached halves both:
+
+<KVCacheQuant caption="INT8 KV cache halves memory and the bytes read per attention step, for typically <0.3% generation-quality loss. The win compounds with context: Llama-3-8B saves ~268 MB at 4K but ~8.6 GB at 128K — long-context serving essentially requires it." />
+
+This connects directly to the roofline picture from Module 2: decode is **memory-bandwidth-bound**, so halving the KV-cache bytes read per step directly buys decode throughput, not just capacity.
+
+---
+
+## Speculative Decoding
+
+Autoregressive decode is slow because it's **sequential** — one token per forward pass of the big model, and each pass is memory-bound, so the GPU sits underused. **Speculative decoding** exploits the fact that many tokens are "easy": a small **draft** model proposes several, and the big **target** model verifies them all in a single parallel pass:
+
+<SpeculativeDecoding caption="The draft model cheaply proposes K tokens; the target verifies all K in one forward pass (the same cost as generating one token). A rejection-sampling acceptance test keeps the matching prefix and resamples at the first mismatch. If the draft is ~80% accurate you accept ~4 tokens per target call → ~4× throughput." />
+
+<Callout type="why" title="Why it's lossless — and what the draft must satisfy">
+
+The accept/reject step is calibrated rejection sampling that makes the distribution of accepted tokens **exactly** match the target model's — the output is identical to running the target alone, with **zero** quality loss. The draft just needs to share the target's **tokenizer**, be **5–20× smaller**, and be reasonably aligned (a smaller model from the same family). Variants like **EAGLE/Medusa** draft from the target's own hidden state, avoiding a separate model. (Production speculative decoding is covered further in Module 7.)
+
+</Callout>
+
+---
+
+## Architecture-Level Efficiency
+
+The cheapest optimization is choosing an efficient architecture in the first place — baking the savings into the model so no post-hoc work is needed:
+
+<StatGrid items={[
+  { value: "Depthwise-sep conv", label: "~8–9× fewer MACs", sub: "MobileNet vs standard 3×3" },
+  { value: "GQA", label: "4× smaller KV cache", sub: "8 KV heads instead of 32" },
+  { value: "Sliding-window attn", label: "O(N²)→O(N·W)", sub: "Mistral local attention" }
+]} caption="Vision: depthwise-separable convs, hardswish (no exp() on mobile). LLMs: GQA shrinks the KV cache, SwiGLU improves accuracy-per-FLOP, RoPE extends context, and sliding-window attention caps the quadratic cost — most of these you met in Module 4 as standard modern-transformer components." />
+
+<Callout type="pitfall" title="Hardware-aware means measure on the target">
+
+Every technique here is hardware-specific: KV-cache quant helps GPU decode but matters differently on CPU; tile alignment is a no-op on hardware without tiled cores; depthwise-separable convs are a win on mobile but can be *memory-bound* on big GPUs. There is no portable "best" — profile on the **actual deployment target**, exactly as the Module 5 benchmarking protocol demands.
+
+</Callout>
+
+---
+
+## Recap
+
+- The **same model** runs faster when its shapes and ops match the silicon — a free design-time lever most people ignore.
+- **Tile alignment**: make hidden/channel dims multiples of **64/128** (NVIDIA) or **32** (ARM) so the hardware doesn't pad with wasted-compute zeros.
+- **KV-cache INT8** halves LLM memory and decode bandwidth for &lt;0.3% quality loss — essential at long context (saves GBs at 128K).
+- **Speculative decoding** gets a **lossless 2–4×** decode throughput: a small draft proposes, the big target verifies in parallel, rejection sampling guarantees identical output.
+- **Architecture choices** (depthwise-separable convs, GQA, sliding-window attention) bake efficiency in; always benchmark on the **real target hardware**.
+
+Next: putting all five techniques together into a systematic workflow — **the complete optimization pipeline**.

@@ -514,3 +514,85 @@ export function TorchCompileFlow({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   6.5 — Hardware-Aware Optimization
+   ════════════════════════════════════════════════════════════ */
+
+/* Tile alignment: dim 100 padded to 128 wastes Tensor Core capacity. */
+export function TileAlignment({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={520}>
+      <svg viewBox="0 0 520 180" width="100%" role="img" aria-label="Tensor Core tile alignment padding">
+        <text x="260" y="26" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={LIME}>dim = 100 → padded to 128 for Tensor Cores</text>
+        {/* useful region */}
+        <rect x="70" y="44" width="250" height="70" rx="3" fill={`${C.on}22`} stroke={C.on} strokeWidth="1.3" />
+        <text x="195" y="84" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.on}>100 — real work</text>
+        {/* padding region */}
+        <rect x="320" y="44" width="70" height="70" rx="3" fill={`${C.hole}1a`} stroke={C.hole} strokeWidth="1.3" strokeDasharray="3 2" />
+        <text x="355" y="80" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.hole}>+28</text>
+        <text x="355" y="94" textAnchor="middle" fontFamily={mono} fontSize="6.5" fill={C.hole}>zeros</text>
+        <text x="260" y="138" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.muted}>28% of Tensor Core throughput burned on padding the hardware adds anyway</text>
+        <text x="260" y="166" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.faint}>design hidden dims as multiples of 64/128 (NVIDIA) or 32 (ARM NEON) from the start</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* KV cache FP16 vs INT8. */
+export function KVCacheQuant({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={520}>
+      <svg viewBox="0 0 520 190" width="100%" role="img" aria-label="KV cache FP16 versus INT8">
+        <text x="120" y="28" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.blue}>FP16 KV cache</text>
+        <rect x="80" y="40" width="80" height="110" rx="4" fill={`${C.blue}26`} stroke={C.blue} strokeWidth="1.4" />
+        <text x="120" y="100" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.blue}>536 MB</text>
+        <text x="120" y="166" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>Llama-3-8B @ 4K</text>
+        <text x="260" y="96" textAnchor="middle" fontFamily={mono} fontSize="15" fill={LIME}>→</text>
+        <text x="380" y="28" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={LIME}>INT8 KV cache</text>
+        <rect x="340" y="95" width="80" height="55" rx="4" fill={`${LIME}30`} stroke={LIME} strokeWidth="1.4" />
+        <text x="380" y="127" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={LIME}>268 MB</text>
+        <text x="380" y="166" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>2× mem + 2× bandwidth</text>
+        <text x="260" y="184" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>&lt;0.3% quality loss · at 128K context this saves ~8.6 GB — why long-context needs it</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Speculative decoding: draft proposes, target verifies in parallel. */
+export function SpeculativeDecoding({ caption }: { caption?: string }) {
+  const toks = ["t1", "t2", "t3", "t4", "t5"];
+  const accepted = [true, true, true, true, false]; // 4 accepted, 1 rejected
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 210" width="100%" role="img" aria-label="Speculative decoding">
+        {/* draft */}
+        <rect x="20" y="40" width="96" height="40" rx="6" fill={`${C.gate}16`} stroke={C.gate} strokeWidth="1.3" />
+        <text x="68" y="58" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.gate}>draft (1B)</text>
+        <text x="68" y="71" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>10× faster</text>
+        <text x="290" y="30" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.muted}>① draft proposes K tokens (cheap, sequential)</text>
+        {toks.map((t, i) => (
+          <g key={`dt${i}`}>
+            <rect x={150 + i * 60} y="44" width="46" height="32" rx="4" fill={`${C.gate}10`} stroke={C.gate} strokeWidth="1" />
+            <text x={173 + i * 60} y="64" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.gate}>{t}</text>
+          </g>
+        ))}
+        <line x1="116" y1="60" x2="150" y2="60" stroke={C.faint} strokeWidth="1.1" />
+        {/* target verify */}
+        <rect x="20" y="120" width="96" height="40" rx="6" fill={`${C.blue}16`} stroke={C.blue} strokeWidth="1.3" />
+        <text x="68" y="138" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.blue}>target (8B)</text>
+        <text x="68" y="151" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>1 parallel pass</text>
+        <text x="290" y="110" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.muted}>② target verifies ALL K in one forward pass</text>
+        {toks.map((t, i) => (
+          <g key={`vt${i}`}>
+            <rect x={150 + i * 60} y="124" width="46" height="32" rx="4"
+              fill={accepted[i] ? `${C.on}1a` : `${C.hole}1a`} stroke={accepted[i] ? C.on : C.hole} strokeWidth="1.2" />
+            <text x={173 + i * 60} y="144" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={accepted[i] ? C.on : C.hole}>{accepted[i] ? "✓" : "✗"}</text>
+            <line x1={173 + i * 60} y1="76" x2={173 + i * 60} y2="124" stroke={C.line} strokeWidth="0.8" strokeDasharray="2 2" />
+          </g>
+        ))}
+        <text x="290" y="184" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.faint}>③ accept the matching prefix (4 of 5), resample at the first miss — ~4× throughput, provably lossless</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

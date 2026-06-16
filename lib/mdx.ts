@@ -204,6 +204,10 @@ import {
   FlashAttention,
   CudaGraphs,
   TorchCompileFlow,
+  // 6.5 Hardware-aware optimization
+  TileAlignment,
+  KVCacheQuant,
+  SpeculativeDecoding,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -371,6 +375,9 @@ const components = {
   FlashAttention,
   CudaGraphs,
   TorchCompileFlow,
+  TileAlignment,
+  KVCacheQuant,
+  SpeculativeDecoding,
 };
 
 export async function renderMDX(source: string) {

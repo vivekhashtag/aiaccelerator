@@ -195,6 +195,10 @@ import {
   Sparsity24,
   StructuredPruningUnits,
   GradualPruningSchedule,
+  // 6.3 Knowledge distillation
+  DarkKnowledge,
+  DistillationLoss,
+  FeatureDistillation,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -355,6 +359,9 @@ const components = {
   Sparsity24,
   StructuredPruningUnits,
   GradualPruningSchedule,
+  DarkKnowledge,
+  DistillationLoss,
+  FeatureDistillation,
 };
 
 export async function renderMDX(source: string) {

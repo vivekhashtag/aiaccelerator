@@ -1,0 +1,83 @@
+---
+title: "Knowledge Distillation"
+module: "06"
+moduleTitle: "Model Optimization & Efficient Inference"
+lesson: "6.3"
+slug: "6-3-knowledge-distillation"
+summary: "Training a small 'student' model to mimic a large 'teacher' — the most powerful compression technique, at the cost of a training pipeline. The 'dark knowledge' in soft labels, the temperature-scaled distillation loss and why the T² correction matters, feature distillation beyond the output layer, and DistilBERT's benchmark 40/60/97 result."
+prerequisites: ["6.2 Pruning & Sparsity"]
+---
+
+## Distillation vs Pruning
+
+Pruning starts from a big model and removes parts. **Knowledge distillation** (Hinton et al., 2015) goes the other way: it trains a *small model from scratch*, but instead of learning from raw labels alone, the student learns from the rich output of a large, already-trained **teacher**. Done well it's the most powerful compression technique — but unlike PTQ it requires a full training pipeline.
+
+---
+
+## Dark Knowledge: Why Soft Labels Teach More
+
+A trained network's full output distribution (before `argmax`) carries far more information than the one-hot label it was trained on:
+
+<DarkKnowledge caption="The hard label says only 'dog.' The teacher's soft probabilities say 'dog — and it looks a bit like a husky and a fox, not at all like a cat.' Those inter-class similarities are 'dark knowledge': the teacher's entire learned structure of how classes relate, which a one-hot label throws away." />
+
+Training the student on these soft targets transfers not just the decision boundary but the teacher's whole sense of class geometry. That extra signal acts as a powerful regulariser and lets a small student reach accuracy it could never find from hard labels alone.
+
+---
+
+## The Distillation Loss
+
+The student is trained on a weighted sum of two losses: a **soft** loss matching the teacher, and a **hard** loss matching the ground truth. **Temperature** `T` controls how much the teacher's distribution is softened — higher `T` spreads the probability mass and exposes more of the inter-class structure:
+
+<Formula label="Combined distillation loss" caption="KL pulls the student toward the teacher's softened distribution; CE keeps it anchored to the true label. α≈0.9, T≈4 are typical.">L = α·T²·KL(student_T ‖ teacher_T) + (1−α)·CE(student, labels)</Formula>
+
+<DistillationLoss caption="Both teacher and student logits are softened by T before the KL term; the student is also scored against hard labels by cross-entropy. The two are blended by α — usually 0.9, mostly distillation." />
+
+<Callout type="pitfall" title="Don't forget the T² factor">
+
+Softening logits by `T` shrinks their gradients by roughly `T²`. Without multiplying the KD term back by `T²`, the distillation signal becomes negligibly small next to the cross-entropy gradient, and the student basically ignores the teacher. The `T²` correction restores the balance — it's the single most common distillation bug.
+
+</Callout>
+
+---
+
+## Feature Distillation: Beyond the Output
+
+Matching only final predictions is the simplest form. **Feature distillation** additionally aligns the teacher's *intermediate* representations, giving the student "hints" about how to process information, not just what to conclude:
+
+<FeatureDistillation caption="An MSE loss matches the student's intermediate feature maps to the teacher's. Because the student is narrower, a small 1×1-conv adapter projects its features up to the teacher's dimensionality first. FitNets pioneered this; PKD applies it layer-by-layer for BERT." />
+
+<Callout type="why" title="Self-distillation and data-free variants">
+
+Distillation has surprising relatives. **Self-distillation** uses the same model as teacher and student — *Born-Again Networks* train generation G1 from G0, G2 from G1, and each generation **improves**, even with no compression (a still-not-fully-explained regularisation effect). **Data-free distillation** handles the case where the teacher's training data is unavailable (privacy/licensing) by using the teacher itself to synthesise samples that maximally activate each class — used in federated and privacy-preserving ML.
+
+</Callout>
+
+---
+
+## DistilBERT: the Benchmark Result
+
+The canonical success story: **DistilBERT** (Sanh et al., 2019) distilled BERT-base (110M params, 12 layers) into a 6-layer, 66M-parameter student by halving the layers and training on three objectives at once — masked-language-modelling, distillation loss on the MLM outputs, and a cosine loss on hidden states (feature distillation):
+
+<StatGrid items={[
+  { value: "40%", label: "smaller", sub: "110M → 66M params" },
+  { value: "60%", label: "faster", sub: "inference latency" },
+  { value: "97%", label: "of BERT's GLUE", sub: "performance retained" }
+]} caption="The 40/60/97 numbers are the benchmark to aim for. If your distillation retains less than ~90% performance for a 40% size cut, the process needs work — more training, better feature alignment, or a higher temperature." />
+
+<Callout type="key" title="When to reach for distillation">
+
+Distillation is the **largest-gain** compression tool but the **most expensive** to run — it needs a teacher, a training loop, and tuning. Reach for it when quantization and pruning haven't hit your size/latency target and you have a training pipeline available. It also composes: a distilled student can then be quantized and pruned, stacking all three of this module's techniques.
+
+</Callout>
+
+---
+
+## Recap
+
+- **Distillation trains a small student to mimic a large teacher** — the most powerful compression method, at the cost of a training pipeline.
+- The teacher's **soft labels** carry **dark knowledge** (inter-class similarity) that one-hot labels lack, acting as a rich regulariser for the student.
+- The loss blends a **temperature-softened KL** term with hard-label **cross-entropy** (`α≈0.9`, `T≈4`); the **T² factor** is essential or the soft signal vanishes.
+- **Feature distillation** additionally matches intermediate representations (via a 1×1 adapter), transferring *how* the teacher thinks, not just its output.
+- **DistilBERT's 40/60/97** (smaller/faster/accuracy retained) is the target; distillation stacks with quantization and pruning.
+
+Next: speeding up the *same* model with zero accuracy loss — **graph optimization and operator fusion**.

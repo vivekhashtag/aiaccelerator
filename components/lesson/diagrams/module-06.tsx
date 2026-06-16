@@ -269,3 +269,126 @@ export function GradualPruningSchedule({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   6.3 — Knowledge Distillation
+   ════════════════════════════════════════════════════════════ */
+
+/* Hard one-hot labels vs soft teacher probabilities (dark knowledge). */
+export function DarkKnowledge({ caption }: { caption?: string }) {
+  const classes = ["cat", "wolf", "husky", "dog", "fox"];
+  const hard = [0, 0, 0, 1, 0];
+  const soft = [0.01, 0.02, 0.04, 0.89, 0.04];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 200" width="100%" role="img" aria-label="Hard labels versus soft teacher labels">
+        {/* hard */}
+        <text x="140" y="24" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.off}>hard label (one-hot)</text>
+        <line x1="40" y1="140" x2="250" y2="140" stroke={C.line} strokeWidth="1" />
+        {hard.map((v, i) => (
+          <g key={`hk${i}`}>
+            <rect x={50 + i * 40} y={140 - v * 100} width="26" height={v * 100} rx="2" fill={`${C.off}55`} stroke={C.off} strokeWidth="0.8" />
+            <text x={63 + i * 40} y="152" textAnchor="middle" fontFamily={mono} fontSize="6.5" fill={C.muted}>{classes[i]}</text>
+          </g>
+        ))}
+        <text x="140" y="176" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>only "it's a dog" — nothing else</text>
+        <line x1="290" y1="24" x2="290" y2="168" stroke={C.line} strokeWidth="1" strokeDasharray="4 3" />
+        {/* soft */}
+        <text x="420" y="24" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={LIME}>soft labels (teacher, T&gt;1)</text>
+        <line x1="320" y1="140" x2="530" y2="140" stroke={C.line} strokeWidth="1" />
+        {soft.map((v, i) => (
+          <g key={`sk${i}`}>
+            <rect x={330 + i * 40} y={140 - v * 100} width="26" height={v * 100} rx="2"
+              fill={i === 3 ? `${LIME}55` : `${C.violet}55`} stroke={i === 3 ? LIME : C.violet} strokeWidth="0.8" />
+            <text x={343 + i * 40} y="152" textAnchor="middle" fontFamily={mono} fontSize="6.5" fill={C.muted}>{classes[i]}</text>
+          </g>
+        ))}
+        <text x="420" y="176" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>"dog, a bit husky/fox" = dark knowledge</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Distillation loss: KL on soft targets + CE on hard labels. */
+export function DistillationLoss({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 220" width="100%" role="img" aria-label="Knowledge distillation loss">
+        {/* teacher */}
+        <rect x="20" y="30" width="110" height="40" rx="6" fill={`${C.blue}16`} stroke={C.blue} strokeWidth="1.3" />
+        <text x="75" y="48" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.blue}>teacher (large)</text>
+        <text x="75" y="61" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>frozen</text>
+        {/* student */}
+        <rect x="20" y="150" width="110" height="40" rx="6" fill={`${LIME}16`} stroke={LIME} strokeWidth="1.4" />
+        <text x="75" y="168" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={LIME}>student (small)</text>
+        <text x="75" y="181" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>trained</text>
+        {/* soft targets (teacher /T) */}
+        <rect x="190" y="34" width="120" height="32" rx="5" fill={C.panel} stroke={C.line} strokeWidth="1" />
+        <text x="250" y="54" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.text}>softmax(z/T)</text>
+        <line x1="130" y1="50" x2="190" y2="50" stroke={C.faint} strokeWidth="1.1" /><polygon points="190,50 183,46 183,54" fill={C.faint} />
+        {/* student soft + hard */}
+        <rect x="190" y="120" width="120" height="28" rx="5" fill={C.panel} stroke={C.line} strokeWidth="1" />
+        <text x="250" y="138" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.text}>softmax(z/T)</text>
+        <rect x="190" y="158" width="120" height="28" rx="5" fill={C.panel} stroke={C.line} strokeWidth="1" />
+        <text x="250" y="176" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.text}>softmax(z)</text>
+        <line x1="130" y1="166" x2="190" y2="140" stroke={C.faint} strokeWidth="1" />
+        <line x1="130" y1="172" x2="190" y2="172" stroke={C.faint} strokeWidth="1" />
+        {/* KD loss */}
+        <rect x="350" y="74" width="100" height="32" rx="5" fill={`${C.violet}16`} stroke={C.violet} strokeWidth="1.3" />
+        <text x="400" y="94" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.violet}>KL · T²</text>
+        <line x1="310" y1="50" x2="350" y2="84" stroke={C.violet} strokeWidth="1" />
+        <line x1="310" y1="134" x2="350" y2="96" stroke={C.violet} strokeWidth="1" />
+        {/* CE loss */}
+        <rect x="350" y="156" width="100" height="30" rx="5" fill={`${C.gate}16`} stroke={C.gate} strokeWidth="1.3" />
+        <text x="400" y="175" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.gate}>CE (labels)</text>
+        <line x1="310" y1="172" x2="350" y2="172" stroke={C.gate} strokeWidth="1" />
+        {/* combine */}
+        <rect x="470" y="110" width="78" height="44" rx="6" fill={`${LIME}14`} stroke={LIME} strokeWidth="1.4" />
+        <text x="509" y="128" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={LIME}>α·KD +</text>
+        <text x="509" y="142" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={LIME}>(1−α)·CE</text>
+        <line x1="450" y1="90" x2="470" y2="124" stroke={C.faint} strokeWidth="1" />
+        <line x1="450" y1="171" x2="470" y2="140" stroke={C.faint} strokeWidth="1" />
+        <text x="280" y="210" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>α≈0.9, T≈4 — the T² term rescales KD gradients back up so the soft signal isn't swamped</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Feature distillation: match intermediate maps via an adapter. */
+export function FeatureDistillation({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 200" width="100%" role="img" aria-label="Feature distillation matches intermediate representations">
+        {/* teacher row */}
+        <text x="20" y="44" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.blue}>teacher</text>
+        {[0, 1, 2].map((i) => (
+          <g key={`tf${i}`}>
+            <rect x={90 + i * 130} y="30" width="60" height="26" rx="4" fill={`${C.blue}1a`} stroke={C.blue} strokeWidth="1.1" />
+            <text x={120 + i * 130} y="47" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.blue}>f{i + 1}</text>
+            {i < 2 && <line x1={150 + i * 130} y1="43" x2={220 + i * 130} y2="43" stroke={C.faint} strokeWidth="1" />}
+          </g>
+        ))}
+        {/* student row */}
+        <text x="20" y="158" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={LIME}>student</text>
+        {[0, 1, 2].map((i) => (
+          <g key={`sf${i}`}>
+            <rect x={90 + i * 130} y="144" width="60" height="24" rx="4" fill={`${LIME}1a`} stroke={LIME} strokeWidth="1.1" />
+            <text x={120 + i * 130} y="160" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={LIME}>f{i + 1}'</text>
+            {i < 2 && <line x1={150 + i * 130} y1="156" x2={220 + i * 130} y2="156" stroke={C.faint} strokeWidth="1" />}
+          </g>
+        ))}
+        {/* adapters + MSE between f1/f2 */}
+        {[0, 1].map((i) => (
+          <g key={`ad${i}`}>
+            <rect x={104 + i * 130} y="92" width="32" height="18" rx="3" fill={`${C.gate}16`} stroke={C.gate} strokeWidth="1" />
+            <text x={120 + i * 130} y="104" textAnchor="middle" fontFamily={mono} fontSize="6.5" fontWeight="700" fill={C.gate}>1×1</text>
+            <line x1={120 + i * 130} y1="144" x2={120 + i * 130} y2="110" stroke={C.gate} strokeWidth="1" />
+            <line x1={120 + i * 130} y1="92" x2={120 + i * 130} y2="56" stroke={C.gate} strokeWidth="1" strokeDasharray="3 2" />
+            <text x={120 + i * 130 + 24} y="84" fontFamily={mono} fontSize="7" fill={C.muted}>MSE</text>
+          </g>
+        ))}
+        <text x="280" y="190" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.faint}>match the teacher's intermediate "hints", not just its output — a 1×1 conv adapter bridges width mismatch</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

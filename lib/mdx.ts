@@ -228,6 +228,10 @@ import {
   OllamaStack,
   // 7.5 TGI
   TgiArchitecture,
+  // 7.6 Optimization in practice
+  ThroughputKnee,
+  GrammarConstrained,
+  TensorParallelSplit,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -415,6 +419,9 @@ const components = {
   SplitOffload,
   OllamaStack,
   TgiArchitecture,
+  ThroughputKnee,
+  GrammarConstrained,
+  TensorParallelSplit,
 };
 
 export async function renderMDX(source: string) {

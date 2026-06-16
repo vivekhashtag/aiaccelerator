@@ -393,3 +393,94 @@ export function TgiArchitecture({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   7.6 — Optimization in Practice
+   ════════════════════════════════════════════════════════════ */
+
+/* Throughput vs batch size — the knee. */
+export function ThroughputKnee({ caption }: { caption?: string }) {
+  const pts = [[1, 125], [4, 480], [8, 820], [16, 1100], [32, 1200]];
+  const px = (b: number) => 60 + (b / 32) * 420;
+  const py = (t: number) => 160 - (t / 1200) * 120;
+  const path = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${px(p[0])} ${py(p[1])}`).join(" ");
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 200" width="100%" role="img" aria-label="Throughput versus batch size knee">
+        <line x1="60" y1="40" x2="60" y2="160" stroke={C.faint} strokeWidth="1.1" />
+        <line x1="60" y1="160" x2="500" y2="160" stroke={C.faint} strokeWidth="1.1" />
+        <text x="30" y="100" fontFamily={mono} fontSize="8" fill={C.muted} transform="rotate(-90 30 100)">tok/s</text>
+        <text x="280" y="184" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.muted}>batch size →</text>
+        <path d={path} fill="none" stroke={SKY} strokeWidth="2.4" />
+        {pts.map((p, i) => (
+          <g key={`tk${i}`}>
+            <circle cx={px(p[0])} cy={py(p[1])} r="3.5" fill={i === 2 || i === 3 ? C.gate : SKY} />
+            <text x={px(p[0])} y={py(p[1]) - 8} textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>bs{p[0]}</text>
+          </g>
+        ))}
+        <rect x={px(8) - 8} y="44" width={px(16) - px(8) + 16} height="120" rx="4" fill={`${C.gate}10`} stroke={C.gate} strokeWidth="1" strokeDasharray="3 2" />
+        <text x={(px(8) + px(16)) / 2} y="36" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.gate}>the knee</text>
+        <text x="280" y="194" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>memory-bound at bs=1; throughput flattens past bs≈16 — continuous batching targets the knee</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Grammar-constrained decoding: mask invalid tokens. */
+export function GrammarConstrained({ caption }: { caption?: string }) {
+  const toks = [
+    { t: '"rating"', ok: true }, { t: ":", ok: true }, { t: "9.2", ok: true },
+    { t: "banana", ok: false }, { t: "<", ok: false }, { t: "}", ok: true },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 190" width="100%" role="img" aria-label="Grammar-constrained JSON decoding">
+        <rect x="20" y="34" width="110" height="34" rx="6" fill={`${C.violet}16`} stroke={C.violet} strokeWidth="1.3" />
+        <text x="75" y="50" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.violet}>JSON schema</text>
+        <text x="75" y="62" textAnchor="middle" fontFamily={mono} fontSize="6.8" fill={C.muted}>→ grammar / FSM</text>
+        <line x1="130" y1="51" x2="166" y2="51" stroke={C.faint} strokeWidth="1.1" /><polygon points="166,51 159,47 159,55" fill={C.faint} />
+        <rect x="166" y="34" width="120" height="34" rx="6" fill={`${C.gate}16`} stroke={C.gate} strokeWidth="1.3" />
+        <text x="226" y="50" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.gate}>token mask</text>
+        <text x="226" y="62" textAnchor="middle" fontFamily={mono} fontSize="6.8" fill={C.muted}>per decode step</text>
+        <text x="290" y="98" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.muted}>at each step, only grammar-valid tokens keep non-zero probability:</text>
+        {toks.map((t, i) => (
+          <g key={`gc${i}`}>
+            <rect x={50 + i * 80} y="112" width="70" height="28" rx="4"
+              fill={t.ok ? `${C.on}1a` : `${C.hole}1a`} stroke={t.ok ? C.on : C.hole} strokeWidth="1.1"
+              strokeDasharray={t.ok ? "0" : "2 2"} opacity={t.ok ? 1 : 0.5} />
+            <text x={85 + i * 80} y="130" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={t.ok ? C.on : C.hole}>{t.t}</text>
+          </g>
+        ))}
+        <text x="280" y="166" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.muted}>green = allowed · red = masked to −∞ before sampling</text>
+        <text x="280" y="184" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.faint}>output is GUARANTEED valid JSON — invalid tokens are impossible, not just unlikely</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Tensor parallelism: split a weight matrix across GPUs + AllReduce. */
+export function TensorParallelSplit({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 200" width="100%" role="img" aria-label="Tensor parallelism splits weights across GPUs">
+        <text x="270" y="24" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={SKY}>one weight matrix, split across 2 GPUs</text>
+        {[0, 1].map((g) => (
+          <g key={`tp${g}`}>
+            <rect x={60 + g * 230} y="44" width="190" height="80" rx="8" fill={`${(g === 0 ? SKY : C.violet)}10`} stroke={g === 0 ? SKY : C.violet} strokeWidth="1.4" />
+            <text x={155 + g * 230} y="38" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={g === 0 ? SKY : C.violet}>GPU {g}</text>
+            {[0, 1, 2].map((c) => (
+              <rect key={`tpc-${g}-${c}`} x={76 + g * 230 + c * 52} y="58" width="44" height="50" rx="3" fill={`${(g === 0 ? SKY : C.violet)}26`} stroke={g === 0 ? SKY : C.violet} strokeWidth="0.8" />
+            ))}
+            <text x={155 + g * 230} y="120" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>half the columns → partial output</text>
+          </g>
+        ))}
+        {/* allreduce */}
+        <rect x="190" y="150" width="160" height="28" rx="6" fill={`${C.on}14`} stroke={C.on} strokeWidth="1.3" />
+        <text x="270" y="168" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.on}>AllReduce (NVLink)</text>
+        <line x1="155" y1="124" x2="240" y2="150" stroke={C.faint} strokeWidth="1" />
+        <line x1="385" y1="124" x2="300" y2="150" stroke={C.faint} strokeWidth="1" />
+        <text x="270" y="194" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>each GPU computes its slice, then AllReduce sums them — overlapped with compute, ~5–15% overhead</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

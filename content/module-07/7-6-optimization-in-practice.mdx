@@ -1,0 +1,151 @@
+---
+title: "LLM Inference Optimisation in Practice"
+module: "07"
+moduleTitle: "Inference Frameworks & LLM Runtimes"
+lesson: "7.6"
+slug: "7-6-optimization-in-practice"
+summary: "The cross-cutting practices that apply to every framework: finding the throughput 'knee' with a batch sweep, what each decoding parameter actually does, guaranteeing valid JSON with grammar-constrained generation, splitting a too-big model across GPUs with tensor parallelism, and monitoring a live serving system with Prometheus."
+prerequisites: ["7.2 vLLM: PagedAttention & Continuous Batching", "4.7a Decoding & Sampling Strategies"]
+---
+
+## Finding the Throughput Knee
+
+Bigger batches mean higher throughput — until they don't. Because decode is memory-bound (7.1), small batches barely use the GPU; throughput climbs steeply with batch size, then **flattens** as you approach compute-bound. A quick sweep finds the sweet spot:
+
+```python
+import time
+from vllm import LLM, SamplingParams
+
+llm = LLM("meta-llama/Llama-3.1-8B-Instruct", gpu_memory_utilization=0.9)
+params = SamplingParams(max_tokens=100, temperature=0.0)
+
+def throughput(batch_size):
+    prompts = ["Tell me about machine learning."] * batch_size
+    t0 = time.time()
+    outs = llm.generate(prompts, params)
+    dt = time.time() - t0
+    tokens = sum(len(o.outputs[0].token_ids) for o in outs)
+    return tokens / dt                       # tokens/sec across the batch
+
+for bs in [1, 4, 8, 16, 32]:
+    print(f"batch={bs:>3}: {throughput(bs):>7.0f} tok/s")
+```
+
+**Step by step:**
+
+1. For each batch size, send that many identical prompts and time how long the whole batch takes.
+2. `tokens / dt` is the **aggregate** throughput — total tokens produced per second across all requests.
+3. Run it across `[1, 4, 8, 16, 32]` and watch where the gains stop being worth the rising per-request latency.
+
+<ThroughputKnee caption="At batch=1 the GPU is starved (memory-bound); throughput rises fast to batch≈8–16, then flattens as the workload becomes compute-bound while latency keeps climbing. That 'knee' is the target operating point — and exactly what continuous batching tries to hold." />
+
+---
+
+## What the Decoding Parameters Actually Do
+
+Every framework exposes the same generation knobs (the theory is Lesson 4.7a). In production you set them deliberately:
+
+```python
+SamplingParams(
+    temperature=0.7,        # 0.0 = greedy/deterministic; 0.0–0.3 factual; 0.7–1.0 creative
+    top_p=0.9,              # nucleus: keep tokens summing to 90% probability mass
+    top_k=50,              # also cap to the 50 most likely (-1 = off)
+    max_tokens=512,         # hard cap on output length
+    presence_penalty=0.1,   # discourage tokens already used (reduces repetition)
+    frequency_penalty=0.1,  # penalise proportional to how often a token appeared
+    stop=["<|eot_id|>"],    # stop sequences that end generation
+    seed=42,                # fix the seed for reproducible outputs
+)
+```
+
+**Step by step:**
+
+1. `temperature` is the master randomness dial — pin it to `0.0` for factual/extraction/eval work, raise it for creative writing.
+2. `top_p` and `top_k` trim the unlikely tail so you don't sample garbage; `top_p=0.9` is the common default.
+3. `presence_penalty` / `frequency_penalty` fight repetition loops; `stop` and `max_tokens` control where generation ends.
+4. `seed` makes a run reproducible (essential for evals and debugging) — same prompt + same seed + `temperature` → identical output.
+
+---
+
+## Guaranteeing JSON: Grammar-Constrained Generation
+
+For extraction, classification, or API responses you need *valid* JSON every time — not "usually valid." Constrained decoding makes invalid output **impossible** by masking tokens that would break the schema:
+
+```python
+from vllm import LLM, SamplingParams
+from pydantic import BaseModel
+
+class MovieReview(BaseModel):
+    title: str
+    rating: float
+    summary: str
+
+llm = LLM("meta-llama/Llama-3.1-8B-Instruct")
+params = SamplingParams(
+    max_tokens=300,
+    guided_decoding_backend="outlines",
+    guided_json=MovieReview.model_json_schema(),   # enforce this exact shape
+)
+out = llm.generate(["Review 'Inception' as JSON."], params)
+# out is GUARANTEED to parse as a MovieReview
+```
+
+**Step by step:**
+
+1. You define the desired shape as a Pydantic model and pass its JSON schema as `guided_json`.
+2. The schema is compiled into a **grammar** (a finite-state machine of which tokens are legal next).
+3. At every decode step, tokens that would violate the grammar are masked to −∞ before sampling — so only schema-valid tokens can be chosen.
+
+<GrammarConstrained caption="The schema becomes an automaton; at each step only tokens that keep the output on a valid path survive (the rest are masked to −∞). The result is guaranteed-parseable JSON — invalid structure is impossible, not merely improbable." />
+
+---
+
+## Multi-GPU: Tensor Parallelism
+
+A 70B model in BF16 is ~140 GB — it can't fit on one 80 GB GPU. **Tensor parallelism** splits each weight matrix across GPUs; each computes its slice and an **AllReduce** combines the results:
+
+```python
+llm = LLM(
+    "meta-llama/Meta-Llama-3.1-70B-Instruct",
+    tensor_parallel_size=4,   # split across 4 GPUs → ~35 GB each
+    dtype="bfloat16",
+)
+```
+
+**Step by step:**
+
+1. `tensor_parallel_size=4` shards every layer's weight matrices across 4 GPUs, so each holds ~1/4 of the model.
+2. Each GPU computes a partial result from its slice; an **AllReduce** over NVLink sums the partials into the full output.
+3. That communication is overlapped with compute, so the practical overhead is only ~5–15% — and it's the only way to serve a model bigger than a single card.
+
+<TensorParallelSplit caption="Each GPU owns a slice of every weight matrix and computes a partial output; an AllReduce over NVLink merges them. Pipeline parallelism (splitting by layers) is usually avoided for inference — it introduces idle 'bubbles'." />
+
+---
+
+## Monitoring a Live System
+
+Production serving needs observability. vLLM exposes **Prometheus** metrics; the ones that matter map directly to the constraints from 7.1:
+
+<StatGrid items={[
+  { value: "queue depth", label: "requests waiting", sub: "alert > 50 → scale up" },
+  { value: "KV cache %", label: "gpu_cache_usage", sub: "alert > 95% → preemption" },
+  { value: "preemption rate", label: "swaps to CPU", sub: "rising → VRAM shortage" }
+]} caption="Watch request queue depth (latency backing up), KV-cache utilisation (near full → requests get evicted to CPU), and preemption rate (VRAM is short). Each is a direct signal of one of the three serving constraints — memory-bound decode, the growing KV cache, and variable request lengths." />
+
+<Callout type="key" title="These knobs are framework-agnostic">
+
+Batch sizing, decoding parameters, grammar constraints, tensor parallelism, and the monitoring signals apply whether you run **vLLM, TGI, or even Ollama** — the APIs differ slightly but the concepts are identical. Master them once and you can tune any serving stack. Always validate with the Module 5 benchmarking protocol: change one knob, measure throughput + latency + accuracy, keep it only if it helps.
+
+</Callout>
+
+---
+
+## Recap
+
+- **Throughput rises then flattens** with batch size — sweep to find the **knee** (≈8–16 for an 8B model) and operate there.
+- **Decoding parameters** (`temperature`, `top_p`/`top_k`, penalties, `stop`, `seed`) are set deliberately per task — greedy for factual, hotter for creative, fixed seed for reproducibility.
+- **Grammar-constrained generation** (`guided_json`) compiles a schema to an automaton and masks invalid tokens — **guaranteed** valid JSON.
+- **Tensor parallelism** (`tensor_parallel_size=N`) shards weights across GPUs with an AllReduce, the only way to serve models bigger than one card (~5–15% overhead).
+- **Monitor** queue depth, KV-cache utilisation, and preemption rate — direct signals of the three serving constraints. The knobs are the same across frameworks.
+
+Next: tying it together — a **framework selection guide** for choosing the right runtime for any deployment.

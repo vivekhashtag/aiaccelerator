@@ -280,3 +280,96 @@ export function FinnPipeline({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   8.4 — FPGA vs GPU vs CPU
+   ════════════════════════════════════════════════════════════ */
+
+/* The three hardware philosophies. */
+export function HardwarePhilosophies({ caption }: { caption?: string }) {
+  const cards = [
+    { t: "CPU", p: "“I do anything, sequentially”", best: "pre/post-proc, control, tiny models", c: C.off },
+    { t: "GPU", p: "“give me regular parallel math”", best: "training, large-model + batch inference", c: C.on },
+    { t: "FPGA", p: "“I become the exact circuit you need”", best: "deterministic, low-power edge streaming", c: ORANGE },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 160" width="100%" role="img" aria-label="CPU GPU FPGA philosophies">
+        {cards.map((c, i) => {
+          const x = 16 + i * 178;
+          return (
+            <g key={`hp${i}`}>
+              <rect x={x} y="30" width="164" height="100" rx="8" fill={`${c.c}12`} stroke={c.c} strokeWidth="1.5" />
+              <text x={x + 82} y="52" textAnchor="middle" fontFamily={mono} fontSize="11" fontWeight="700" fill={c.c}>{c.t}</text>
+              <foreignObject x={x + 8} y="60" width="148" height="34">
+                <div style={{ fontFamily: mono, fontSize: "7.6px", color: C.text, textAlign: "center", lineHeight: 1.3, fontStyle: "italic" }}>{c.p}</div>
+              </foreignObject>
+              <foreignObject x={x + 8} y="98" width="148" height="28">
+                <div style={{ fontFamily: mono, fontSize: "7.4px", color: C.muted, textAlign: "center", lineHeight: 1.25 }}>best: {c.best}</div>
+              </foreignObject>
+            </g>
+          );
+        })}
+        <text x="280" y="22" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>three philosophies — match the workload to the silicon</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Latency + jitter: FPGA is deterministic. */
+export function LatencyJitter({ caption }: { caption?: string }) {
+  const rows = [
+    { t: "CPU i7", lat: "15–50 ms", jit: "5–20 ms jitter", w: 330, c: C.off },
+    { t: "GPU 3090", lat: "2–5 ms", jit: "1–3 ms jitter", w: 120, c: C.on },
+    { t: "FPGA ZCU104", lat: "0.1–0.5 ms", jit: "<1 µs — deterministic", w: 30, c: ORANGE },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 170" width="100%" role="img" aria-label="Inference latency and jitter">
+        <text x="280" y="22" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>CNN inference latency (INT8) — bar = latency, label = jitter</text>
+        {rows.map((r, i) => {
+          const y = 40 + i * 36;
+          return (
+            <g key={`lj${i}`}>
+              <text x="20" y={y + 16} fontFamily={mono} fontSize="8" fontWeight="700" fill={r.c}>{r.t}</text>
+              <rect x="130" y={y + 2} width={r.w} height="20" rx="3" fill={`${r.c}30`} stroke={r.c} strokeWidth="1.1" />
+              <text x="136" y={y + 16} fontFamily={mono} fontSize="7.5" fontWeight="700" fill={C.text}>{r.lat}</text>
+              <text x={140 + r.w + 6} y={y + 16} fontFamily={mono} fontSize="7" fill={C.muted}>{r.jit}</text>
+            </g>
+          );
+        })}
+        <text x="280" y="160" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.faint}>latency = pipeline_depth × clock_period — same every input, regardless of OS/heat/load</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Power efficiency: img/s/W across devices. */
+export function EfficiencyBars({ caption }: { caption?: string }) {
+  const devs = [
+    { t: "Jetson Orin", e: 133, c: C.off },
+    { t: "Intel NCS2", e: 300, c: C.violet },
+    { t: "NVIDIA T4", e: 1857, c: C.on },
+    { t: "Xilinx ZCU104", e: 2000, c: ORANGE },
+  ];
+  const max = 2000;
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 180" width="100%" role="img" aria-label="Inference energy efficiency img/s/W">
+        <text x="270" y="22" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>energy efficiency — images/sec per watt (INT8 CNN)</text>
+        {devs.map((d, i) => {
+          const y = 38 + i * 32;
+          const w = (d.e / max) * 340;
+          return (
+            <g key={`ef${i}`}>
+              <text x="20" y={y + 15} fontFamily={mono} fontSize="8" fill={C.text}>{d.t}</text>
+              <rect x="150" y={y + 2} width={w} height="18" rx="3" fill={`${d.c}33`} stroke={d.c} strokeWidth="1.1" />
+              <text x={156 + w} y={y + 15} fontFamily={mono} fontSize="7.5" fontWeight="700" fill={d.c}>{d.e}</text>
+            </g>
+          );
+        })}
+        <text x="270" y="172" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>a 5 W FPGA beats a 70 W datacenter T4 on efficiency — why FPGA wins on battery/edge power</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

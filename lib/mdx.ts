@@ -249,6 +249,10 @@ import {
   // 8.3 FPGA quantization
   XnorPopcount,
   FinnPipeline,
+  // 8.4 FPGA vs GPU vs CPU
+  HardwarePhilosophies,
+  LatencyJitter,
+  EfficiencyBars,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -451,6 +455,9 @@ const components = {
   DataflowStreaming,
   XnorPopcount,
   FinnPipeline,
+  HardwarePhilosophies,
+  LatencyJitter,
+  EfficiencyBars,
 };
 
 export async function renderMDX(source: string) {

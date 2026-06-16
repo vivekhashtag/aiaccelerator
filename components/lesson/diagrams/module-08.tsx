@@ -591,3 +591,67 @@ export function FpgaToAsic({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   8.8 — Edge AI & TinyML Landscape
+   ════════════════════════════════════════════════════════════ */
+
+/* The hardware ramp by power & memory — where TinyML sits. */
+export function TinyMlSpectrum({ caption }: { caption?: string }) {
+  const tiers = [
+    { t: "MCU", p: "mW · KB", e: "wake word, anomaly", c: C.violet },
+    { t: "MCU + NPU", p: "10s mW · MB", e: "person detect, vision", c: ORANGE },
+    { t: "MPU / RPi", p: "W · GB", e: "small CNN, 1–3B LLM", c: C.on },
+    { t: "FPGA", p: "W · KB-on-chip", e: "deterministic streaming", c: C.gate },
+    { t: "GPU", p: "100s W · 10s GB", e: "training, big LLMs", c: C.blue },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 160" width="100%" role="img" aria-label="The edge-to-cloud hardware spectrum">
+        {tiers.map((t, i) => {
+          const x = 12 + i * 110;
+          return (
+            <g key={`tm${i}`}>
+              <rect x={x} y="40" width="98" height="74" rx="8" fill={`${t.c}12`} stroke={t.c} strokeWidth="1.5" />
+              <text x={x + 49} y="62" textAnchor="middle" fontFamily={mono} fontSize="9.5" fontWeight="700" fill={t.c}>{t.t}</text>
+              <text x={x + 49} y="78" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.text}>{t.p}</text>
+              <foreignObject x={x + 4} y="86" width="90" height="26">
+                <div style={{ fontFamily: mono, fontSize: "6.6px", color: C.muted, textAlign: "center", lineHeight: 1.2 }}>{t.e}</div>
+              </foreignObject>
+              {i < 4 && <text x={x + 104} y="80" fontFamily={mono} fontSize="9" fill={C.faint}>→</text>}
+            </g>
+          );
+        })}
+        <text x="280" y="28" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>more power & memory →</text>
+        <text x="280" y="134" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>TinyML lives at the far left: always-on inference in milliwatts and kilobytes — no cloud, fully private</text>
+        <text x="280" y="150" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={ORANGE}>the new wave: micro-NPUs add a fixed MAC engine to the MCU (10–100× the CPU core)</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* MCU memory budget: flash (weights) + SRAM (tensor arena). */
+export function McuMemoryBudget({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 180" width="100%" role="img" aria-label="MCU memory budget for TinyML">
+        {/* flash */}
+        <text x="150" y="26" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.violet}>FLASH (e.g. 1–2 MB)</text>
+        <rect x="40" y="36" width="220" height="50" rx="6" fill={`${C.violet}10`} stroke={C.violet} strokeWidth="1.3" />
+        <rect x="46" y="42" width="120" height="38" rx="3" fill={`${C.violet}33`} stroke={C.violet} strokeWidth="0.9" />
+        <text x="106" y="65" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={C.violet}>INT8 weights</text>
+        <text x="214" y="65" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>+ code</text>
+        {/* sram */}
+        <text x="390" y="26" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={ORANGE}>SRAM (e.g. 256 KB–1 MB)</text>
+        <rect x="280" y="36" width="220" height="50" rx="6" fill={`${ORANGE}10`} stroke={ORANGE} strokeWidth="1.3" />
+        <rect x="286" y="42" width="130" height="38" rx="3" fill={`${ORANGE}33`} stroke={ORANGE} strokeWidth="0.9" />
+        <text x="351" y="61" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={ORANGE}>tensor arena</text>
+        <text x="351" y="72" textAnchor="middle" fontFamily={mono} fontSize="6.5" fill={C.muted}>(activations, scratch)</text>
+        <text x="470" y="65" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>+ stack</text>
+        <text x="270" y="112" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.text}>weights live in flash · activations in SRAM — both measured in KB, not GB</text>
+        <text x="270" y="136" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>fits: keyword spotting (~20 KB), person detection (~300 KB), gesture/anomaly (~few KB)</text>
+        <text x="270" y="156" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.hole}>does NOT fit: anything LLM-sized — TinyML is small CNNs/RNNs only</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

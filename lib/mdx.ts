@@ -263,6 +263,9 @@ import {
   StreamingPipeline,
   EnergyPerInference,
   FpgaToAsic,
+  // 8.8 TinyML landscape
+  TinyMlSpectrum,
+  McuMemoryBudget,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -475,6 +478,8 @@ const components = {
   StreamingPipeline,
   EnergyPerInference,
   FpgaToAsic,
+  TinyMlSpectrum,
+  McuMemoryBudget,
 };
 
 export async function renderMDX(source: string) {

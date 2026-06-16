@@ -1,0 +1,67 @@
+---
+title: "Edge AI Microcontrollers & TinyML"
+module: "08"
+moduleTitle: "Hardware Acceleration: FPGA & Edge NPUs"
+lesson: "8.8"
+slug: "8-08-tinyml-landscape"
+summary: "The smallest end of the hardware ramp — running neural networks on microcontrollers in milliwatts and kilobytes. What TinyML is, the memory and power constraints that define it, what models actually fit, and the new wave of micro-NPUs that bolt a fixed MAC engine onto an MCU for 10–100× the throughput of the CPU core."
+prerequisites: ["8.4 FPGA vs GPU vs CPU: When to Use Which", "6.1 Quantization"]
+---
+
+## Below the FPGA: TinyML
+
+The FPGA half of this module ran inference at single-digit watts. Microcontrollers go further down — **milliwatts and kilobytes**. **TinyML** is the practice of running ML models on microcontroller-class hardware: always-on, battery-powered (often years on a coin cell), fully private (no cloud), and costing cents per unit. It's the largest-volume edge AI by far — billions of MCUs ship per year.
+
+<TinyMlSpectrum caption="The full ramp from milliwatt MCUs to hundred-watt GPUs. TinyML lives at the far left: always-on inference in mW and KB. The recent shift is the middle tier — micro-NPUs that add a fixed MAC accelerator to the MCU, delivering 10–100× the CPU core for vision-class models." />
+
+---
+
+## The Constraints That Define It
+
+A microcontroller is a different world from everything so far. There's no DRAM, often no OS, and memory is measured in **kilobytes**:
+
+<McuMemoryBudget caption="Weights live in FLASH (typically 1–2 MB) alongside the program; activations and scratch live in a 'tensor arena' in SRAM (256 KB–1 MB). Both are KB-scale, so models must be tiny and INT8. Keyword spotting fits in ~20 KB, person detection in ~300 KB — but nothing LLM-sized comes close." />
+
+<Callout type="key" title="Quantization isn't optional here — it's the entry ticket">
+
+On an MCU, **INT8 is mandatory**, not an optimization. There's no FPU fast enough (or memory big enough) for FP32 networks, so every TinyML model is quantized to INT8 (sometimes INT4 or binary) using exactly the Module 6 techniques. The whole model — weights in flash, the **tensor arena** of activations in SRAM — must fit in KB. This is why TinyML and quantization are inseparable: without INT8 there is no model on the device at all.
+
+</Callout>
+
+---
+
+## What Actually Fits
+
+The constraint dictates the applications. TinyML does **small, always-on perception**, not general AI:
+
+<StatGrid items={[
+  { value: "Wake word", label: "~20–100 KB", sub: "“Hey Siri” keyword spotting" },
+  { value: "Person/object detect", label: "~250–500 KB", sub: "tiny vision CNN (MobileNet-class)" },
+  { value: "Anomaly / vibration", label: "~few KB", sub: "predictive maintenance, autoencoder" },
+  { value: "Gesture / IMU", label: "~few KB", sub: "motion classification" }
+]} caption="The canonical TinyML workloads: keyword spotting, visual wake words / person detection, vibration-anomaly detection for predictive maintenance, and gesture/activity recognition from accelerometer data. All are small INT8 CNNs or RNNs — there is no LLM on a microcontroller." />
+
+---
+
+## Why NPUs Are Coming to MCUs
+
+Historically, a microcontroller ran these models on its CPU core (a Cortex-M) — slowly. The recent shift is **micro-NPUs**: a small, fixed MAC-array accelerator (the same systolic idea as the DPU and TPU) integrated alongside the CPU, giving a large speedup and, crucially, much better **energy per inference**:
+
+<Callout type="why" title="The same idea you just learned, hardened into silicon">
+
+A micro-NPU is exactly the FPGA-to-ASIC endpoint from Lesson 8.7: a fixed INT8 MAC engine, but baked into the microcontroller die instead of configured into fabric. It typically delivers **10–100×** the throughput of the Cortex-M core at a fraction of the energy — enough to run a vision model on a coin cell. That's why the three flagship parts ahead — **STM32 N6** (Neural-ART), **NXP i.MX RT** (eIQ Neutron), and **Renesas RA / DRP-AI** — are defined by their on-chip NPU. The CPU still orchestrates (load sensor data, set up the inference); the NPU does the MACs — the same PS-orchestrates / accelerator-computes split as the Zynq, scaled down to milliwatts.
+
+</Callout>
+
+The next lessons go vendor by vendor, but they share a common substrate — the Arm Cortex-M ecosystem — which we cover first.
+
+---
+
+## Recap
+
+- **TinyML** runs neural networks on microcontroller-class hardware — **milliwatts and kilobytes**, always-on, private, battery-powered, the highest-volume edge AI.
+- The constraints are severe: no DRAM/OS, **weights in flash + a tensor arena of activations in SRAM**, both KB-scale — so **INT8 quantization is mandatory** (Module 6 is the entry ticket).
+- What fits: **wake words, person/object detection, anomaly/vibration, gesture** — small INT8 CNNs/RNNs, never LLMs.
+- The new wave is **micro-NPUs**: a fixed MAC engine on the MCU (the FPGA→ASIC endpoint), giving **10–100×** the CPU core — the defining feature of STM32 N6, NXP i.MX RT, and Renesas RA.
+
+Next: the common foundation under all of them — **Arm Cortex-M, Helium, CMSIS-NN, and the Ethos-U micro-NPU**.

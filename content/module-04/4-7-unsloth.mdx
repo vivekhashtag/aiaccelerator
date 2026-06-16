@@ -79,4 +79,4 @@ A model fine-tuned on `[INST]` tags but served with ChatML markers — or vice v
 - The API is a thin wrapper (`FastLanguageModel` + `get_peft_model`) over the standard `SFTTrainer`; set `target_modules` to all linear layers and `lora_dropout = 0`.
 - **Choose the smallest base** that meets quality (LLaMA-3.2-3B → 3.1-8B), and **match the dataset format** (Instruction / ChatML / ShareGPT) to the model's template via `get_chat_template()`.
 
-Next: grounding the model in current, trustworthy facts — **Retrieval-Augmented Generation**.
+Next: the inference-time knobs that turn the model's probabilities into text — **decoding & sampling strategies**.

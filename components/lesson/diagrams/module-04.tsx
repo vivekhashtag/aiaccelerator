@@ -1152,3 +1152,149 @@ export function SparseVsDenseParams({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   4.7a — Decoding & Sampling
+   ════════════════════════════════════════════════════════════ */
+
+/* logits → temperature → truncate → softmax → sample. */
+export function DecodingPipeline({ caption }: { caption?: string }) {
+  const stages = [
+    { t: "logits", s: "raw scores", c: C.blue },
+    { t: "÷ T", s: "temperature", c: C.gate },
+    { t: "top-k / top-p", s: "truncate", c: C.violet },
+    { t: "softmax", s: "→ probs", c: C.on },
+    { t: "sample", s: "pick token", c: ROSE },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 150" width="100%" role="img" aria-label="Decoding pipeline from logits to token">
+        {stages.map((st, i) => {
+          const x = 16 + i * 110;
+          return (
+            <g key={`stg${i}`}>
+              <rect x={x} y="48" width="92" height="46" rx="7" fill={`${st.c}14`} stroke={st.c} strokeWidth="1.4" />
+              <text x={x + 46} y="70" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={st.c}>{st.t}</text>
+              <text x={x + 46} y="84" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>{st.s}</text>
+              {i < 4 && (
+                <g>
+                  <line x1={x + 92} y1="71" x2={x + 110} y2="71" stroke={C.faint} strokeWidth="1.2" />
+                  <polygon points={`${x + 110},71 ${x + 103},67 ${x + 103},75`} fill={C.faint} />
+                </g>
+              )}
+            </g>
+          );
+        })}
+        <text x="280" y="28" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>the model gives a distribution every step — decoding is how you turn it into one token</text>
+        <text x="280" y="120" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.faint}>none of this touches the weights — same model, very different outputs</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Temperature reshapes the distribution. */
+export function TemperatureEffect({ caption }: { caption?: string }) {
+  // base logits, reshaped by temperature into bar heights (visual, normalised)
+  const panels = [
+    { T: "T = 0.5", h: [62, 30, 14, 8, 5, 3], note: "sharper · greedier · safe", c: C.on },
+    { T: "T = 1.0", h: [40, 30, 22, 16, 12, 9], note: "the model's own odds", c: C.blue },
+    { T: "T = 1.5", h: [30, 26, 23, 20, 18, 16], note: "flatter · riskier · creative", c: ROSE },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 200" width="100%" role="img" aria-label="Temperature reshapes the token distribution">
+        {panels.map((p, pi) => {
+          const ox = 24 + pi * 172;
+          return (
+            <g key={`temp${pi}`}>
+              <text x={ox + 78} y="26" textAnchor="middle" fontFamily={mono} fontSize="9.5" fontWeight="700" fill={p.c}>{p.T}</text>
+              <line x1={ox} y1="150" x2={ox + 156} y2="150" stroke={C.line} strokeWidth="1" />
+              {p.h.map((h, bi) => (
+                <rect key={`tb${pi}-${bi}`} x={ox + 6 + bi * 25} y={150 - h} width="18" height={h} rx="2" fill={`${p.c}${bi === 0 ? "" : "66"}`} stroke={p.c} strokeWidth="0.8" />
+              ))}
+              <text x={ox + 78} y="172" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>{p.note}</text>
+            </g>
+          );
+        })}
+        <text x="270" y="192" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.faint}>T scales logits before softmax — T→0 collapses to greedy (argmax), high T flattens toward uniform</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Top-k vs top-p (nucleus) truncation of a sorted distribution. */
+export function TopKTopP({ caption }: { caption?: string }) {
+  const probs = [28, 22, 16, 11, 8, 6, 4, 3, 1.5, 0.5]; // descending, sums ~100
+  const kCut = 4; // top-k = 4
+  // top-p = 0.9 → cumulative until ≥90: 28,50,66,77,85,91 → first 6
+  const pCut = 6;
+  const bx = (i: number) => 60 + i * 44;
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 220" width="100%" role="img" aria-label="Top-k versus top-p nucleus sampling">
+        <line x1="50" y1="160" x2="510" y2="160" stroke={C.line} strokeWidth="1" />
+        {probs.map((p, i) => {
+          const inK = i < kCut;
+          const inP = i < pCut;
+          return (
+            <g key={`pb${i}`}>
+              <rect x={bx(i)} y={160 - p * 4} width="28" height={p * 4} rx="2"
+                fill={inK ? `${C.violet}55` : inP ? `${C.gate}40` : C.panel}
+                stroke={inK ? C.violet : inP ? C.gate : C.line} strokeWidth="1" />
+              <text x={bx(i) + 14} y="172" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>{p}%</text>
+            </g>
+          );
+        })}
+        {/* top-k cut */}
+        <line x1={bx(kCut) - 8} y1="44" x2={bx(kCut) - 8} y2="160" stroke={C.violet} strokeWidth="1.4" strokeDasharray="4 3" />
+        <text x={bx(kCut) - 8} y="38" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.violet}>top-k = 4</text>
+        {/* top-p cut */}
+        <line x1={bx(pCut) - 8} y1="62" x2={bx(pCut) - 8} y2="160" stroke={C.gate} strokeWidth="1.4" strokeDasharray="4 3" />
+        <text x={bx(pCut) + 30} y="56" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.gate}>top-p = 0.9 (nucleus)</text>
+        <text x="270" y="198" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.faint}>top-k keeps a FIXED count; top-p keeps the smallest set summing to p — it widens on flat distributions, narrows on peaked ones</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Greedy vs beam search over a small expansion tree. */
+export function BeamSearch({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 220" width="100%" role="img" aria-label="Beam search keeps the top-B sequences">
+        {/* root */}
+        <circle cx="40" cy="110" r="9" fill={ROSE} />
+        <text x="40" y="92" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>start</text>
+        {/* level 1: 4 candidates, keep top-2 (beams) */}
+        {[
+          { y: 40, p: ".41", keep: true },
+          { y: 90, p: ".29", keep: true },
+          { y: 140, p: ".18", keep: false },
+          { y: 190, p: ".12", keep: false },
+        ].map((n, i) => (
+          <g key={`l1-${i}`}>
+            <line x1="49" y1="110" x2="171" y2={n.y} stroke={n.keep ? C.on : C.line} strokeWidth={n.keep ? 1.6 : 0.8} strokeDasharray={n.keep ? "0" : "3 2"} />
+            <circle cx="180" cy={n.y} r="8" fill={n.keep ? C.on : C.panel} stroke={n.keep ? C.on : C.line} strokeWidth="1.2" />
+            <text x="180" y={n.y - 12} textAnchor="middle" fontFamily={mono} fontSize="7" fill={n.keep ? C.on : C.faint}>{n.p}</text>
+          </g>
+        ))}
+        {/* level 2: expand the 2 kept beams, keep top-2 again */}
+        {[
+          { fy: 40, ty: 30, keep: true }, { fy: 40, ty: 70, keep: false },
+          { fy: 90, ty: 120, keep: true }, { fy: 90, ty: 165, keep: false },
+        ].map((e, i) => (
+          <g key={`l2-${i}`}>
+            <line x1="189" y1={e.fy} x2="351" y2={e.ty} stroke={e.keep ? C.on : C.line} strokeWidth={e.keep ? 1.6 : 0.8} strokeDasharray={e.keep ? "0" : "3 2"} />
+            <circle cx="360" cy={e.ty} r="8" fill={e.keep ? C.on : C.panel} stroke={e.keep ? C.on : C.line} strokeWidth="1.2" />
+          </g>
+        ))}
+        <text x="180" y="214" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.on}>beam width B = 2</text>
+        <text x="430" y="60" fontFamily={mono} fontSize="8" fill={C.muted}>keep the B highest-</text>
+        <text x="430" y="72" fontFamily={mono} fontSize="8" fill={C.muted}>probability *sequences*,</text>
+        <text x="430" y="84" fontFamily={mono} fontSize="8" fill={C.muted}>not just the next token</text>
+        <text x="430" y="150" fontFamily={mono} fontSize="8" fill={C.faint}>greedy = beam</text>
+        <text x="430" y="162" fontFamily={mono} fontSize="8" fill={C.faint}>with B = 1</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

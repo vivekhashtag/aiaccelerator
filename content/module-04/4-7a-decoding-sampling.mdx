@@ -1,0 +1,92 @@
+---
+title: "Decoding & Sampling Strategies"
+module: "04"
+moduleTitle: "Generative AI & LLM Fundamentals"
+lesson: "4.7a"
+slug: "4-7a-decoding-sampling"
+summary: "The step every LLM takes that nothing else in the module covers — turning the model's per-step probability distribution into an actual token. Greedy and beam search, temperature, top-k and top-p (nucleus) truncation, repetition penalties, and the practical recipes: why factual answers want low temperature and creative writing wants nucleus sampling — all without touching a single weight."
+prerequisites: ["4.4 Transformer Architecture & Attention"]
+---
+
+## From Logits to a Token
+
+A trained LLM does **not** output text. At every step it outputs a vector of **logits** — one raw score per vocabulary token — which a softmax turns into a probability distribution over ~50,000–150,000 possible next tokens. **Decoding** (a.k.a. the sampling strategy) is the rule that turns that distribution into the one token you actually emit, then appends it and repeats.
+
+<DecodingPipeline caption="The model produces a distribution; the decoder reshapes and samples from it. Every knob here — temperature, top-k, top-p, penalties — is applied at inference time and changes nothing about the weights. The same checkpoint can sound robotic or wildly creative depending purely on these settings." />
+
+<Callout type="insight" title="Decoding is free, weight-independent control">
+
+This is the cheapest, fastest lever you have over model behaviour — no fine-tuning, no data, no GPU-hours. Get it wrong and a perfectly good model produces repetitive loops or incoherent word salad; get it right and the *same* model is fluent and on-task. Most "the model is bad" complaints in practice are really "the decoding settings are wrong."
+
+</Callout>
+
+---
+
+## Deterministic Decoding: Greedy & Beam
+
+The simplest rule is **greedy decoding**: take the single highest-probability token (`argmax`) at every step. It's deterministic and fast, but **myopic** — by always grabbing the locally best token it misses higher-probability *sequences*, and it tends to fall into bland, repetitive loops ("the the the").
+
+**Beam search** fixes the myopia by keeping the **B most probable partial sequences** ("beams") at each step instead of one, expanding all of them and pruning back to the top B:
+
+<BeamSearch caption="Beam search tracks the top-B whole-sequence probabilities, not just the next token — so it can pass through a lower-probability token now to reach a higher-probability sentence later. Greedy decoding is exactly beam search with B = 1." />
+
+<Callout type="pitfall" title="Beam search is great for closed tasks, bad for open ones">
+
+Beam search shines on **closed-ended** generation with a "correct" answer — translation, summarisation, structured extraction — where you want the single most-likely output. But on **open-ended** generation (chat, storytelling) it produces dull, generic, often repetitive text: the highest-probability sequence is the *blandest* one, and humans don't actually speak in maximum-likelihood sentences. That's the **"beam search curse,"** and it's why open-ended generation uses *sampling* instead.
+
+</Callout>
+
+---
+
+## Temperature: the Randomness Dial
+
+Sampling means drawing a token *randomly* from the distribution rather than always taking the top one. **Temperature** `T` controls how that distribution is shaped, by scaling the logits before the softmax:
+
+<Formula label="Temperature scaling" caption="T < 1 sharpens toward the top tokens; T > 1 flattens toward uniform; T → 0 becomes greedy.">softmax(zᵢ / T) — divide every logit by T, then normalise</Formula>
+
+<TemperatureEffect caption="Low T concentrates probability on the few top tokens (safe, repetitive); T = 1 uses the model's own learned odds; high T flattens the distribution so unlikely tokens get a real chance (creative, but risks incoherence). Temperature is the single most-used generation knob." />
+
+A useful intuition: temperature doesn't add knowledge, it only redistributes the model's existing uncertainty. At `T = 0` you always get the same answer; at `T = 1.2` you get variety at the cost of more mistakes.
+
+---
+
+## Truncation: Top-k and Top-p (Nucleus)
+
+Pure temperature sampling has a flaw: even after flattening, the long tail of *thousands* of garbage tokens still holds a little probability mass, and occasionally one gets sampled — producing a jarring non-sequitur. **Truncation** fixes this by zeroing out the tail before sampling:
+
+- **Top-k** keeps only the `k` highest-probability tokens (e.g. `k = 40`) and renormalises. Simple, but `k` is a *fixed count* — too many choices when the model is confident, too few when it's genuinely uncertain.
+- **Top-p (nucleus)** keeps the smallest set of tokens whose probabilities **sum to ≥ p** (e.g. `p = 0.9`). The cutoff **adapts** to the distribution's shape: narrow when one token dominates, wide when the model is torn.
+
+<TopKTopP caption="Top-k draws a vertical line at a fixed rank; top-p draws it wherever the cumulative mass crosses p, so the kept set shrinks on peaked distributions and grows on flat ones. Nucleus sampling is the modern default; the newer min-p keeps tokens above a fraction of the top token's probability." />
+
+In practice top-p (often combined with a moderate temperature) is the default for open-ended generation. They compose: temperature reshapes, then top-k/top-p trims the tail, then you sample from what remains.
+
+---
+
+## Repetition Control & Practical Recipes
+
+Even with good sampling, models loop. Three penalties counter it: a **repetition penalty** down-weights tokens already generated; **frequency/presence penalties** (the OpenAI-style knobs) scale that by how often a token appeared; and **no-repeat-n-gram** hard-bans repeating any n-gram. Use them sparingly — too strong and the model avoids necessary words (it can't say "the" anymore).
+
+<StatGrid items={[
+  { value: "Factual / code", label: "T 0–0.3, or greedy", sub: "determinism > variety" },
+  { value: "Balanced chat", label: "T 0.7, top-p 0.9", sub: "the common default" },
+  { value: "Creative writing", label: "T 0.9–1.1, top-p 0.95", sub: "+ small repetition penalty" }
+]} caption="Decoding settings are task-dependent, not model-dependent. Reproducible evals and code generation pin the temperature to ~0; brainstorming and fiction open it up. There is no single 'best' setting — only the right one for the job." />
+
+<Callout type="key" title="Why this matters downstream">
+
+Decoding interacts with everything ahead. **Structured / JSON output** (next lessons) often forces near-greedy decoding plus a grammar constraint, so the syntax can't drift. **Self-consistency** prompting deliberately raises the temperature to draw *diverse* reasoning paths, then votes. And every **inference runtime** (Module 7) implements these samplers in its hot loop — `temperature`, `top_p`, `top_k`, and the penalties are the API surface you'll tune in production. Knowing what each knob does is the difference between guessing and engineering.
+
+</Callout>
+
+---
+
+## Recap
+
+- An LLM emits **logits → a probability distribution** each step; **decoding** turns that into a token, and it changes **nothing about the weights** — it's free, fast control.
+- **Greedy** (argmax) and **beam search** (top-B sequences) are deterministic and best for **closed-ended** tasks; on open-ended generation beam search goes bland (the "beam search curse") → use sampling.
+- **Temperature** scales logits to reshape the distribution: low = sharp/safe, high = flat/creative, `T → 0` = greedy.
+- **Top-k** keeps a fixed count of tokens; **top-p (nucleus)** keeps an adaptive set summing to `p` — the modern default — and they compose with temperature and **repetition penalties**.
+- Settings are **task-dependent**: ~0 temperature for facts/code, `T ≈ 0.7 + top-p 0.9` for chat, hotter for creativity. These same knobs reappear in structured output, self-consistency, and every inference runtime.
+
+Next: giving the model knowledge it was never trained on — **Retrieval-Augmented Generation** and the data engineering behind it.

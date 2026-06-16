@@ -147,6 +147,11 @@ import {
   MoELayer,
   ExpertLoadBalancing,
   SparseVsDenseParams,
+  // 4.7a Decoding & sampling
+  DecodingPipeline,
+  TemperatureEffect,
+  TopKTopP,
+  BeamSearch,
   // Module 5 — Inference Systems Fundamentals
   // 5.1 Types of inference
   InferenceParadigms,
@@ -298,6 +303,10 @@ const components = {
   MoELayer,
   ExpertLoadBalancing,
   SparseVsDenseParams,
+  DecodingPipeline,
+  TemperatureEffect,
+  TopKTopP,
+  BeamSearch,
   // Module 5
   InferenceParadigms,
   StreamingTTFT,

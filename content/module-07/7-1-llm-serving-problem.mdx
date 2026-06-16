@@ -24,7 +24,14 @@ for request in incoming_requests:        # 100 users queued up
 # between requests, and every request's context is handled in isolation.
 ```
 
-This is unusable: serial requests, an idle GPU between them, and wasted memory. The frameworks in this module — **vLLM, llama.cpp, Ollama, TGI** — exist to fix exactly this. To understand *how*, we first have to understand *why* LLM serving is uniquely hard.
+**What goes wrong, step by step:**
+
+1. The `for` loop handles **one request at a time** — request 2 can't begin until request 1 has finished generating all 512 tokens.
+2. While that one request decodes (one token per pass), the GPU is **mostly idle** — it has capacity for many more requests but does nothing with it.
+3. Each `generate()` call treats its prompt **in isolation**, so any shared context (a common system prompt) is recomputed from scratch every time.
+4. The result: with 100 users, the last one waits `100 × inference_time` — **minutes**.
+
+The frameworks in this module — **vLLM, llama.cpp, Ollama, TGI** — exist to fix exactly this. To understand *how*, we first have to understand *why* LLM serving is uniquely hard.
 
 ---
 
@@ -82,7 +89,13 @@ for ctx in (4096, 8192, 131072):
 # 131072 tokens ->  17.18 GB  <- one request fills an entire A100!
 ```
 
-At 128K context, the KV cache for **one** request fills an entire A100 — which is exactly why long-context serving needs the KV-cache INT8 quantization from Module 6 and the paging system we meet in the next lesson.
+**Reading the calculator, step by step:**
+
+1. `kv_cache_bytes` just plugs the dimensions into the formula above — the leading `2` counts one tensor for **keys** and one for **values**.
+2. For a **single token** it returns 131,072 bytes = **128 KB** — so every token you generate permanently adds 128 KB to VRAM until the request finishes.
+3. Multiplying by context length: 4K tokens → **0.5 GB**, 8K → **1 GB**, but **128K → 17 GB** — which by itself exceeds what's left on an A100 after the 16 GB of weights.
+
+The takeaway: KV-cache memory grows **linearly with context length** and quickly dominates the GPU. At 128K context the cache for **one** request fills an entire A100 — exactly why long-context serving needs the KV-cache INT8 quantization from Module 6 and the paging system we meet next.
 
 ---
 

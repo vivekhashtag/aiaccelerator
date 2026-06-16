@@ -1,0 +1,109 @@
+---
+title: "FPGA in Practice: Patterns, Economics & Setup"
+module: "08"
+moduleTitle: "Hardware Acceleration: FPGA & Edge NPUs"
+lesson: "8.7"
+slug: "8-07-fpga-in-practice"
+summary: "Tying the FPGA half together. The streaming-pipeline pattern that keeps all data on-chip, design-space exploration with a real resource-budget calculator, why FPGA latency is exactly calculable, energy-per-inference across the whole hardware landscape, the FPGA→ASIC path that birthed the TPU, and a practical PYNQ-Z2 setup checklist."
+prerequisites: ["8.5 Implementing a Neural Network on PYNQ-Z2"]
+---
+
+## The Streaming Pipeline Pattern
+
+The most efficient FPGA AI architecture keeps **all intermediate data on-chip** — data flows from one layer to the next through BRAM/FIFOs and never touches external DRAM until the final result:
+
+<StreamingPipeline caption="A camera or DMA streams pixels in; each layer's output feeds the next entirely within on-chip BRAM; only the final classification goes back out via DMA. Reading from BRAM costs ~5 ns (one clock); reading from DRAM costs 10–100 ns and far more energy — so staying on-chip is the core FPGA efficiency principle." />
+
+---
+
+## Design-Space Exploration
+
+For a given FPGA and model, you trade off **unroll factor** (more parallel MACs ↔ more DSPs), **quantization** (binary/INT4/INT8 ↔ accuracy), and **weight storage** (on-chip BRAM ≤630 KB ↔ off-chip DRAM). Before committing to hours of synthesis, you estimate whether a design fits:
+
+```python
+def estimate_fpga_resources(model):
+    TOTAL_DSPS, TOTAL_BRAMS = 220, 140          # PYNQ-Z2 budget (140 × 36 Kb = 630 KB)
+    dsps, brams = 0, 0
+    for layer in model["layers"]:
+        if layer["type"] == "conv":
+            macs_per_dsp = 16 // layer.get("precision", 8)   # 2 INT8, 4 INT4 per DSP
+            dsps += layer.get("unroll", 1) // macs_per_dsp
+            wbytes = layer["c_in"] * layer["c_out"] * layer["kernel"]**2 * layer.get("precision", 8) // 8
+            brams += wbytes / (36 * 1024 / 8)
+        elif layer["type"] == "fc":
+            wbytes = layer["n_in"] * layer["n_out"] * layer.get("precision", 8) // 8
+            brams += wbytes / (36 * 1024 / 8)
+    fits = dsps <= TOTAL_DSPS * 0.8 and brams <= TOTAL_BRAMS * 0.8
+    print(f"DSPs {dsps:.0f}/{TOTAL_DSPS}  BRAMs {brams:.0f}/{TOTAL_BRAMS}  fits={fits}")
+    return fits
+```
+
+**Step by step:**
+
+1. For each conv layer, `macs_per_dsp` encodes the precision packing from 8.3 (2 INT8 / 4 INT4 per DSP), so the `unroll` factor divided by it gives the DSPs that layer needs.
+2. Weight bytes per layer (channels × kernel² × bits) are converted to BRAM blocks (each holds 36 Kbit).
+3. The design is declared to **fit** only if it stays under **80%** of both budgets — you leave headroom for routing and control logic, or place-and-route fails.
+4. You run this *before* synthesis: it turns an hours-long "did it fit?" into a one-second check.
+
+<Callout type="key" title="FPGA latency is exact, not estimated">
+
+Because the pipeline is deterministic, you can compute latency precisely: `total = Σ(pipeline_stages × clock_period) + DMA_transfer`. A small MLP on the PYNQ-Z2 at 100 MHz (10 ns/cycle) works out to ~11 µs total, with throughput set by the slowest stage (~126k img/s) — and these are **exact** numbers, not probabilistic ones. That predictability is what sets FPGA apart from CPU/GPU, where latency depends on the OS scheduler, cache state, and thermal throttling.
+
+</Callout>
+
+---
+
+## Where FPGA Sits: Energy Per Inference
+
+Zooming out to the full hardware landscape, energy-per-inference places the FPGA precisely:
+
+<EnergyPerInference caption="µJ per MNIST inference (log scale): a laptop CPU burns ~4.5 µJ, a Jetson ~0.15, a PYNQ-Z2 FPGA ~0.02 (7× better than the Jetson), and a custom ASIC ~0.001. The FPGA is the edge sweet spot — far better than mobile GPUs, short of dedicated silicon." />
+
+---
+
+## From FPGA to ASIC
+
+The FPGA is often the **last step before custom silicon**. The RTL you validate on a PYNQ-Z2 is the same RTL that becomes an ASIC — trading flexibility for orders-of-magnitude better power and speed at volume:
+
+<FpgaToAsic caption="ASICs are 100–1000× lower power and 3–10× faster than FPGAs, at cents-per-chip in the millions — but cost millions in masks and 1–3 years to tape out. The FPGA proves the architecture first. Google's TPU, Microsoft Brainwave, and Apple's Neural Engine were all validated on FPGAs before fabrication." />
+
+<Callout type="insight" title="The thread back to Module 1 — and forward to NPUs">
+
+This closes a loop: in Module 1 you built a MAC unit and a systolic array at the gate level; here you've put one on real reconfigurable silicon and measured it; and the ASIC step is how that exact design becomes a shipped chip. **The productized NPUs in the microcontrollers ahead are precisely that endpoint** — fixed MAC engines hardened into silicon — which is why understanding the FPGA makes them click instantly.
+
+</Callout>
+
+---
+
+## Practical PYNQ-Z2 Setup
+
+To actually run any of this, the board setup is short: flash the **PYNQ image** (pynq.io) to a 16 GB+ microSD with balenaEtcher, set the boot jumper to SD, connect Ethernet + power, and open the on-board Jupyter at `http://192.168.2.99` (login `xilinx`/`xilinx`). A first "hello world" confirms the fabric works:
+
+```python
+from pynq.overlays.base import BaseOverlay
+import time
+
+base = BaseOverlay("base.bit")     # pre-installed overlay with DMA + GPIO
+for _ in range(5):                  # blink an on-board LED
+    base.leds[0].on();  time.sleep(0.1)
+    base.leds[0].off(); time.sleep(0.1)
+print("Your FPGA is working correctly.")
+```
+
+**Step by step:**
+
+1. `BaseOverlay("base.bit")` loads the pre-built base design (DMA + GPIO + LEDs) that ships on the SD card — no synthesis needed for a first test.
+2. `base.leds[0]` is a GPIO-mapped LED; toggling it on/off blinks a physical light on the board — proof that Python on the ARM is really driving the fabric.
+3. From here you load your own FINN or Vitis-AI overlay (Lessons 8.5–8.6) exactly the same way. (The FINN *compiler* itself runs on your laptop, via Docker `xilinx/finn`, and generates the bitstream you copy to the board.)
+
+---
+
+## Recap
+
+- The **streaming pipeline** keeps all intermediate data **on-chip** (BRAM ~5 ns) and off DRAM (~10–100 ns) — the central FPGA efficiency pattern.
+- **Design-space exploration** trades unroll × quantization × storage; a quick **resource estimator** checks the 80%-of-budget fit before an hours-long synthesis.
+- FPGA **latency is exact** (`Σ stages × clock + DMA`), unlike probabilistic CPU/GPU timing.
+- On **energy per inference**, the FPGA is the edge sweet spot — better than mobile GPUs, short of ASICs — and it's the **prototype step before ASIC** (TPU, Brainwave, Neural Engine all started on FPGAs).
+- **PYNQ-Z2 setup** is flash-boot-connect-Jupyter; a base-overlay LED blink confirms the fabric.
+
+That completes the FPGA half of the module. Next we descend to the smallest end of the hardware ramp — **edge AI microcontrollers and TinyML**, where NPUs run in milliwatts.

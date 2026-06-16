@@ -259,6 +259,10 @@ import {
   // 8.6 Vitis AI & DPU
   FinnVsVitis,
   DpuEngine,
+  // 8.7 FPGA in practice
+  StreamingPipeline,
+  EnergyPerInference,
+  FpgaToAsic,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -468,6 +472,9 @@ const components = {
   StreamingConv,
   FinnVsVitis,
   DpuEngine,
+  StreamingPipeline,
+  EnergyPerInference,
+  FpgaToAsic,
 };
 
 export async function renderMDX(source: string) {

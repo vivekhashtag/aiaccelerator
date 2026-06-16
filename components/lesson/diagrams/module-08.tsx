@@ -496,3 +496,98 @@ export function DpuEngine({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   8.7 — FPGA in Practice
+   ════════════════════════════════════════════════════════════ */
+
+/* Streaming pipeline: keep intermediate data on-chip, never DRAM. */
+export function StreamingPipeline({ caption }: { caption?: string }) {
+  const stages = ["DMA in", "norm", "Conv1+BN+ReLU", "MaxPool", "Conv2", "GAP", "FC+Softmax", "DMA out"];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 160" width="100%" role="img" aria-label="On-chip streaming pipeline">
+        <rect x="14" y="60" width="532" height="40" rx="8" fill={`${ORANGE}08`} stroke={ORANGE} strokeWidth="1.2" strokeDasharray="5 3" />
+        <text x="280" y="52" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={ORANGE}>everything inside stays in on-chip BRAM (~5 ns) — never round-trips to DRAM (~10–100 ns)</text>
+        {stages.map((s, i) => {
+          const x = 22 + i * 66;
+          const edge = i === 0 || i === 7;
+          return (
+            <g key={`sp${i}`}>
+              <rect x={x} y="68" width="58" height="24" rx="4" fill={edge ? `${C.blue}16` : `${C.on}16`} stroke={edge ? C.blue : C.on} strokeWidth="1" />
+              <foreignObject x={x + 2} y="70" width="54" height="20">
+                <div style={{ fontFamily: mono, fontSize: "6.5px", color: edge ? C.blue : C.on, textAlign: "center", lineHeight: 1.1, fontWeight: 700 }}>{s}</div>
+              </foreignObject>
+              {i < 7 && <line x1={x + 58} y1="80" x2={x + 66} y2="80" stroke={C.faint} strokeWidth="1" />}
+            </g>
+          );
+        })}
+        <text x="280" y="128" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.faint}>DRAM access is slow + power-hungry; on-chip is one clock — the core FPGA efficiency principle</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Energy per inference across the hardware landscape (log scale). */
+export function EnergyPerInference({ caption }: { caption?: string }) {
+  // µJ per MNIST inference; log10 mapping
+  const devs = [
+    { t: "Laptop CPU", uj: 4.5, c: C.off },
+    { t: "Raspberry Pi 4", uj: 2.5, c: C.off },
+    { t: "Jetson Orin", uj: 0.15, c: C.on },
+    { t: "STM32 MCU", uj: 0.1, c: C.violet },
+    { t: "PYNQ-Z2 FPGA", uj: 0.02, c: ORANGE },
+    { t: "Custom ASIC", uj: 0.001, c: C.blue },
+  ];
+  // log scale: map 0.001..4.5 → x
+  const lx = (uj: number) => 150 + (Math.log10(uj) - Math.log10(0.001)) / (Math.log10(4.5) - Math.log10(0.001)) * 350;
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 190" width="100%" role="img" aria-label="Energy per inference by device">
+        <text x="280" y="20" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>energy per MNIST inference — µJ, log scale (lower = better)</text>
+        {devs.map((d, i) => {
+          const y = 32 + i * 24;
+          return (
+            <g key={`en${i}`}>
+              <text x="20" y={y + 13} fontFamily={mono} fontSize="8" fill={C.text}>{d.t}</text>
+              <line x1="150" y1={y + 9} x2={lx(d.uj)} y2={y + 9} stroke={d.c} strokeWidth="6" strokeLinecap="round" />
+              <text x={lx(d.uj) + 8} y={y + 13} fontFamily={mono} fontSize="7.5" fontWeight="700" fill={d.c}>{d.uj} µJ</text>
+            </g>
+          );
+        })}
+        <text x="280" y="184" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.faint}>FPGA is the edge sweet spot — better than mobile GPUs, short of custom ASICs</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* FPGA prototype → ASIC production. */
+export function FpgaToAsic({ caption }: { caption?: string }) {
+  const rows = [
+    { k: "cost", f: "$100–$10k / board", a: "$1M–$100M masks, ¢/chip at volume" },
+    { k: "power", f: "2–10 W", a: "0.001–0.1 W (100–1000× better)" },
+    { k: "speed", f: "100–500 MHz", a: "1–5 GHz (3–10× better)" },
+    { k: "volume", f: "100s–1000s", a: "millions–billions" },
+    { k: "time", f: "days–months", a: "1–3 years" },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 200" width="100%" role="img" aria-label="FPGA prototype to ASIC production">
+        <text x="270" y="22" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={ORANGE}>FPGA (prototype) → ASIC (production) — same RTL</text>
+        <text x="245" y="44" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={ORANGE}>FPGA</text>
+        <text x="450" y="44" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.blue}>ASIC</text>
+        {rows.map((r, i) => {
+          const y = 56 + i * 24;
+          return (
+            <g key={`fa${i}`}>
+              <text x="20" y={y + 13} fontFamily={mono} fontSize="8" fontWeight="700" fill={C.muted}>{r.k}</text>
+              <text x="100" y={y + 13} fontFamily={mono} fontSize="7.5" fill={ORANGE}>{r.f}</text>
+              <text x="330" y={y + 13} fontFamily={mono} fontSize="7.5" fill={C.blue}>{r.a}</text>
+            </g>
+          );
+        })}
+        <text x="270" y="192" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>validated on FPGA, then taped out: Google TPU, MS Brainwave, Apple Neural Engine</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

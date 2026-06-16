@@ -1,0 +1,95 @@
+---
+title: "Pruning & Sparsity"
+module: "06"
+moduleTitle: "Model Optimization & Efficient Inference"
+lesson: "6.2"
+slug: "6-2-pruning-sparsity"
+summary: "Where quantization reduces precision, pruning removes parameters outright. Why unstructured (scattered-zero) pruning looks great on paper but doesn't speed up dense GPU kernels, the one hardware exception (NVIDIA 2:4), structured pruning of whole channels/heads/layers that actually runs faster, gradual magnitude pruning during training, and why sparsity + quantization multiply."
+prerequisites: ["6.1 Quantization"]
+---
+
+## Two Axes of Compression
+
+Quantization (6.1) shrinks each weight; **pruning** removes weights entirely — zeroing the parameters that contribute least to the output. The lever is intuitive (a 50% sparse model has half the weights), but the payoff depends entirely on *which* weights you remove and whether your hardware can skip them. That subtlety is the whole lesson.
+
+---
+
+## Unstructured Pruning — and Why It Disappoints
+
+The simplest method is **magnitude pruning**: zero out the smallest-absolute-value weights, anywhere they appear. It compresses well and barely dents accuracy — networks are heavily **overparameterised**.
+
+<Callout type="insight" title="The lottery ticket hypothesis">
+
+Frankle & Carbin (2019) showed that inside a large trained network hides a sparse **"winning ticket"** subnetwork that, retrained *from its original initialisation*, matches the full network's accuracy. Found by iterative magnitude pruning (train → prune → reset survivors to init → retrain), it's strong evidence that most of a network's capacity is redundant — the justification for pruning at all.
+
+</Callout>
+
+But there's a catch that trips up most newcomers:
+
+<UnstructuredVsStructured caption="Scattered zeros (left) don't help on dense hardware: cuBLAS and Tensor Cores operate on dense rectangular blocks, so a randomly-sparse matrix occupies the same VRAM and runs the same multiply-add cycles — 0 × x = 0 is still computed and accumulated. Removing whole units (right) yields a genuinely smaller dense matrix that's faster on any hardware." />
+
+<Callout type="pitfall" title="50% unstructured sparsity ≠ 2× faster">
+
+This is the single most common pruning mistake. A weight set to zero in a random position still gets loaded and multiplied — the GPU has no efficient way to skip arbitrary zeros. Unstructured pruning helps **model size on disk** (zeros compress well) but, on its own, gives **no inference speedup** on GPUs. To get speed you need *structure*.
+
+</Callout>
+
+---
+
+## The Hardware Exception: NVIDIA 2:4
+
+Ampere (A100) and newer GPUs accelerate exactly one fine-grained pattern: **2:4 structured sparsity** — within every contiguous block of 4 weights, exactly 2 are zero. A small index tells the sparse Tensor Core which 2 to keep:
+
+<Sparsity24 caption="2:4 sparsity does 2 MACs instead of 4 per group plus a tiny index — a real 2× throughput at exactly 50% sparsity. It must be imposed during training (the network learns which 2-of-4 to keep), not bolted on afterward. The A100's sparse INT8 path hits 1,248 TOPS vs 624 dense." />
+
+---
+
+## Structured Pruning — Real Speedups
+
+To get speedups on *ordinary* hardware, remove whole structural units so the result is a smaller **dense** model:
+
+<StructuredPruningUnits caption="Channel pruning drops the conv filters with the smallest L1 norm; head pruning removes the attention heads doing the least selective work (low gradient×activation, or high attention entropy); layer dropping removes whole transformer layers (early/late ones contribute least). Each shrinks the model into a smaller dense one." />
+
+<Callout type="why" title="Which heads, which channels?">
+
+For **channels**, the L1 norm of each filter's weights is a cheap, effective importance score. For **attention heads**, three signals identify deadweight: *gradient × activation* (first-order contribution to the loss), *attention entropy* (a near-uniform head isn't selecting anything), and *Taylor-expansion proxy* (the head whose removal least changes the loss). For **layers**, the middle layers of a deep transformer matter most, so dropping alternate early/late layers is the aggressive option — exactly what DistilBERT does (next lesson).
+
+</Callout>
+
+---
+
+## Gradual Magnitude Pruning
+
+In practice the most effective approach isn't a single post-hoc cut — it's **gradual magnitude pruning (GMP)**: ramp the sparsity up *during* training so the model continually adapts to its shrinking weight set:
+
+<GradualPruningSchedule caption="Sparsity rises on a cubic schedule (slow start, fast middle, slow finish) — e.g. 0% → 70% over 50 epochs. After each prune step the model retrains and recovers, so the final sparse network is far healthier than one pruned all at once." />
+
+---
+
+## Sparsity × Quantization = Multiplicative
+
+Pruning and quantization attack different things (count vs precision), so they **stack**:
+
+<StatGrid items={[
+  { value: "INT8 alone", label: "4× memory", sub: "precision 32→8 bit" },
+  { value: "2:4 sparse alone", label: "2× throughput", sub: "Ampere sparse cores" },
+  { value: "INT8 + 2:4", label: "≈8× vs FP32 dense", sub: "the combination" }
+]} caption="On Ampere, prune to 2:4 then quantize to INT8 for ~8× over FP32 dense — the canonical 'maximum compression' recipe. The same logic extends to INT4 + structured pruning for even smaller edge models." />
+
+<Callout type="key" title="The honest summary">
+
+**Structured pruning** (channel/head/layer) gives real, portable speedups at a 0.5–2% accuracy cost and is the version that matters for most deployments. **Unstructured pruning** only pays off with NVIDIA's 2:4 hardware support — otherwise it's a model-size win, not a latency win. And **gradual** beats post-hoc every time. Always pair pruning with the benchmarking protocol from Module 5: measure the *actual* speedup, not the theoretical one.
+
+</Callout>
+
+---
+
+## Recap
+
+- **Pruning removes parameters; quantization reduces their precision** — complementary axes that multiply.
+- **Unstructured** magnitude pruning compresses well (lottery-ticket overparameterisation) but gives **no GPU speedup** — dense kernels still multiply the scattered zeros.
+- The exception is **NVIDIA 2:4** structured sparsity (2 of every 4 weights), a real 2× on Ampere+ that must be **trained in**.
+- **Structured** pruning of whole **channels, heads, or layers** yields a smaller *dense* model with genuine, portable speedups (0.5–2% accuracy cost) — DistilBERT-style layer dropping is the aggressive end.
+- **Gradual magnitude pruning** (cubic schedule during training) beats one-shot pruning; **sparsity + quantization** combine to ~8× on Ampere.
+
+Next: building a small model that mimics a large one from scratch — **knowledge distillation**.

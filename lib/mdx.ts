@@ -190,6 +190,11 @@ import {
   QuantGranularity,
   PTQvsQAT,
   SmoothQuantShift,
+  // 6.2 Pruning & sparsity
+  UnstructuredVsStructured,
+  Sparsity24,
+  StructuredPruningUnits,
+  GradualPruningSchedule,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -346,6 +351,10 @@ const components = {
   QuantGranularity,
   PTQvsQAT,
   SmoothQuantShift,
+  UnstructuredVsStructured,
+  Sparsity24,
+  StructuredPruningUnits,
+  GradualPruningSchedule,
 };
 
 export async function renderMDX(source: string) {

@@ -138,3 +138,134 @@ export function SmoothQuantShift({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   6.2 — Pruning & Sparsity
+   ════════════════════════════════════════════════════════════ */
+
+/* Unstructured (scattered zeros) vs structured (whole units removed). */
+export function UnstructuredVsStructured({ caption }: { caption?: string }) {
+  const unstr = [
+    [1, 0, 1, 0, 1], [0, 1, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 1, 0, 1],
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 210" width="100%" role="img" aria-label="Unstructured versus structured pruning">
+        <text x="130" y="26" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.hole}>unstructured — random zeros</text>
+        {unstr.map((row, r) =>
+          row.map((v, c) => (
+            <rect key={`u-${r}-${c}`} x={56 + c * 30} y={40 + r * 30} width="28" height="28" rx="2"
+              fill={v ? `${C.blue}33` : C.panel} stroke={v ? C.blue : C.line} strokeWidth="0.9" />
+          ))
+        )}
+        <text x="130" y="180" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>same VRAM, same MAC cycles —</text>
+        <text x="130" y="192" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>dense GPU kernels multiply the 0s too</text>
+        <line x1="280" y1="30" x2="280" y2="170" stroke={C.line} strokeWidth="1" strokeDasharray="4 3" />
+        <text x="420" y="26" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.on}>structured — whole channel out</text>
+        {[0, 1, 2, 3].map((r) =>
+          [0, 1, 2, 3, 4].map((c) => {
+            const removed = c === 1 || c === 3;
+            return (
+              <rect key={`s-${r}-${c}`} x={346 + c * 30} y={40 + r * 30} width="28" height="28" rx="2"
+                fill={removed ? C.panel : `${C.on}33`} stroke={removed ? C.line : C.on} strokeWidth="0.9"
+                strokeDasharray={removed ? "2 2" : "0"} opacity={removed ? 0.5 : 1} />
+            );
+          })
+        )}
+        <text x="420" y="180" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>smaller DENSE matrix —</text>
+        <text x="420" y="192" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>real speedup on any hardware</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* NVIDIA 2:4 structured sparsity. */
+export function Sparsity24({ caption }: { caption?: string }) {
+  const blocks = [
+    [1, 0, 1, 0], [0, 1, 1, 0],
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={520}>
+      <svg viewBox="0 0 520 170" width="100%" role="img" aria-label="NVIDIA 2:4 structured sparsity">
+        <text x="260" y="26" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={LIME}>2:4 — keep exactly 2 of every 4 weights</text>
+        {blocks.map((blk, bi) =>
+          blk.map((v, i) => (
+            <g key={`b${bi}-${i}`}>
+              <rect x={70 + bi * 200 + i * 44} y="50" width="38" height="38" rx="4"
+                fill={v ? `${LIME}33` : C.panel} stroke={v ? LIME : C.line} strokeWidth="1.1"
+                strokeDasharray={v ? "0" : "2 2"} />
+              <text x={70 + bi * 200 + i * 44 + 19} y="73" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={v ? LIME : C.faint}>{v ? "w" : "0"}</text>
+            </g>
+          ))
+        )}
+        <text x="155" y="108" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>group of 4 → 2 kept + index</text>
+        <text x="355" y="108" textAnchor="middle" fontFamily={mono} fontSize="7.5" fill={C.muted}>group of 4 → 2 kept + index</text>
+        <text x="260" y="138" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.text}>2 MACs instead of 4 → 2× throughput at exactly 50% sparsity (Ampere+ sparse Tensor Cores)</text>
+        <text x="260" y="158" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>the one sparsity pattern hardware actually accelerates — must be trained in, not added after</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Structured pruning units: channel, head, layer. */
+export function StructuredPruningUnits({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 180" width="100%" role="img" aria-label="Structured pruning units: channels, heads, layers">
+        <text x="90" y="26" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={LIME}>channels (CNN)</text>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <rect key={`ch${i}`} x={30 + i * 26} y="40" width="20" height="60" rx="3"
+            fill={i === 1 || i === 4 ? C.panel : `${C.blue}33`} stroke={i === 1 || i === 4 ? C.line : C.blue} strokeWidth="1"
+            strokeDasharray={i === 1 || i === 4 ? "2 2" : "0"} opacity={i === 1 || i === 4 ? 0.5 : 1} />
+        ))}
+        <text x="90" y="116" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>drop low-L1-norm filters</text>
+        <text x="280" y="26" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={LIME}>attention heads</text>
+        {[0, 1, 2, 3].map((i) => (
+          <g key={`hd${i}`}>
+            <circle cx={228 + i * 35} cy="68" r="14"
+              fill={i === 2 ? C.panel : `${C.violet}33`} stroke={i === 2 ? C.line : C.violet} strokeWidth="1"
+              strokeDasharray={i === 2 ? "2 2" : "0"} opacity={i === 2 ? 0.5 : 1} />
+            <text x={228 + i * 35} y="72" textAnchor="middle" fontFamily={mono} fontSize="7" fill={i === 2 ? C.faint : C.violet}>h{i + 1}</text>
+          </g>
+        ))}
+        <text x="280" y="116" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>drop redundant heads</text>
+        <text x="470" y="26" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={LIME}>layers</text>
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <rect key={`ly${i}`} x="430" y={36 + i * 12} width="80" height="9" rx="2"
+            fill={i % 2 === 1 ? C.panel : `${C.on}33`} stroke={i % 2 === 1 ? C.line : C.on} strokeWidth="0.9"
+            strokeDasharray={i % 2 === 1 ? "2 2" : "0"} opacity={i % 2 === 1 ? 0.5 : 1} />
+        ))}
+        <text x="470" y="120" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>drop alternate layers</text>
+        <text x="280" y="160" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.faint}>all three remove whole units → a smaller dense model that runs fast everywhere (DistilBERT drops layers)</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Gradual magnitude pruning schedule. */
+export function GradualPruningSchedule({ caption }: { caption?: string }) {
+  const pts = [[0, 0], [10, 20], [20, 40], [30, 60], [40, 70], [50, 70]];
+  const px = (e: number) => 60 + e * 8.4;
+  const py = (s: number) => 160 - s * 1.7;
+  const path = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${px(p[0])} ${py(p[1])}`).join(" ");
+  return (
+    <DiagramFrame caption={caption} maxWidth={520}>
+      <svg viewBox="0 0 520 200" width="100%" role="img" aria-label="Gradual magnitude pruning schedule">
+        <line x1="60" y1="30" x2="60" y2="160" stroke={C.faint} strokeWidth="1.1" />
+        <line x1="60" y1="160" x2="480" y2="160" stroke={C.faint} strokeWidth="1.1" />
+        <text x="30" y="95" fontFamily={mono} fontSize="8" fill={C.muted} transform="rotate(-90 30 95)">sparsity %</text>
+        <text x="270" y="184" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.muted}>training epoch →</text>
+        <path d={path} fill="none" stroke={LIME} strokeWidth="2.4" />
+        {pts.slice(0, 5).map((p, i) => (
+          <g key={`gp${i}`}>
+            <circle cx={px(p[0])} cy={py(p[1])} r="3.5" fill={LIME} />
+            <text x={px(p[0])} y={py(p[1]) - 8} textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>{p[1]}%</text>
+          </g>
+        ))}
+        <text x="300" y="70" fontFamily={mono} fontSize="7.5" fill={C.faint}>prune a little → retrain →</text>
+        <text x="300" y="82" fontFamily={mono} fontSize="7.5" fill={C.faint}>model adapts → prune more</text>
+        <text x="270" y="198" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.faint}>cubic schedule beats one-shot pruning — the model recovers between each step</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

@@ -295,6 +295,16 @@ import {
   LangGraphAnatomy,
   ConditionalAgentGraph,
   HumanInLoopGate,
+  // 9.4 Multi-agent systems
+  MultiAgentPatterns,
+  SupervisorPattern,
+  CriticLoop,
+  // 9.5 n8n
+  N8nWorkflow,
+  N8nVsLangGraph,
+  // 9.6 Memory systems
+  MemoryTiers,
+  ContextCompression,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -530,6 +540,13 @@ const components = {
   LangGraphAnatomy,
   ConditionalAgentGraph,
   HumanInLoopGate,
+  MultiAgentPatterns,
+  SupervisorPattern,
+  CriticLoop,
+  N8nWorkflow,
+  N8nVsLangGraph,
+  MemoryTiers,
+  ContextCompression,
 };
 
 export async function renderMDX(source: string) {

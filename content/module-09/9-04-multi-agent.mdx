@@ -1,0 +1,165 @@
+---
+title: "Multi-Agent Systems"
+module: "09"
+moduleTitle: "Agentic AI Systems & Orchestration"
+lesson: "9.4"
+slug: "9-04-multi-agent"
+summary: "One agent does one thing at a time. Multi-agent systems add specialisation, parallelism, scale, and reliability by composing several agents. The three core topologies — supervisor (a router LLM), peer-to-peer handoff, and critic (review-and-revise) — built on the LangGraph graph model from 9.3."
+prerequisites: ["9.3 LangGraph: Stateful Agent Workflows"]
+---
+
+## Why Multiple Agents?
+
+A single agent handles one task at a time. Composing several unlocks four things:
+
+<StatGrid items={[
+  { value: "Specialisation", label: "right tool for the job", sub: "a researcher hands to a coder hands to a reviewer" },
+  { value: "Parallelism", label: "fan-out", sub: "10 agents on 10 topics vs 1 doing them in sequence" },
+  { value: "Scale", label: "beat context limits", sub: "split a 1,000-page doc across 100 agents, then synthesise" },
+  { value: "Reliability", label: "supervision", sub: "a supervisor detects a failed worker and reassigns" }
+]} caption="The four reasons to reach for multiple agents. Each also adds coordination cost — so use one agent until one of these forces your hand." />
+
+The three topologies you'll actually use:
+
+<MultiAgentPatterns caption="Supervisor: a central router LLM picks the next worker each turn. Peer-to-peer: agents hand control directly to each other. Critic: one agent reviews another's output and requests revisions. They compose — a supervisor system can contain a critic loop." />
+
+---
+
+## The Supervisor Pattern
+
+The most common architecture: one **supervisor** LLM decides which specialised **worker** acts next, and workers always report back to it.
+
+<SupervisorPattern caption="The supervisor reads the conversation and emits a routing decision ('next: research_agent'). The chosen worker runs, returns its result, and control loops back to the supervisor — which routes again or finishes." />
+
+```python
+import json
+from langchain_core.messages import SystemMessage, AIMessage
+from langgraph.graph import StateGraph, START, END
+
+SUPERVISOR_PROMPT = """You are a supervisor managing a team of agents.
+Workers:
+  - research_agent: searches the web and reads documents
+  - code_agent:     writes and tests Python
+  - write_agent:    formats and presents findings
+
+Given the conversation, decide who acts next.
+Respond ONLY with JSON: {"next": "<worker>", "instruction": "<what to do>"}
+When the task is complete: {"next": "FINISH", "instruction": ""}
+"""
+
+def supervisor(state: AgentState) -> dict:
+    decision = json.loads(
+        llm.invoke([SystemMessage(SUPERVISOR_PROMPT), *state["messages"]]).content
+    )
+    return {
+        "next":        decision["next"],
+        "instruction": decision["instruction"],
+        "messages":    [AIMessage(f"[supervisor] → {decision['next']}")],
+    }
+
+def route_to_worker(state: AgentState) -> str:
+    return END if state["next"] == "FINISH" else state["next"]
+
+# Build: supervisor fans out to workers; every worker returns to the supervisor
+g = StateGraph(AgentState)
+g.add_node("supervisor",     supervisor)
+g.add_node("research_agent", lambda s: {"messages": [AIMessage(research(s["instruction"]))]})
+g.add_node("code_agent",     lambda s: {"messages": [AIMessage(write_code(s["instruction"]))]})
+g.add_node("write_agent",    lambda s: {"messages": [AIMessage(format_out(s["instruction"]))]})
+
+g.add_edge(START, "supervisor")
+g.add_conditional_edges("supervisor", route_to_worker)
+for w in ["research_agent", "code_agent", "write_agent"]:
+    g.add_edge(w, "supervisor")          # always return to supervisor
+```
+
+**Step by step:**
+
+1. **The supervisor is just an LLM with a routing prompt.** It outputs structured JSON naming the next worker and an instruction — no special framework magic.
+2. **`route_to_worker`** is the conditional-edge routing function from 9.3: it returns a worker name (→ that node) or `END` when the supervisor says `FINISH`.
+3. **Every worker has an edge back to `supervisor`** (`g.add_edge(w, "supervisor")`). This is the defining shape — workers never talk to each other, only to the boss, which keeps control flow simple and auditable.
+4. **Each worker is itself an agent** (here simplified to a function). In practice each could be its own LangGraph — a graph of graphs.
+
+<Callout type="pitfall" title="The supervisor must be able to say FINISH">
+
+A supervisor with no termination route is failure mode 2 (infinite loops) waiting to happen — it keeps dispatching workers forever. Always give it an explicit `FINISH` option *and* cap the number of supervisor turns. Routing power and a stop condition ship together.
+
+</Callout>
+
+---
+
+## Peer-to-Peer (Handoffs)
+
+Sometimes a central router is overkill — agents can hand control **directly** to each other based on what they encounter:
+
+```python
+def triage_agent(state: AgentState) -> dict:
+    query = state["messages"][-1].content.lower()
+    if "code" in query or "implement" in query:
+        return {"next_agent": "code_agent", "reason": "coding task"}
+    if "search" in query or "find" in query:
+        return {"next_agent": "research_agent", "reason": "lookup task"}
+    return {"next_agent": "general_agent"}
+
+def code_agent_node(state: AgentState) -> dict:
+    if state.get("needs_research"):
+        # Hand off to research, asking to come back here afterwards
+        return {"next_agent": "research_agent", "return_to": "code_agent"}
+    # ... otherwise do the coding work ...
+    return {"next_agent": "triage_agent"}   # hand back when done
+```
+
+**Step by step:**
+
+1. **Each agent decides its own successor** by setting `next_agent` — there's no central supervisor mediating every hop.
+2. **`return_to`** enables a temporary handoff: the code agent asks research to do a lookup *and come back*, modelling a call/return rather than a one-way pass.
+3. **Use peer-to-peer when routing is naturally local** (an agent knows who should go next better than a central planner would); use supervisor when you want one auditable place that owns all routing decisions.
+
+---
+
+## The Critic Pattern
+
+A **critic** agent reviews another agent's output and sends it back for revision until it passes — the single highest-leverage reliability pattern in this lesson:
+
+<CriticLoop caption="The writer drafts; the critic scores it against explicit criteria and returns structured feedback; if not approved, the draft goes back for revision. The loop is bounded by a max revision count so it can't spin forever." />
+
+```python
+def critic_agent(state: AgentState) -> dict:
+    critique = json.loads(llm.invoke(f"""
+        Review this draft for accuracy, consistency, completeness, clarity.
+        Draft: {state['draft']}
+        Respond JSON: {{"approved": true/false, "issues": [...], "suggestions": "..."}}
+    """).content)
+    return {"approved": critique["approved"], "critique": critique}
+
+def route_after_critique(state: AgentState) -> str:
+    if state["approved"] or state.get("revision_count", 0) >= 3:
+        return "final_output"     # passed, or out of revisions
+    return "writer_agent"         # send back to revise
+
+g.add_conditional_edges("critic_agent", route_after_critique)
+```
+
+**Step by step:**
+
+1. **The critic returns structured feedback**, not prose — `approved` plus concrete `issues`. Structured output (lesson 9.7) is what lets the routing function act on it programmatically.
+2. **`route_after_critique`** stops on **either** approval **or** `revision_count >= 3`. The second condition is non-negotiable: a perfectionist critic that never approves would loop forever.
+3. **This is generate-then-verify**, the same idea as adversarial review in code: a second model checking the first catches errors the writer is blind to, at the cost of extra calls.
+
+<Callout type="insight" title="The patterns nest">
+
+These aren't exclusive. A production research system is often a **supervisor** routing to specialised workers, where the *write* worker internally runs a **critic loop**, and the *research* step **fans out** in parallel. Multi-agent design is composing these three primitives — supervisor, handoff, critic — not picking one.
+
+</Callout>
+
+---
+
+## Recap
+
+- Use multiple agents for **specialisation, parallelism, scale, and reliability** — but only once one of those forces it, since coordination has a cost.
+- **Supervisor:** a router LLM emits structured routing decisions; workers always report back; it must be able to say `FINISH` (and be turn-capped) to avoid infinite loops.
+- **Peer-to-peer:** agents hand control directly to each other (optionally with `return_to` for call/return) — best when routing is naturally local.
+- **Critic:** a reviewer scores another agent's output and loops it back for revision, **bounded by a max revision count** — the highest-leverage reliability pattern, and it relies on structured output.
+- The three patterns **compose** — real systems nest a critic inside a worker inside a supervisor.
+
+Next: the no-code counterpart for orchestration — **n8n**, visual workflow automation for AI.

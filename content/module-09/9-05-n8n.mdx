@@ -1,0 +1,130 @@
+---
+title: "n8n: Visual Workflow Automation for Agents"
+module: "09"
+moduleTitle: "Agentic AI Systems & Orchestration"
+lesson: "9.5"
+slug: "9-05-n8n"
+summary: "Where LangGraph is code-first, n8n is a visual, self-hostable workflow platform — Zapier for engineers, with native LLM nodes and 400+ integrations. We set it up, build an AI support workflow visually, drop into a JavaScript code node when logic gets custom, configure the built-in AI Agent (ReAct) node, and learn exactly when to pick n8n over LangGraph."
+prerequisites: ["9.4 Multi-Agent Systems"]
+---
+
+## What n8n Is and Why It Matters
+
+**n8n** is an open-source workflow automation platform — think Zapier, but self-hosted, code-friendly, and with native LLM nodes. For an AI engineer it provides a visual drag-and-drop builder, **400+ pre-built integrations** (Slack, Gmail, GitHub, Notion, databases, CRMs), JavaScript code nodes for custom logic, LLM nodes (Claude, GPT, Gemini, local Ollama), and webhook/schedule/event triggers — all runnable on your own infrastructure so data never leaves it.
+
+<Callout type="key" title="n8n is where LangGraph meets non-technical users">
+
+LangGraph (lesson 9.3) is developer-facing — you write Python. n8n is the *orchestration* layer a business analyst can edit without code. The two aren't rivals: many teams prototype and run integration-heavy flows in n8n, and call out to a LangGraph service for the hard reasoning. Use n8n for **plumbing and routing**, LangGraph for **deep reasoning**.
+
+</Callout>
+
+---
+
+## A Visual AI Workflow
+
+A workflow is a trigger feeding a chain of nodes. Here's a customer-support pipeline built entirely by dragging nodes:
+
+<N8nWorkflow caption="Webhook trigger → an LLM 'classify intent' node → a Switch that branches by category → a specialised bot per branch → an LLM 'quality check' node → send the reply, or escalate to a human in Slack. No Python — and the escalate branch is human-in-the-loop, built visually." />
+
+The same structure as a LangGraph (nodes + conditional edges), but expressed on a canvas. The Switch node is the conditional edge; the LLM nodes are agent nodes; the escalate branch is the human gate from 9.3.
+
+---
+
+## Setup
+
+n8n self-hosts in one Docker command:
+
+```bash
+docker run -it --rm \
+  --name n8n -p 5678:5678 \
+  -v ~/.n8n:/home/node/.n8n \
+  -e N8N_BASIC_AUTH_ACTIVE=true \
+  -e N8N_BASIC_AUTH_USER=admin \
+  -e N8N_BASIC_AUTH_PASSWORD=change-me \
+  n8nio/n8n
+# editor at http://localhost:5678  (n8n.io offers a managed free tier too)
+```
+
+**Step by step:**
+
+1. **`-p 5678:5678`** exposes the editor UI; **`-v ~/.n8n:…`** persists your workflows and credentials across container restarts (without it, everything is lost on exit).
+2. **`N8N_BASIC_AUTH_*`** puts the editor behind a login — the minimum before exposing it anywhere beyond localhost.
+3. **Self-hosting is the point for AI work**: prompts, customer data, and API keys stay on your infrastructure instead of a third-party cloud.
+
+---
+
+## The Code Node: When Visual Isn't Enough
+
+When a workflow needs logic no node provides, drop in a **Code node** (JavaScript) that reads the previous node's output and returns transformed items:
+
+```javascript
+// n8n Code node — runs inside the workflow.
+// $input.all() returns the items emitted by the previous node.
+const items = $input.all();
+
+const filtered = items
+  .filter(it => it.json.confidence_score > 0.8)         // keep high-confidence
+  .map(it => ({
+    json: {
+      title:        it.json.title,
+      url:          it.json.url,
+      summary:      it.json.summary.substring(0, 500),
+      score:        it.json.confidence_score,
+      processed_at: new Date().toISOString(),
+    },
+  }));
+
+if (filtered.length === 0) {
+  // Emit a signal so a downstream Switch can take a different branch
+  return [{ json: { status: "no_results", original_count: items.length } }];
+}
+return filtered;
+```
+
+**Step by step:**
+
+1. **`$input.all()`** is n8n's bridge to the previous node — every node passes an array of `{ json: {...} }` items, and your code transforms them.
+2. **Return shape matters:** you must return an array of `{ json: ... }` objects; the next node consumes exactly that. Here we filter to high-confidence results and reshape them.
+3. **The empty-results branch** returns a status object instead of failing — the same errors-as-data discipline from 9.2, so a downstream Switch can route to a fallback rather than crashing the run.
+
+---
+
+## The AI Agent Node
+
+n8n ships a first-class **AI Agent** node that implements a full ReAct loop (lesson 9.2) with configurable tools — no code required:
+
+```text
+AI Agent node:
+  Model:         Claude Opus / GPT / local Ollama
+  System prompt: "You are a support agent for Acme Corp…"
+  Memory:        Window Buffer Memory (last N messages)
+  Tools:
+    - HTTP Request    → query internal APIs
+    - Code Execution  → run a Python/JS snippet
+    - Vector Store    → retrieve from a RAG knowledge base
+    - Sub-workflow    → call any other n8n workflow as a tool
+```
+
+That "sub-workflow as a tool" line is the powerful part: any workflow you've built becomes a tool the agent can call — composition without code.
+
+<N8nVsLangGraph caption="The decision rule. n8n wins when the work is integration-heavy, edited by non-technical teammates, or needs visual monitoring. LangGraph wins when you need fine-grained control of the reasoning loop, custom retries/parallelism/state, or programmatic per-node testing." />
+
+**Choose n8n when** the workflow involves many SaaS integrations, non-technical teammates must modify it, you want visual monitoring/debugging, or it's mostly orchestration (routing, filtering, formatting). **Choose LangGraph when** you need fine-grained control of the agent's reasoning, custom retry/parallel/state logic, heavy multi-step reasoning, or programmatic testing of individual nodes.
+
+<Callout type="why" title="Same loop, different surface">
+
+The n8n AI Agent node is the *exact* ReAct loop from 9.2 — model, tools, observe, repeat — rendered as a configurable box. That's the recurring lesson of this module: the agent loop is universal, and frameworks differ only in the surface (raw API, Python graph, visual canvas) they wrap around it. Pick the surface that fits your team, not the one with the most hype.
+
+</Callout>
+
+---
+
+## Recap
+
+- **n8n** is a self-hostable, visual workflow platform with native LLM nodes and 400+ integrations — the no-/low-code counterpart to LangGraph, ideal for integration-heavy orchestration editable by non-technical teammates.
+- A workflow is a **trigger + chain of nodes**; a **Switch** node is a conditional edge and an **escalate** branch is human-in-the-loop — the same primitives as a LangGraph, on a canvas.
+- It **self-hosts in one Docker command** (persist `~/.n8n`, put it behind auth) so data and keys stay on your infrastructure.
+- **Code nodes** (JavaScript, via `$input.all()` returning `{json}` items) handle custom logic; the **AI Agent node** is a full ReAct loop with tools — including other workflows as tools.
+- **n8n for plumbing/integrations, LangGraph for deep reasoning** — and under both sits the same universal agent loop.
+
+Next: giving agents memory that outlives a single conversation — **the four memory systems**.

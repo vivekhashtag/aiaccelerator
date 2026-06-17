@@ -1,0 +1,143 @@
+---
+title: "Memory Systems for Agents"
+module: "09"
+moduleTitle: "Agentic AI Systems & Orchestration"
+lesson: "9.6"
+slug: "9-06-memory"
+summary: "Agents need memory at four timescales: in-context (working), short-term (session), long-term (persistent vector store), and procedural (skills). We implement long-term semantic memory with a vector store, wire it into an agent node, and add context-window compression — the direct fix for the context-overflow failure mode."
+prerequisites: ["9.3 LangGraph: Stateful Agent Workflows", "4.8 Retrieval-Augmented Generation"]
+---
+
+## The Four Types of Agent Memory
+
+A bare agent forgets everything when the conversation ends, and chokes when the conversation grows too long. Real agents need memory at four timescales — much like humans:
+
+<MemoryTiers caption="In-context: the messages in the window — fast, ~128K tokens, gone at session end. Short-term: session store (Redis/SQLite) holding summaries and recent results. Long-term: a vector store of facts/docs retrieved by semantic search, persisting indefinitely. Procedural: skills baked into weights or cached exemplars." />
+
+- **In-context (working memory)** — the conversation messages currently in the window. Fast and cheap, but limited (~128K tokens) and discarded when the session ends.
+- **Short-term (session memory)** — Redis/SQLite for the duration of a session: a summarised history, recent tool results. Survives context limits, cleared when the session ends. (This is exactly what LangGraph **checkpointing** from 9.3 provides.)
+- **Long-term (persistent memory)** — a vector store (Qdrant, Pinecone, Chroma) or key-value store of facts learned about the user, documents, and past outcomes. Persists indefinitely; retrieved by semantic search.
+- **Procedural (skill memory)** — fine-tuned weights or cached few-shot exemplars: *"I've solved this kind of problem before — here's how."*
+
+---
+
+## Long-Term Memory with a Vector Store
+
+Long-term memory is the RAG machinery from Module 4 (4.8) repurposed: embed facts, store the vectors, retrieve by similarity when relevant.
+
+```python
+import time
+from langchain_community.vectorstores import Qdrant
+from langchain_voyageai import VoyageAIEmbeddings   # Anthropic has no embeddings API
+
+class MemoryManager:
+    def __init__(self):
+        self.session_summaries = {}                  # short-term (use Redis in prod)
+        self.vector_store = Qdrant.from_texts(       # long-term
+            texts=["(memory initialised)"],
+            embedding=VoyageAIEmbeddings(model="voyage-3"),
+            location=":memory:",                     # use a path/server for persistence
+            collection_name="agent_memory",
+        )
+
+    def save(self, key: str, content: str, metadata: dict | None = None):
+        self.vector_store.add_texts(
+            texts=[content],
+            metadatas=[{"key": key, "ts": time.time(), **(metadata or {})}],
+        )
+
+    def retrieve(self, query: str, k: int = 3) -> list[str]:
+        return [d.page_content for d in self.vector_store.similarity_search(query, k=k)]
+```
+
+**Step by step:**
+
+1. **Embeddings come from a dedicated model, not Claude.** Anthropic doesn't expose an embeddings endpoint — its recommended partner is **Voyage AI** (`voyage-3`). You can swap in any embeddings model; the LLM and the embedder are separate components.
+2. **`location=":memory:"`** is in-RAM for demos; point it at a Qdrant file or server for memory that survives restarts — that's what makes it *long-term* rather than another session store.
+3. **`save`** attaches metadata (a key, a timestamp) so you can later filter or expire entries; **`retrieve`** is plain semantic search — the same `similarity_search` you used for RAG.
+
+Now wire it into an agent node so every turn is memory-aware:
+
+```python
+from langchain_core.messages import SystemMessage
+
+memory = MemoryManager()
+
+def memory_agent(state: AgentState) -> dict:
+    query = state["messages"][-1].content
+
+    past = memory.retrieve(query, k=3)                       # pull relevant memories
+    context = "\n".join(past) if past else "No relevant past context."
+
+    system = SystemMessage(f"""You are an assistant with memory.
+RELEVANT PAST CONTEXT:
+{context}
+Use it if relevant. New important facts will be saved.""")
+
+    response = llm.invoke([system] + state["messages"])
+
+    if "fact:" in response.content.lower():                  # persist new facts
+        memory.save(key=f"fact_{time.time()}", content=response.content)
+
+    return {"messages": [response]}
+```
+
+**Step by step:**
+
+1. **Retrieve before generating.** The node first pulls the top-k relevant memories for the current query and injects them into the system prompt — the agent "remembers" by retrieval, not by holding everything in context.
+2. **Selective write-back.** Only content the model flags as a fact gets saved, so the store fills with durable knowledge rather than chatter. (A more robust version uses structured output from 9.7 to decide what to persist.)
+3. **This closes the loop with short-term memory:** session checkpoints hold the *current* conversation; the vector store accumulates knowledge *across* conversations.
+
+---
+
+## Context-Window Management
+
+Even with external memory, a single long run can overflow the window — failure mode 3 from 9.1. The fix is compression: keep the system message and the most recent turns, summarise the rest.
+
+<ContextCompression caption="When history nears the limit, summarise the old turns into a few bullet points and keep only the recent messages verbatim. The summary preserves facts and decisions while reclaiming most of the tokens — and cuts per-turn cost." />
+
+```python
+from langchain_core.messages import SystemMessage
+
+def compress(messages: list, llm, max_tokens: int = 50_000) -> list:
+    approx = sum(len(m.content.split()) * 1.3 for m in messages)   # rough token estimate
+    if approx <= max_tokens:
+        return messages                                            # no compression needed
+
+    system = [m for m in messages if m.type == "system"]
+    recent = messages[-10:]                                        # keep last 10 verbatim
+    old    = messages[len(system):-10]
+    if not old:
+        return messages
+
+    digest = "\n".join(f"{m.type}: {m.content[:200]}" for m in old)
+    summary = llm.invoke(
+        f"Summarise this history as bullet-point facts (no opinions):\n{digest}"
+    ).content
+
+    return system + [SystemMessage(f"[earlier conversation summary]\n{summary}")] + recent
+```
+
+**Step by step:**
+
+1. **Estimate, then decide.** A cheap word-count heuristic (`× 1.3`) avoids running the compressor on conversations that don't need it — compression itself costs an LLM call.
+2. **Keep the anchors.** The system message (instructions) and the last ~10 turns (immediate context) stay verbatim; only the **middle** — old, already-acted-on turns — gets summarised.
+3. **Replace, don't append.** The summary *substitutes* for the old messages, reclaiming their tokens. Run this inside the agent loop and a long-running agent stays within budget indefinitely.
+
+<Callout type="insight" title="Memory is a hierarchy, like the cache hierarchy">
+
+The four tiers mirror the memory pyramid from Module 2: in-context = registers/L1 (fast, tiny), session = RAM (bigger, volatile), long-term vector store = disk (vast, persistent, slower to fetch), procedural = the model weights themselves. Good agent design, like good systems design, is **moving the right data to the right tier** — hot context in the window, durable knowledge in the vector store, and a compressor managing the boundary.
+
+</Callout>
+
+---
+
+## Recap
+
+- Agents need memory at **four timescales**: in-context (working), short-term/session (checkpoints, Redis), long-term (a persistent vector store), and procedural (weights / cached exemplars).
+- **Long-term memory is RAG repurposed**: embed facts, store vectors, retrieve relevant ones into the prompt each turn — and embeddings come from a dedicated model (Anthropic recommends **Voyage AI**, not Claude).
+- A **memory-aware node** retrieves before generating and writes back only durable facts, accumulating knowledge across conversations.
+- **Context compression** — keep the system message + recent turns, summarise the middle — is the direct fix for context overflow and lowers per-turn cost.
+- Treat memory as a **hierarchy**, the same instinct as the cache pyramid: right data, right tier.
+
+Next: making agent outputs reliable enough to build on — **structured outputs and tool schemas**.

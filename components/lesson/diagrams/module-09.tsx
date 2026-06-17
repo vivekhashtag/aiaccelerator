@@ -308,3 +308,245 @@ export function HumanInLoopGate({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   9.4 — Multi-Agent Systems
+   ════════════════════════════════════════════════════════════ */
+
+/* Three multi-agent topologies. */
+export function MultiAgentPatterns({ caption }: { caption?: string }) {
+  const cards = [
+    { t: "Supervisor", d: "one router LLM picks the next worker each turn", best: "clear task decomposition", c: INDIGO },
+    { t: "Peer-to-peer", d: "agents hand off control directly to each other", best: "dynamic, flow-based routing", c: C.on },
+    { t: "Critic", d: "one agent reviews another & requests revisions", best: "quality / correctness loops", c: C.gate },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 160" width="100%" role="img" aria-label="Three multi-agent patterns">
+        <text x="280" y="20" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>three ways to organize multiple agents — pick by how work flows</text>
+        {cards.map((c, i) => {
+          const x = 16 + i * 178;
+          return (
+            <g key={`ma${i}`}>
+              <rect x={x} y="34" width="164" height="100" rx="8" fill={`${c.c}12`} stroke={c.c} strokeWidth="1.5" />
+              <text x={x + 82} y="54" textAnchor="middle" fontFamily={mono} fontSize="10" fontWeight="700" fill={c.c}>{c.t}</text>
+              <foreignObject x={x + 8} y="62" width="148" height="40"><div style={{ fontFamily: mono, fontSize: "7.4px", color: C.text, textAlign: "center", lineHeight: 1.3 }}>{c.d}</div></foreignObject>
+              <foreignObject x={x + 8} y="106" width="148" height="22"><div style={{ fontFamily: mono, fontSize: "7px", color: C.muted, textAlign: "center", lineHeight: 1.2 }}>best: {c.best}</div></foreignObject>
+            </g>
+          );
+        })}
+        <text x="280" y="152" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>specialisation, parallelism, scale, and reliability — the reasons to use more than one agent</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Supervisor routes to specialised workers, who report back. */
+export function SupervisorPattern({ caption }: { caption?: string }) {
+  const workers = [
+    { t: "research", c: C.on },
+    { t: "code", c: C.gate },
+    { t: "write", c: C.violet },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 190" width="100%" role="img" aria-label="Supervisor multi-agent pattern">
+        {/* supervisor */}
+        <rect x="200" y="28" width="140" height="40" rx="8" fill={`${INDIGO}1a`} stroke={INDIGO} strokeWidth="1.6" />
+        <text x="270" y="46" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={INDIGO}>Supervisor LLM</text>
+        <text x="270" y="59" textAnchor="middle" fontFamily={mono} fontSize="6.6" fill={C.muted}>which worker next?</text>
+        {/* workers */}
+        {workers.map((w, i) => {
+          const x = 60 + i * 150;
+          return (
+            <g key={`sw${i}`}>
+              <rect x={x} y="120" width="120" height="40" rx="7" fill={`${w.c}14`} stroke={w.c} strokeWidth="1.3" />
+              <text x={x + 60} y="138" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={w.c}>{w.t}_agent</text>
+              <text x={x + 60} y="151" textAnchor="middle" fontFamily={mono} fontSize="6.4" fill={C.muted}>specialised</text>
+              {/* down (route) */}
+              <line x1="270" y1="68" x2={x + 60} y2="120" stroke={C.faint} strokeWidth="1.1" />
+              <polygon points={`${x + 60},120 ${x + 56},113 ${x + 64},113`} fill={C.faint} />
+            </g>
+          );
+        })}
+        <text x="270" y="100" textAnchor="middle" fontFamily={mono} fontSize="7" fontWeight="700" fill={C.faint}>route + instruction ↓     ↑ result returns to supervisor</text>
+        <text x="270" y="178" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>workers always report back; the supervisor loops until it routes to FINISH → END</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Writer ⇄ Critic revision loop. */
+export function CriticLoop({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 170" width="100%" role="img" aria-label="Writer critic revision loop">
+        <rect x="60" y="60" width="130" height="46" rx="8" fill={`${INDIGO}1a`} stroke={INDIGO} strokeWidth="1.5" />
+        <text x="125" y="80" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={INDIGO}>writer_agent</text>
+        <text x="125" y="94" textAnchor="middle" fontFamily={mono} fontSize="6.6" fill={C.muted}>drafts output</text>
+        <rect x="350" y="60" width="130" height="46" rx="8" fill={`${C.gate}16`} stroke={C.gate} strokeWidth="1.5" />
+        <text x="415" y="80" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.gate}>critic_agent</text>
+        <text x="415" y="94" textAnchor="middle" fontFamily={mono} fontSize="6.6" fill={C.muted}>scores · finds issues</text>
+        {/* draft -> critic */}
+        <path d="M190 76 L350 76" stroke={C.faint} strokeWidth="1.2" /><polygon points="350,76 343,72 343,80" fill={C.faint} />
+        <text x="270" y="70" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>draft</text>
+        {/* critic -> writer (revise) */}
+        <path d="M350 92 L190 92" stroke={C.hole} strokeWidth="1.2" /><polygon points="190,92 197,88 197,96" fill={C.hole} />
+        <text x="270" y="104" textAnchor="middle" fontFamily={mono} fontSize="7" fontWeight="700" fill={C.hole}>not approved → revise</text>
+        {/* approve -> out */}
+        <rect x="350" y="124" width="130" height="32" rx="7" fill={`${C.on}14`} stroke={C.on} strokeWidth="1.3" />
+        <text x="415" y="144" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.on}>approved → output</text>
+        <line x1="415" y1="106" x2="415" y2="124" stroke={C.on} strokeWidth="1.2" /><polygon points="415,124 411,117 419,117" fill={C.on} />
+        <text x="270" y="24" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>a critic loop raises quality — bounded by a max revision count</text>
+        <text x="270" y="166" textAnchor="middle" fontFamily={mono} fontSize="7.6" fill={C.faint}>stop on approval OR revision_count ≥ 3 — never loop forever (failure mode 2)</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   9.5 — n8n: Visual Workflow Automation
+   ════════════════════════════════════════════════════════════ */
+
+/* A visual n8n AI workflow: trigger → classify → branch → check → act. */
+export function N8nWorkflow({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 200" width="100%" role="img" aria-label="An n8n AI support workflow">
+        <text x="280" y="18" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>a customer-support workflow, built by dragging nodes — no Python</text>
+        {/* trigger */}
+        <rect x="20" y="80" width="84" height="36" rx="6" fill={`${C.gate}16`} stroke={C.gate} strokeWidth="1.3" />
+        <text x="62" y="98" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={C.gate}>webhook</text>
+        <text x="62" y="109" textAnchor="middle" fontFamily={mono} fontSize="6.2" fill={C.muted}>trigger</text>
+        {/* classify */}
+        <rect x="124" y="80" width="90" height="36" rx="6" fill={`${INDIGO}16`} stroke={INDIGO} strokeWidth="1.3" />
+        <text x="169" y="98" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={INDIGO}>classify</text>
+        <text x="169" y="109" textAnchor="middle" fontFamily={mono} fontSize="6.2" fill={C.muted}>LLM chain</text>
+        {/* switch -> 3 bots */}
+        <rect x="234" y="80" width="70" height="36" rx="6" fill={`${C.violet}16`} stroke={C.violet} strokeWidth="1.3" />
+        <text x="269" y="101" textAnchor="middle" fontFamily={mono} fontSize="7.5" fontWeight="700" fill={C.violet}>switch</text>
+        {["billing", "technical", "general"].map((b, i) => (
+          <g key={`bot${i}`}>
+            <rect x={324} y={50 + i * 36} width="86" height="28" rx="5" fill={`${C.on}12`} stroke={C.on} strokeWidth="1" />
+            <text x={367} y={68 + i * 36} textAnchor="middle" fontFamily={mono} fontSize="6.8" fill={C.on}>{b} bot</text>
+            <line x1="304" y1="98" x2="324" y2={64 + i * 36} stroke={C.faint} strokeWidth="0.9" />
+          </g>
+        ))}
+        {/* merge -> quality check */}
+        <rect x="430" y="80" width="50" height="36" rx="6" fill={`${INDIGO}16`} stroke={INDIGO} strokeWidth="1.3" />
+        <text x="455" y="96" textAnchor="middle" fontFamily={mono} fontSize="6.6" fontWeight="700" fill={INDIGO}>quality</text>
+        <text x="455" y="106" textAnchor="middle" fontFamily={mono} fontSize="6.6" fontWeight="700" fill={INDIGO}>check</text>
+        {[50, 86, 122].map((y, i) => <line key={`mg${i}`} x1="410" y1={y + 14} x2="430" y2="98" stroke={C.faint} strokeWidth="0.9" />)}
+        {/* send / escalate */}
+        <rect x="496" y="62" width="56" height="26" rx="5" fill={`${C.on}14`} stroke={C.on} strokeWidth="1" />
+        <text x="524" y="78" textAnchor="middle" fontFamily={mono} fontSize="6.4" fontWeight="700" fill={C.on}>send</text>
+        <rect x="496" y="108" width="56" height="26" rx="5" fill={`${C.hole}14`} stroke={C.hole} strokeWidth="1" />
+        <text x="524" y="124" textAnchor="middle" fontFamily={mono} fontSize="6.2" fontWeight="700" fill={C.hole}>escalate</text>
+        <line x1="480" y1="92" x2="496" y2="75" stroke={C.on} strokeWidth="1" />
+        <line x1="480" y1="104" x2="496" y2="121" stroke={C.hole} strokeWidth="1" />
+        {/* main arrows */}
+        <line x1="104" y1="98" x2="124" y2="98" stroke={C.faint} strokeWidth="1.1" />
+        <line x1="214" y1="98" x2="234" y2="98" stroke={C.faint} strokeWidth="1.1" />
+        <text x="280" y="192" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>400+ integrations, LLM nodes, webhook/schedule triggers — and an escalate-to-human branch</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* When to choose n8n vs LangGraph. */
+export function N8nVsLangGraph({ caption }: { caption?: string }) {
+  const rows = [
+    { k: "many SaaS integrations (CRM, email, Slack)", n8n: true },
+    { k: "non-technical teammates edit the workflow", n8n: true },
+    { k: "visual monitoring & debugging", n8n: true },
+    { k: "fine-grained control of the reasoning loop", n8n: false },
+    { k: "custom retries, parallelism, complex state", n8n: false },
+    { k: "programmatic per-node testing", n8n: false },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 210" width="100%" role="img" aria-label="n8n versus LangGraph decision">
+        <text x="200" y="22" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>if your need is…</text>
+        <text x="455" y="22" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>reach for</text>
+        {rows.map((r, i) => {
+          const y = 36 + i * 27;
+          const tool = r.n8n ? "n8n" : "LangGraph";
+          const col = r.n8n ? C.gate : INDIGO;
+          return (
+            <g key={`vs${i}`}>
+              <rect x="20" y={y} width="380" height="22" rx="4" fill={`${col}10`} stroke={col} strokeWidth="0.9" />
+              <text x="30" y={y + 15} fontFamily={mono} fontSize="7.6" fill={C.text}>{r.k}</text>
+              <rect x="410" y={y} width="130" height="22" rx="4" fill={`${col}1c`} stroke={col} strokeWidth="1.1" />
+              <text x="475" y={y + 15} textAnchor="middle" fontFamily={mono} fontSize="7.8" fontWeight="700" fill={col}>{tool}</text>
+            </g>
+          );
+        })}
+        <text x="280" y="204" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>n8n = visual orchestration & integrations · LangGraph = code-first control over reasoning</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   9.6 — Memory Systems for Agents
+   ════════════════════════════════════════════════════════════ */
+
+/* The four tiers of agent memory. */
+export function MemoryTiers({ caption }: { caption?: string }) {
+  const tiers = [
+    { t: "in-context", s: "working memory", d: "messages in the context window — fast, ~128K, gone at end", c: INDIGO },
+    { t: "short-term", s: "session memory", d: "Redis/SQLite for a session — summaries, recent results", c: C.on },
+    { t: "long-term", s: "persistent memory", d: "vector store — facts/docs, retrieved by semantic search", c: C.gate },
+    { t: "procedural", s: "skill memory", d: "fine-tuned weights / cached few-shot exemplars", c: C.violet },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 180" width="100%" role="img" aria-label="Four types of agent memory">
+        <text x="280" y="18" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>agents need memory at four timescales — like humans</text>
+        {tiers.map((t, i) => {
+          const x = 12 + i * 137;
+          return (
+            <g key={`mt${i}`}>
+              <rect x={x} y="34" width="125" height="116" rx="8" fill={`${t.c}12`} stroke={t.c} strokeWidth="1.5" />
+              <text x={x + 62} y="54" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={t.c}>{t.t}</text>
+              <text x={x + 62} y="67" textAnchor="middle" fontFamily={mono} fontSize="6.6" fill={C.muted}>{t.s}</text>
+              <foreignObject x={x + 6} y="74" width="113" height="72"><div style={{ fontFamily: mono, fontSize: "7px", color: C.text, textAlign: "center", lineHeight: 1.3 }}>{t.d}</div></foreignObject>
+              {i < 3 && <text x={x + 129} y="94" fontFamily={mono} fontSize="9" fill={C.faint}>→</text>}
+            </g>
+          );
+        })}
+        <text x="280" y="170" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>shorter ← faster & cheaper · longer → persists, but needs retrieval</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Context compression: keep recent, summarise old. */
+export function ContextCompression({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 170" width="100%" role="img" aria-label="Context window compression">
+        <text x="280" y="18" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>when history nears the context limit, compress the old, keep the recent</text>
+        {/* before */}
+        <text x="120" y="40" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.hole}>before — overflowing</text>
+        {Array.from({ length: 12 }).map((_, i) => (
+          <rect key={`bf${i}`} x={30 + i * 15} y="50" width="12" height="22" rx="2" fill={`${C.off}26`} stroke={C.off} strokeWidth="0.7" />
+        ))}
+        <text x="120" y="86" textAnchor="middle" fontFamily={mono} fontSize="6.8" fill={C.muted}>~95K / 128K tokens</text>
+        {/* arrow */}
+        <line x1="225" y1="60" x2="265" y2="60" stroke={C.faint} strokeWidth="1.3" /><polygon points="265,60 257,55 257,65" fill={C.faint} />
+        <text x="245" y="50" textAnchor="middle" fontFamily={mono} fontSize="6.6" fontWeight="700" fill={INDIGO}>LLM summarise</text>
+        {/* after */}
+        <text x="410" y="40" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.on}>after — compressed</text>
+        <rect x="290" y="50" width="60" height="22" rx="3" fill={`${INDIGO}22`} stroke={INDIGO} strokeWidth="1.1" />
+        <text x="320" y="64" textAnchor="middle" fontFamily={mono} fontSize="6.4" fontWeight="700" fill={INDIGO}>summary</text>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <rect key={`af${i}`} x={360 + i * 15} y="50" width="12" height="22" rx="2" fill={`${C.on}26`} stroke={C.on} strokeWidth="0.7" />
+        ))}
+        <text x="410" y="86" textAnchor="middle" fontFamily={mono} fontSize="6.8" fill={C.muted}>summary + last N messages</text>
+        <text x="280" y="120" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.text}>keep the system message + last ~10 turns; replace the rest with a bullet-point summary</text>
+        <text x="280" y="146" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.faint}>directly fixes failure mode 3 (context overflow) — and cuts cost per turn</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

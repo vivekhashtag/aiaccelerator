@@ -1,0 +1,117 @@
+---
+title: "NXP i.MX RT & the eIQ Neutron NPU"
+module: "08"
+moduleTitle: "Hardware Acceleration: FPGA & Edge NPUs"
+lesson: "8.11"
+slug: "8-11-nxp-imx-rt"
+summary: "NXP's edge-AI line: the i.MX RT 'crossover' MCUs that run at near-application-processor clocks while keeping MCU determinism, accelerated by the configurable eIQ Neutron NPU. The eIQ software environment converts a standard model and deploys it through TensorFlow Lite for Microcontrollers — the same substrate, a different vendor stack."
+prerequisites: ["8.10 STM32 N6 & the Neural-ART Accelerator"]
+---
+
+## The "Crossover" Idea
+
+STM32 N6 was a microcontroller that grew an NPU. NXP comes at the edge from a slightly different angle with the **i.MX RT** family — what NXP calls a **crossover MCU**. The idea: take the **real-time determinism and instant boot of a microcontroller** and push the clock and peripherals up toward what you'd expect from an **applications processor (MPU)**.
+
+<ImxRtBlock caption="An i.MX RT crossover MCU: a Cortex-M7 running up to ~1 GHz (sometimes with a companion Cortex-M4), the configurable eIQ Neutron NPU for INT8 MACs, fast on-chip SRAM plus external memory via high-speed serial interfaces, and rich I/O (camera, Ethernet, USB, audio). MCU behaviour at near-MPU performance." />
+
+<Callout type="insight" title="Where 'crossover' actually bites">
+
+A classic MCU is deterministic but slow; an MPU (like a Raspberry Pi's chip) is fast but boots an OS and has unpredictable latency. The i.MX RT sits between them: a **1 GHz Cortex-M7** with single-cycle interrupt behaviour and no OS required. For edge AI that means you can run a meaningful model *and* still service a motor-control loop or audio stream on a hard deadline — the kind of mixed real-time + ML workload that neither a pure MCU nor a Linux MPU handles cleanly.
+
+</Callout>
+
+---
+
+## The eIQ Neutron NPU
+
+The accelerator on the AI-capable parts is the **eIQ Neutron NPU** — NXP's own scalable NPU IP. "Scalable/configurable" is the key word: the same architecture is licensed at different MAC widths across the portfolio, from tiny RT MCUs up to the i.MX 9 application processors. Same role as always: a fixed INT8 MAC engine that offloads the convolution-heavy layers from the Cortex-M7.
+
+<StatGrid items={[
+  { value: "Cortex-M7", label: "control + fallback", sub: "up to ~1 GHz, runs CMSIS-NN ops the NPU can't" },
+  { value: "eIQ Neutron", label: "INT8 MACs", sub: "Conv / depthwise / FC / pooling offload" },
+  { value: "Crossover I/O", label: "feeds the model", sub: "camera (CSI), Ethernet, USB, audio at MCU latency" }
+]} caption="Same CPU-orchestrates / NPU-computes split as the STM32 N6 and the Zynq — only the names change (Cortex-M7 instead of M55, Neutron instead of Neural-ART)." />
+
+---
+
+## The eIQ Software Environment
+
+NXP's umbrella for ML tooling is **eIQ**. The two pieces you touch: **eIQ Toolkit** (with the **eIQ Portal** GUI for data curation, training, and model conversion) and the runtime — **TensorFlow Lite for Microcontrollers**, with NPU-accelerated kernels for the Neutron.
+
+<EiqFlow caption="The vendor flow again: bring a trained model into eIQ Toolkit → it quantizes to INT8 and runs the Neutron converter so supported layers target the NPU → it emits a deployable .tflite (as a C array) → you run it with TFLite Micro on the device. Identical shape to ST's flow; eIQ replaces ST Edge AI, Neutron replaces Neural-ART." />
+
+### Step 1 — Convert and quantize for the Neutron
+
+eIQ Toolkit (GUI or CLI) takes a float model, applies INT8 post-training quantization with a representative dataset, and runs the Neutron converter so eligible ops are tagged for the NPU:
+
+```bash
+# eIQ Toolkit — quantize to INT8 and target the Neutron NPU
+eiq-converter \
+    --input vww_mobilenet.h5 \
+    --quantize int8 \
+    --representative-data ./calib_images/ \
+    --target neutron \
+    --output vww_int8_neutron.tflite
+```
+
+**What each flag does:**
+
+1. **`--quantize int8`** — mandatory for the MCU (the Module 6 entry ticket). Float weights and activations become INT8 with per-tensor/per-channel scales.
+2. **`--representative-data`** — the calibration set that determines the activation ranges (the calibration step from 6.1). Without it, post-training quantization can't pick good scales and accuracy collapses.
+3. **`--target neutron`** — runs the converter pass that marks Conv/FC/pool layers for the NPU. Unsupported ops are simply left for the CPU — the same graph-split decision as Vela and ST Edge AI.
+
+### Step 2 — Run it with TFLite Micro
+
+NXP deploys through the standard **TFLite Micro** runtime; the difference from a plain CPU build is the **op resolver**, where the Neutron-backed kernels register:
+
+```cpp
+#include "tensorflow/lite/micro/micro_interpreter.h"
+#include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
+#include "model_data.h"   // vww_int8_neutron.tflite as a C array
+
+constexpr int kArenaSize = 136 * 1024;        // tensor arena in SRAM
+alignas(16) static uint8_t tensor_arena[kArenaSize];
+
+// Only the ops this model uses — kept minimal to save flash.
+static tflite::MicroMutableOpResolver<6> resolver;
+resolver.AddConv2D();            // routed to the eIQ Neutron NPU
+resolver.AddDepthwiseConv2D();   // routed to the NPU
+resolver.AddFullyConnected();
+resolver.AddMaxPool2D();
+resolver.AddReshape();
+resolver.AddSoftmax();           // small op — stays on the Cortex-M7
+
+const tflite::Model* model = tflite::GetModel(g_model_data);
+tflite::MicroInterpreter interpreter(model, resolver, tensor_arena, kArenaSize);
+interpreter.AllocateTensors();   // lays out activations in the arena
+
+// --- per inference ---
+int8_t* in = interpreter.input(0)->data.int8;
+memcpy(in, camera_frame, kInputBytes);
+interpreter.Invoke();            // NPU runs Conv/DW/FC; CPU runs the rest
+int8_t* out = interpreter.output(0)->data.int8;
+```
+
+**Step by step:**
+
+1. **`MicroMutableOpResolver<6>`** registers exactly the six operators this model needs — no more. On an MCU you don't link the full kernel set; you list ops to keep the flash image small.
+2. **`AddConv2D` / `AddDepthwiseConv2D`** resolve to **Neutron-accelerated** implementations because the model was converted with `--target neutron`. The *same TFLite Micro call* would resolve to a CMSIS-NN CPU kernel on a part without the NPU — your code is portable across the portfolio.
+3. **`AllocateTensors`** carves the activation tensors out of `tensor_arena` (your SRAM budget). If the arena is too small, this fails — that's your signal to shrink the model.
+4. **`Invoke`** runs the whole graph: NPU for the heavy convolutions, Cortex-M7 for `Softmax` and anything unsupported. One call, hardware decides placement.
+
+<Callout type="key" title="Two vendors, one mental model">
+
+Compare to the STM32 N6 lesson: ST gave you a generated-C runtime (`ai_network_run`); NXP gives you standard **TFLite Micro** with NPU kernels swapped in at the resolver. Different APIs, identical pipeline — **import → INT8 + convert for the NPU → call one inference function**. The portable skill is the pipeline, not the SDK. (TFLite Micro itself is the subject of 8.13 — here it's just NXP's chosen runtime.)
+
+</Callout>
+
+---
+
+## Recap
+
+- **i.MX RT** is NXP's **crossover MCU** line: MCU determinism and instant boot at near-MPU clocks (Cortex-M7 up to ~1 GHz), good for mixed real-time + ML workloads.
+- The **eIQ Neutron NPU** is NXP's scalable INT8 accelerator, used from RT MCUs up to i.MX 9 — same CPU-orchestrates / NPU-computes split as every chip in this chapter.
+- **eIQ Toolkit / eIQ Portal** quantizes to INT8 and runs the **Neutron converter**; deployment is through standard **TFLite Micro**, with NPU-backed kernels registered in the op resolver.
+- The workflow is the now-familiar **import → INT8 + convert → one inference call** — only the tool (eIQ) and engine (Neutron) carry NXP's name.
+
+Next: Renesas takes a different architectural bet — the **reconfigurable DRP-AI accelerator**.

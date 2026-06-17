@@ -1,0 +1,144 @@
+---
+title: "Structured Outputs & Tool Schemas"
+module: "09"
+moduleTitle: "Agentic AI Systems & Orchestration"
+lesson: "9.7"
+slug: "9-07-structured-outputs"
+summary: "Agents that emit free-form text can't be chained — you can't programmatically parse them. Structured outputs (JSON validated by a schema) make agent results predictable and composable. We define schemas with Pydantic, force schema-conformant output via Claude's tool-use mechanism, add a validate-and-retry loop, and use Pydantic AI for fully type-safe agents."
+prerequisites: ["9.2 ReAct: The Foundation Pattern"]
+---
+
+## Why Structured Outputs Matter
+
+Throughout this module, one agent's output becomes another's input: the supervisor's routing decision (9.4), the critic's verdict (9.4), the memory write-back (9.6). All of those broke down the moment the output was free-form prose.
+
+<StructuredVsFreeform caption="Free-form text can't be parsed, composed, or validated — a downstream node has to guess at it. Schema-validated JSON is typed, machine-checkable, and composable. Structured output is the contract that lets agents be wired together at all." />
+
+<Callout type="key" title="Structured output is the glue of multi-agent systems">
+
+Every coordination pattern you've seen depends on it. `route_to_worker` needs `{"next": "..."}`; `route_after_critique` needs `{"approved": true}`. Without a guaranteed shape, those routing functions are parsing prose with regex — exactly failure mode 1 (the agent emits something the next step can't handle). Schemas turn that from "hope" into "contract."
+
+</Callout>
+
+---
+
+## Schemas with Pydantic
+
+**Pydantic** is the Python standard for declaring and validating data shapes. You describe the output you want as a class; the `Field` descriptions double as instructions to the model:
+
+```python
+from pydantic import BaseModel, Field
+
+class ResearchFinding(BaseModel):
+    title:      str   = Field(description="Title of the paper or finding")
+    source_url: str   = Field(description="URL of the source")
+    summary:    str   = Field(max_length=500, description="2-3 sentence summary")
+    confidence: float = Field(ge=0.0, le=1.0, description="Confidence 0-1")
+    published:  str | None = Field(default=None, description="Date if known")
+
+class ResearchReport(BaseModel):
+    query:      str
+    findings:   list[ResearchFinding]
+    conclusion: str
+    gaps:       list[str] = Field(description="What we couldn't find")
+```
+
+**Step by step:**
+
+1. **The class *is* the schema.** Types (`float`, `list[ResearchFinding]`) and constraints (`ge=0.0, le=1.0`, `max_length=500`) define exactly what's valid — and Pydantic enforces them at parse time.
+2. **`Field(description=...)` is dual-purpose**: it documents the field *and* becomes part of the JSON schema the model reads, so the description literally guides generation.
+3. **Schemas nest.** `ResearchReport` contains a list of `ResearchFinding` — arbitrarily structured output, validated end to end.
+
+---
+
+## Forcing Schema-Conformant Output on Claude
+
+The most reliable way to get valid JSON from Claude isn't to ask for JSON in the prompt — it's to reuse the **tool-use** mechanism from 9.2. Define a "tool" whose `input_schema` is your Pydantic schema and force the model to call it; the tool input is then guaranteed-shaped JSON:
+
+```python
+import anthropic, json
+client = anthropic.Anthropic()
+
+def extract_report(query: str) -> ResearchReport:
+    schema = ResearchReport.model_json_schema()
+    resp = client.messages.create(
+        model="claude-opus-4-8", max_tokens=2048,
+        tools=[{
+            "name": "submit_report",
+            "description": "Return the research report.",
+            "input_schema": schema,           # the Pydantic schema, as a tool
+        }],
+        tool_choice={"type": "tool", "name": "submit_report"},  # FORCE the call
+        messages=[{"role": "user", "content": f"Research: {query}"}],
+    )
+    tool_block = next(b for b in resp.content if b.type == "tool_use")
+    return ResearchReport.model_validate(tool_block.input)   # validate → typed object
+```
+
+**Step by step:**
+
+1. **`model_json_schema()`** turns the Pydantic class into the JSON Schema the API expects — no hand-writing.
+2. **`tool_choice={"type": "tool", "name": ...}`** forces Claude to call *that* tool. Because the API constrains the tool input to the schema, the output structure is guaranteed — far more reliable than parsing JSON out of free text.
+3. **`model_validate(tool_block.input)`** runs Pydantic's validation (ranges, lengths, required fields) and returns a typed object. If the model somehow produced something off-spec, this raises — your signal to retry.
+
+<SchemaValidationLoop caption="Validation runs in your code, not the model's head. Valid output becomes a typed object; invalid output is sent back to the model with the error message so it can correct itself. Libraries like instructor and Pydantic AI automate this retry — you just declare the type." />
+
+---
+
+## Pydantic AI: Type-Safe Agents
+
+**Pydantic AI** is a modern agent framework built around this idea — you declare the output type and the tool signatures, and it handles validation, retries, and the tool loop:
+
+```python
+from pydantic_ai import Agent, RunContext
+from pydantic import BaseModel
+
+class ResearchResult(BaseModel):
+    findings:   list[str]
+    confidence: float
+    sources:    list[str]
+
+agent = Agent(
+    "anthropic:claude-opus-4-8",
+    output_type=ResearchResult,                      # the run is guaranteed to return this
+    system_prompt="You are a research assistant.",
+)
+
+@agent.tool
+async def search_papers(ctx: RunContext, query: str) -> list[dict]:
+    """Search academic papers."""
+    return await arxiv_search(query)
+
+@agent.tool
+def calc_stats(numbers: list[float]) -> dict:
+    """Statistics over a list of numbers."""
+    return {"mean": sum(numbers) / len(numbers), "max": max(numbers)}
+
+result = await agent.run("Find papers on binary neural networks")
+print(result.output.confidence)   # typed access — IDE autocomplete works
+print(result.output.findings)
+```
+
+**Step by step:**
+
+1. **`output_type=ResearchResult`** makes the *entire run* type-safe: `agent.run(...)` is guaranteed to return a validated `ResearchResult`, or it raises after exhausting retries — no manual parsing anywhere.
+2. **`@agent.tool`** registers typed tools. The function signature *is* the schema — Pydantic AI derives the tool's `input_schema` from the type hints, so `search_papers(query: str)` needs no separate schema declaration.
+3. **`result.output` is a typed object**, so downstream code (and your IDE) treats agent output like any other typed value — the composability promise from the top of the lesson, fully realised.
+
+<Callout type="insight" title="Schemas appear at both ends of the agent">
+
+Notice the symmetry: tool **inputs** are schemas (the model fills them) and the agent's **output** is a schema (validated on the way out). The same mechanism — a JSON schema the model must satisfy — secures both ends of the loop. Master it once and every framework's "structured output" feature is the same trick with a different wrapper.
+
+</Callout>
+
+---
+
+## Recap
+
+- **Structured output is the glue of agentic systems** — routing, critique, and memory all need a guaranteed shape, not parseable prose; free-form text breaks composition (failure mode 1).
+- **Pydantic** declares the shape: types + constraints + `Field` descriptions that double as model instructions and nest arbitrarily.
+- On Claude, the reliable path is **tool-use with a forced `tool_choice`** — the API constrains the tool input to your schema, then you `model_validate` it into a typed object.
+- A **validate-and-retry loop** (return the validation error to the model) guarantees conformance; **instructor** and **Pydantic AI** automate it.
+- **Pydantic AI** makes whole runs type-safe via `output_type`, and derives tool schemas from function signatures — schemas guard both the tool *inputs* and the agent *output*.
+
+Next: turning retrieval itself into an agent — **Agentic RAG**.

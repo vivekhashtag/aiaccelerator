@@ -550,3 +550,223 @@ export function ContextCompression({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   9.7 — Structured Outputs & Tool Schemas
+   ════════════════════════════════════════════════════════════ */
+
+/* Free-form text vs schema-validated JSON. */
+export function StructuredVsFreeform({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 170" width="100%" role="img" aria-label="Free-form text versus structured output">
+        {/* free-form */}
+        <text x="140" y="22" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.hole}>free-form text</text>
+        <rect x="30" y="32" width="220" height="64" rx="7" fill={`${C.hole}0e`} stroke={C.hole} strokeWidth="1.2" />
+        <foreignObject x="40" y="40" width="200" height="50"><div style={{ fontFamily: mono, fontSize: "7.4px", color: C.text, lineHeight: 1.3 }}>&quot;I found 3 papers. The first, by Yao et al., is about… probably 90% relevant I think&quot;</div></foreignObject>
+        <text x="140" y="112" textAnchor="middle" fontFamily={mono} fontSize="7.4" fill={C.muted}>can&apos;t parse · can&apos;t compose · can&apos;t validate</text>
+        <text x="140" y="126" textAnchor="middle" fontFamily={mono} fontSize="7.4" fontWeight="700" fill={C.hole}>brittle ✗</text>
+        {/* structured */}
+        <text x="420" y="22" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.on}>schema-validated JSON</text>
+        <rect x="310" y="32" width="220" height="64" rx="7" fill={`${C.on}0e`} stroke={C.on} strokeWidth="1.2" />
+        <foreignObject x="320" y="40" width="200" height="52"><div style={{ fontFamily: mono, fontSize: "7px", color: C.text, lineHeight: 1.3, whiteSpace: "pre" }}>{`{ "title": "ReAct…",
+  "url": "arxiv.org/…",
+  "confidence": 0.9 }`}</div></foreignObject>
+        <text x="420" y="112" textAnchor="middle" fontFamily={mono} fontSize="7.4" fill={C.muted}>typed · composable · machine-checked</text>
+        <text x="420" y="126" textAnchor="middle" fontFamily={mono} fontSize="7.4" fontWeight="700" fill={C.on}>reliable ✓</text>
+        <text x="280" y="152" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>agents that emit free-form text can&apos;t be chained — structured output is what makes them composable</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Schema-validation retry loop. */
+export function SchemaValidationLoop({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 160" width="100%" role="img" aria-label="Schema validation retry loop">
+        <rect x="24" y="60" width="96" height="40" rx="7" fill={`${INDIGO}1a`} stroke={INDIGO} strokeWidth="1.4" />
+        <text x="72" y="84" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={INDIGO}>LLM</text>
+        <rect x="170" y="60" width="120" height="40" rx="7" fill={`${C.gate}16`} stroke={C.gate} strokeWidth="1.4" />
+        <text x="230" y="80" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.gate}>validate</text>
+        <text x="230" y="92" textAnchor="middle" fontFamily={mono} fontSize="6.4" fill={C.muted}>Pydantic schema</text>
+        <rect x="356" y="40" width="170" height="34" rx="7" fill={`${C.on}14`} stroke={C.on} strokeWidth="1.3" />
+        <text x="441" y="61" textAnchor="middle" fontFamily={mono} fontSize="7.8" fontWeight="700" fill={C.on}>valid → typed object ✓</text>
+        {/* arrows */}
+        <line x1="120" y1="80" x2="170" y2="80" stroke={C.faint} strokeWidth="1.2" /><polygon points="170,80 163,76 163,84" fill={C.faint} />
+        <line x1="290" y1="72" x2="356" y2="57" stroke={C.on} strokeWidth="1.2" /><polygon points="356,57 348,57 352,63" fill={C.on} />
+        {/* retry */}
+        <path d="M290 92 Q330 120 200 120 Q90 120 72 100" stroke={C.hole} strokeWidth="1.2" fill="none" strokeDasharray="4 3" />
+        <polygon points="72,100 68,108 77,105" fill={C.hole} />
+        <text x="230" y="134" textAnchor="middle" fontFamily={mono} fontSize="7.4" fontWeight="700" fill={C.hole}>invalid → return the error to the model, retry</text>
+        <text x="280" y="22" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>validation happens in code — the model retries until the output matches the schema</text>
+        <text x="280" y="152" textAnchor="middle" fontFamily={mono} fontSize="7.6" fill={C.faint}>frameworks (instructor, Pydantic AI) automate this retry — you just declare the type</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   9.8 — Agentic RAG
+   ════════════════════════════════════════════════════════════ */
+
+/* Basic RAG vs agentic RAG. */
+export function BasicVsAgenticRAG({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 190" width="100%" role="img" aria-label="Basic RAG versus agentic RAG">
+        {/* basic */}
+        <text x="20" y="30" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.off}>basic RAG (Module 4) — one shot</text>
+        {["query", "retrieve", "generate"].map((s, i) => (
+          <g key={`br${i}`}>
+            <rect x={30 + i * 130} y="42" width="104" height="30" rx="6" fill={`${C.off}14`} stroke={C.off} strokeWidth="1.1" />
+            <text x={82 + i * 130} y="61" textAnchor="middle" fontFamily={mono} fontSize="7.6" fill={C.off}>{s}</text>
+            {i < 2 && <line x1={134 + i * 130} y1="57" x2={160 + i * 130} y2="57" stroke={C.faint} strokeWidth="1.1" />}
+          </g>
+        ))}
+        <text x="240" y="88" textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.muted}>one retrieval, one generation — fails if the first retrieval is poor</text>
+        {/* agentic */}
+        <text x="20" y="118" fontFamily={mono} fontSize="9" fontWeight="700" fill={INDIGO}>agentic RAG — retrieve, check, reformulate, repeat</text>
+        <rect x="30" y="130" width="92" height="30" rx="6" fill={`${INDIGO}16`} stroke={INDIGO} strokeWidth="1.2" />
+        <text x="76" y="149" textAnchor="middle" fontFamily={mono} fontSize="7.4" fill={INDIGO}>retrieve</text>
+        <polygon points="160,145 192,128 224,145 192,162" fill={`${C.gate}16`} stroke={C.gate} strokeWidth="1.2" />
+        <text x="192" y="142" textAnchor="middle" fontFamily={mono} fontSize="6.4" fontWeight="700" fill={C.gate}>enough?</text>
+        <text x="192" y="152" textAnchor="middle" fontFamily={mono} fontSize="6.4" fontWeight="700" fill={C.gate}>info</text>
+        <rect x="262" y="130" width="92" height="30" rx="6" fill={`${C.on}16`} stroke={C.on} strokeWidth="1.2" />
+        <text x="308" y="149" textAnchor="middle" fontFamily={mono} fontSize="7.4" fill={C.on}>generate</text>
+        <line x1="122" y1="145" x2="160" y2="145" stroke={C.faint} strokeWidth="1.1" />
+        <line x1="224" y1="145" x2="262" y2="145" stroke={C.on} strokeWidth="1.1" /><text x="243" y="140" textAnchor="middle" fontFamily={mono} fontSize="6" fontWeight="700" fill={C.on}>yes</text>
+        {/* reformulate loop */}
+        <path d="M192 162 Q192 184 110 184 Q60 184 60 160" stroke={C.hole} strokeWidth="1.2" fill="none" strokeDasharray="4 3" />
+        <polygon points="60,160 56,168 65,165" fill={C.hole} />
+        <text x="150" y="180" textAnchor="middle" fontFamily={mono} fontSize="6.6" fontWeight="700" fill={C.hole}>no → reformulate query</text>
+        <text x="430" y="148" textAnchor="middle" fontFamily={mono} fontSize="7.4" fill={C.faint}>self-correcting</text>
+        <text x="430" y="160" textAnchor="middle" fontFamily={mono} fontSize="7.4" fill={C.faint}>retrieval</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Contextual compression: retrieve many, keep only relevant excerpts. */
+export function ContextualCompression({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 160" width="100%" role="img" aria-label="Contextual compression of retrieved documents">
+        <text x="270" y="20" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>retrieve broadly, then keep only the query-relevant excerpts</text>
+        {/* 10 full docs */}
+        <text x="90" y="44" textAnchor="middle" fontFamily={mono} fontSize="7.6" fontWeight="700" fill={C.off}>retrieve k=10 full docs</text>
+        {Array.from({ length: 10 }).map((_, i) => (
+          <rect key={`fd${i}`} x={30 + (i % 5) * 26} y={52 + Math.floor(i / 5) * 34} width="22" height="28" rx="2" fill={`${C.off}22`} stroke={C.off} strokeWidth="0.7" />
+        ))}
+        {/* compressor */}
+        <rect x="210" y="60" width="110" height="40" rx="7" fill={`${INDIGO}16`} stroke={INDIGO} strokeWidth="1.4" />
+        <text x="265" y="78" textAnchor="middle" fontFamily={mono} fontSize="7.6" fontWeight="700" fill={INDIGO}>LLM extractor</text>
+        <text x="265" y="90" textAnchor="middle" fontFamily={mono} fontSize="6.2" fill={C.muted}>keep relevant only</text>
+        <line x1="160" y1="80" x2="210" y2="80" stroke={C.faint} strokeWidth="1.2" /><polygon points="210,80 203,76 203,84" fill={C.faint} />
+        {/* excerpts */}
+        <text x="430" y="44" textAnchor="middle" fontFamily={mono} fontSize="7.6" fontWeight="700" fill={C.on}>relevant excerpts</text>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <rect key={`ex${i}`} x={380 + i * 26} y="60" width="22" height="40" rx="2" fill={`${C.on}26`} stroke={C.on} strokeWidth="0.8" />
+        ))}
+        <line x1="320" y1="80" x2="372" y2="80" stroke={C.faint} strokeWidth="1.2" /><polygon points="372,80 365,76 365,84" fill={C.faint} />
+        <text x="270" y="134" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.text}>fewer tokens into the generator → cheaper, less distraction, higher answer quality</text>
+        <text x="270" y="150" textAnchor="middle" fontFamily={mono} fontSize="7.6" fontWeight="700" fill={C.faint}>cast a wide net on recall, then compress for precision</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   9.9 — Agent Evaluation & Reliability
+   ════════════════════════════════════════════════════════════ */
+
+/* The five-level evaluation taxonomy. */
+export function EvalTaxonomy({ caption }: { caption?: string }) {
+  const levels = [
+    { n: "1", t: "final answer", d: "is the answer right? (misses how it got there)", c: C.on },
+    { n: "2", t: "tool calls", d: "right tools, right params? (trajectory match)", c: C.gate },
+    { n: "3", t: "reasoning", d: "sound reasoning even if wrong? (LLM-judge)", c: INDIGO },
+    { n: "4", t: "efficiency", d: "wasted steps? loops? (steps, cost per task)", c: C.violet },
+    { n: "5", t: "robustness", d: "holds on adversarial/edge cases? (red-team)", c: C.hole },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 200" width="100%" role="img" aria-label="Five-level agent evaluation taxonomy">
+        <text x="280" y="20" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>evaluating an agent ≫ checking the final answer — five levels, increasing depth</text>
+        {levels.map((l, i) => {
+          const y = 32 + i * 31;
+          return (
+            <g key={`et${i}`}>
+              <rect x="30" y={y} width="34" height="26" rx="5" fill={`${l.c}1c`} stroke={l.c} strokeWidth="1.2" />
+              <text x="47" y={y + 17} textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={l.c}>{l.n}</text>
+              <text x="76" y={y + 12} fontFamily={mono} fontSize="8.5" fontWeight="700" fill={l.c}>{l.t}</text>
+              <text x="76" y={y + 23} fontFamily={mono} fontSize="7.2" fill={C.muted}>{l.d}</text>
+            </g>
+          );
+        })}
+        <text x="280" y="194" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>the path matters, not just the destination — a right answer via flawed reasoning still fails</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* LLM-as-judge scoring. */
+export function LLMAsJudge({ caption }: { caption?: string }) {
+  const dims = ["accuracy", "completeness", "reasoning", "efficiency", "safety"];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 160" width="100%" role="img" aria-label="LLM as judge evaluation">
+        <rect x="24" y="40" width="110" height="40" rx="7" fill={`${C.off}14`} stroke={C.off} strokeWidth="1.2" />
+        <text x="79" y="58" textAnchor="middle" fontFamily={mono} fontSize="7.8" fontWeight="700" fill={C.off}>agent output</text>
+        <text x="79" y="70" textAnchor="middle" fontFamily={mono} fontSize="6.4" fill={C.muted}>+ task (+ reference)</text>
+        <rect x="180" y="36" width="120" height="48" rx="7" fill={`${INDIGO}1a`} stroke={INDIGO} strokeWidth="1.5" />
+        <text x="240" y="56" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={INDIGO}>judge LLM</text>
+        <text x="240" y="69" textAnchor="middle" fontFamily={mono} fontSize="6.4" fill={C.muted}>strong model + rubric</text>
+        <line x1="134" y1="60" x2="180" y2="60" stroke={C.faint} strokeWidth="1.2" /><polygon points="180,60 173,56 173,64" fill={C.faint} />
+        <line x1="300" y1="60" x2="346" y2="60" stroke={C.faint} strokeWidth="1.2" /><polygon points="346,60 339,56 339,64" fill={C.faint} />
+        {dims.map((d, i) => (
+          <g key={`jd${i}`}>
+            <rect x="350" y={30 + i * 19} width="180" height="16" rx="3" fill={`${C.on}12`} stroke={C.on} strokeWidth="0.8" />
+            <text x="358" y={42 + i * 19} fontFamily={mono} fontSize="7" fill={C.text}>{d}</text>
+            <text x="520" y={42 + i * 19} textAnchor="end" fontFamily={mono} fontSize="7" fontWeight="700" fill={C.on}>n/5</text>
+          </g>
+        ))}
+        <text x="280" y="150" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>a strong model scores outputs on a rubric — scalable, but calibrate it against human labels</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Circuit breaker state machine. */
+export function CircuitBreaker({ caption }: { caption?: string }) {
+  const states = [
+    { t: "CLOSED", d: "normal — calls pass through", c: C.on },
+    { t: "OPEN", d: "blocking — fail fast after N errors", c: C.hole },
+    { t: "HALF-OPEN", d: "testing — allow one trial call", c: C.gate },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 160" width="100%" role="img" aria-label="Circuit breaker state machine">
+        <text x="280" y="20" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>a circuit breaker stops hammering a failing service — protects cost & latency</text>
+        {states.map((s, i) => {
+          const x = 30 + i * 178;
+          return (
+            <g key={`cb${i}`}>
+              <rect x={x} y="44" width="160" height="50" rx="9" fill={`${s.c}14`} stroke={s.c} strokeWidth="1.5" />
+              <text x={x + 80} y="66" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={s.c}>{s.t}</text>
+              <foreignObject x={x + 6} y="72" width="148" height="20"><div style={{ fontFamily: mono, fontSize: "7px", color: C.muted, textAlign: "center", lineHeight: 1.2 }}>{s.d}</div></foreignObject>
+            </g>
+          );
+        })}
+        <text x="119" y="112" textAnchor="middle" fontFamily={mono} fontSize="6.8" fontWeight="700" fill={C.hole}>N failures →</text>
+        <line x1="190" y1="69" x2="208" y2="69" stroke={C.hole} strokeWidth="1.1" /><polygon points="208,69 201,65 201,73" fill={C.hole} />
+        <text x="297" y="112" textAnchor="middle" fontFamily={mono} fontSize="6.8" fontWeight="700" fill={C.gate}>timeout →</text>
+        <line x1="368" y1="69" x2="386" y2="69" stroke={C.gate} strokeWidth="1.1" /><polygon points="386,69 379,65 379,73" fill={C.gate} />
+        <path d="M470 94 Q470 130 119 130 Q80 130 80 96" stroke={C.on} strokeWidth="1.1" fill="none" strokeDasharray="4 3" />
+        <polygon points="80,96 76,104 85,101" fill={C.on} />
+        <text x="280" y="126" textAnchor="middle" fontFamily={mono} fontSize="6.8" fontWeight="700" fill={C.on}>trial succeeds → CLOSED (recovered)</text>
+        <text x="280" y="150" textAnchor="middle" fontFamily={mono} fontSize="7.6" fill={C.faint}>one of several reliability guards: + budget limits, retries with backoff, tracing</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

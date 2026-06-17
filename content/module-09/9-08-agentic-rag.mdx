@@ -1,0 +1,120 @@
+---
+title: "Agentic RAG: Retrieval as a Loop"
+module: "09"
+moduleTitle: "Agentic AI Systems & Orchestration"
+lesson: "9.8"
+slug: "9-08-agentic-rag"
+summary: "Basic RAG (Module 4) does one retrieval and one generation — and fails silently when the first retrieval is poor. Agentic RAG wraps retrieval in the agent loop: check whether the retrieved context is sufficient, reformulate the query if not, and iterate. Plus contextual compression — retrieve broadly, then keep only the relevant excerpts."
+prerequisites: ["9.2 ReAct: The Foundation Pattern", "4.8 Retrieval-Augmented Generation"]
+---
+
+## From Basic RAG to Agentic RAG
+
+Basic RAG, from Module 4 (4.8), is a straight line: embed the query, retrieve the top-k chunks, stuff them into the prompt, generate. It works — until the first retrieval misses, at which point it confidently answers from poor context with no chance to recover.
+
+**Agentic RAG** applies the agent loop to retrieval itself: it can reformulate a weak query, retrieve from multiple angles, verify facts against each other, and fill gaps before answering.
+
+<BasicVsAgenticRAG caption="Basic RAG: one retrieval, one generation — no recourse if retrieval is poor. Agentic RAG: retrieve → check sufficiency → reformulate and retry if needed → generate. It's the ReAct loop (9.2) with retrieval as the tool and 'is this enough?' as the reasoning step." />
+
+---
+
+## Implementing Agentic RAG
+
+The core is a retrieve-check-reformulate loop, bounded by a max-iteration count (failure mode 2):
+
+```python
+class AgenticRAG:
+    def __init__(self, vector_store, llm, max_iter=3):
+        self.vs, self.llm, self.max_iter = vector_store, llm, max_iter
+
+    def retrieve_and_check(self, query: str) -> tuple[list, bool]:
+        docs = self.vs.similarity_search(query, k=4)
+        verdict = self.llm.invoke(f"""
+            Query: {query}
+            Retrieved: {[d.page_content[:300] for d in docs]}
+            Do these contain enough to answer the query?
+            Reply 'YES' or 'NO: <what is missing>'.
+        """).content
+        return docs, verdict.strip().startswith("YES")
+
+    def better_query(self, original: str, missing: str) -> str:
+        return self.llm.invoke(
+            f"Original: {original}\nMissing: {missing}\n"
+            f"Write a better search query to find the missing info. Query only."
+        ).content.strip()
+
+    def answer(self, question: str) -> str:
+        all_docs, query = [], question
+        for i in range(self.max_iter):
+            docs, sufficient = self.retrieve_and_check(query)
+            all_docs.extend(docs)
+            if sufficient:
+                break
+            if i < self.max_iter - 1:
+                query = self.better_query(question, docs[-1].page_content)
+
+        context = "\n\n".join(d.page_content for d in all_docs[:8])
+        return self.llm.invoke(
+            f"Context:\n{context}\n\nQuestion: {question}\nAnswer:"
+        ).content
+```
+
+**Step by step:**
+
+1. **`retrieve_and_check`** adds the step basic RAG lacks: after retrieving, it asks the LLM whether the context actually answers the query — a self-grading gate that turns silent failure into a decision.
+2. **`better_query`** is the reformulation move: given what's missing, the model writes a sharper search query. This is the agent *reasoning about its own retrieval* — the essence of agentic RAG.
+3. **The `answer` loop** iterates retrieve → check → reformulate up to `max_iter`, accumulating docs across attempts, then generates once from the combined context. The bound guarantees termination.
+4. **It degrades gracefully:** if it never finds enough, it still answers from what it gathered (and a production version would say so) rather than looping forever or pretending.
+
+<Callout type="why" title="This is just ReAct with a retrieval tool">
+
+Look at the shape: the "tool" is `similarity_search`, the "observation" is the retrieved docs, the "thought" is *is this sufficient?*, and the "action" is *reformulate and search again*. Agentic RAG isn't a new paradigm — it's the 9.2 loop pointed at a vector store. Every advanced RAG variant (multi-hop, self-RAG, corrective RAG) is a different reasoning policy over the same loop.
+
+</Callout>
+
+---
+
+## Contextual Compression
+
+Retrieval has a precision/recall tension: retrieve few chunks and you miss relevant context; retrieve many and you flood the model with noise (and tokens). **Contextual compression** resolves it — retrieve broadly, then use an LLM to extract only the parts relevant to the query before generation:
+
+<ContextualCompression caption="Retrieve k=10 full documents for recall, then an LLM extractor keeps only the query-relevant excerpts for precision. Fewer, sharper tokens reach the generator — cheaper, less distraction, and higher answer quality." />
+
+```python
+from langchain.retrievers import ContextualCompressionRetriever
+from langchain.retrievers.document_compressors import LLMChainExtractor
+
+base = vector_store.as_retriever(search_kwargs={"k": 10})   # wide net: recall
+compressor = LLMChainExtractor.from_llm(llm)                 # keep relevant: precision
+
+retriever = ContextualCompressionRetriever(
+    base_compressor=compressor,
+    base_retriever=base,
+)
+
+docs = retriever.invoke("What is Flash Attention?")
+# → only the Flash-Attention-relevant excerpts, not 10 full pages
+```
+
+**Step by step:**
+
+1. **Cast a wide net first** (`k=10`) so the relevant material is almost certainly *somewhere* in the retrieved set — optimise the base retriever for recall.
+2. **`LLMChainExtractor`** then reads each document against the query and pulls out only the relevant sentences — optimising for precision after the fact.
+3. **The payoff is threefold:** fewer tokens (lower cost), less irrelevant context (less chance the model is distracted or misled), and often a better answer. It pairs naturally with the agentic loop above — compress each retrieval before the sufficiency check.
+
+<Callout type="insight" title="Retrieval quality is the ceiling on RAG quality">
+
+No generator can answer from context it never received. That's why both techniques here target *retrieval*: the loop fixes "we asked the wrong question," compression fixes "we drowned the answer in noise." Generation is rarely the bottleneck in a RAG agent — retrieval is, and these are the two levers that move it.
+
+</Callout>
+
+---
+
+## Recap
+
+- **Basic RAG** does one retrieval + one generation and fails silently on poor retrieval; **agentic RAG** wraps retrieval in the agent loop — check sufficiency, reformulate, retry — bounded by a max-iteration count.
+- Agentic RAG is structurally **ReAct with a retrieval tool**: search is the action, retrieved docs are the observation, "is this enough?" is the reasoning step.
+- **Contextual compression** resolves the recall/precision tension — retrieve broadly (k=10), then LLM-extract only the relevant excerpts — cutting tokens and noise while raising answer quality.
+- **Retrieval quality caps RAG quality**: both techniques target retrieval, because that — not generation — is the usual bottleneck.
+
+Next: how do you know any of this actually works? **Agent evaluation and reliability engineering**.

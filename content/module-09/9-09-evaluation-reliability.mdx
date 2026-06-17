@@ -1,0 +1,227 @@
+---
+title: "Agent Evaluation & Reliability"
+module: "09"
+moduleTitle: "Agentic AI Systems & Orchestration"
+lesson: "9.9"
+slug: "9-09-evaluation-reliability"
+summary: "The central challenge of agentic AI, made concrete. Why evaluating an agent is far harder than testing a function, the five-level evaluation taxonomy, LLM-as-judge scoring (with Weave), and the production reliability patterns that keep agents safe in the wild: circuit breakers, cost tracking with budget limits, and retry with backoff."
+prerequisites: ["9.7 Structured Outputs & Tool Schemas"]
+---
+
+## Why Agent Evaluation Is Hard
+
+Evaluating a function is easy: known input → expected output → compare. Evaluating an **agent** is hard because:
+
+1. The **path** to the answer (which tools, in what order) matters, not just the final answer.
+2. Correct final answers can be reached via **flawed reasoning** — right for the wrong reasons.
+3. The same task has **many valid solutions**.
+4. Agent behaviour is **stochastic** — different runs, different outcomes.
+5. **Edge cases and adversarial inputs** matter more than the average case.
+
+<Callout type="key" title="This is the module's thesis, operationalised">
+
+Lesson 9.1 claimed the real problem is reliability, not capability. Evaluation is how you *measure* reliability — and reliability engineering is how you *enforce* it. Everything in this lesson exists to turn "it seemed to work in the demo" into "it works 99% of the time, and we can prove it."
+
+</Callout>
+
+---
+
+## The Evaluation Taxonomy
+
+Don't evaluate only the final answer. There are five levels, each deeper than the last:
+
+<EvalTaxonomy caption="Level 1 final answer (right?), 2 tool calls (right tools/params? — trajectory matching), 3 reasoning (sound even if wrong? — LLM-judge), 4 efficiency (wasted steps/loops? — steps & cost per task), 5 robustness (holds on adversarial/edge cases? — red-teaming). The path matters, not just the destination." />
+
+A useful production rule: track **Level 1** for a quick pass/fail, **Level 4** as your cost/efficiency SLA, and sample **Levels 3 and 5** continuously — those are where silent quality regressions hide.
+
+---
+
+## LLM-as-Judge
+
+For tasks with no single ground-truth answer, use a strong model to score outputs against a rubric — returning **structured** scores (lesson 9.7) so they're aggregatable:
+
+```python
+import json
+
+class AgentEvaluator:
+    def __init__(self, judge_llm):
+        self.judge = judge_llm
+
+    def evaluate_response(self, task, response, reference=None) -> dict:
+        scores = json.loads(self.judge.invoke(f"""
+            Evaluate this agent response on a 1-5 scale per dimension.
+
+            TASK: {task}
+            RESPONSE: {response}
+            {"REFERENCE: " + reference if reference else ""}
+
+            Dimensions: accuracy, completeness, reasoning, efficiency, safety.
+            Return JSON: {{"accuracy": n, "completeness": n, "reasoning": n,
+                          "efficiency": n, "safety": n, "explanation": "..."}}
+        """).content)
+        scores["overall"] = sum(
+            scores[k] for k in ["accuracy", "completeness", "reasoning", "efficiency"]
+        ) / 4
+        return scores
+
+    def evaluate_trajectory(self, task, tool_calls) -> dict:
+        traj = "\n".join(
+            f"{i+1}: {tc['name']}({json.dumps(tc['args'])})"
+            for i, tc in enumerate(tool_calls)
+        )
+        return json.loads(self.judge.invoke(f"""
+            Task: {task}
+            Trajectory:
+            {traj}
+            Were steps unnecessary? params correct? sequence logical?
+            Return JSON: {{"issues": [...], "efficiency_score": 1-5}}
+        """).content)
+```
+
+**Step by step:**
+
+1. **`evaluate_response`** is **Level 1–3**: a rubric across accuracy/completeness/reasoning/efficiency/safety, returned as structured scores you can average and trend over time.
+2. **`evaluate_trajectory`** is **Level 2 & 4**: it judges the *sequence of tool calls*, not just the answer — catching wasted steps and wrong parameters that a final-answer check would miss entirely.
+3. **Safety is a scored dimension**, not an afterthought — flag harmful or inappropriate output as part of routine evaluation.
+
+<Callout type="pitfall" title="Calibrate the judge against humans">
+
+LLM-as-judge is scalable but not automatically trustworthy — judges have biases (they favour longer answers, their own style, the first option shown). Before relying on judge scores, **correlate them against a few hundred human labels**. If they don't track, fix the rubric or the judge model. An uncalibrated judge gives you confident numbers that mean nothing.
+
+</Callout>
+
+---
+
+## Running Evaluations with Weave
+
+W&B **Weave** provides production evaluation infrastructure — datasets, scorers, and a dashboard — with tracing built in:
+
+```python
+import weave
+from weave import Dataset, Evaluation
+
+weave.init("my-agent-project")
+
+suite = Dataset(name="agent-tests-v1", rows=[
+    {"input": "Capital of France?",                "expected": "Paris"},
+    {"input": "Sum of the first 10 primes",        "expected": "129"},
+    {"input": "Summarise the latest AI papers",    "expected": None},  # judge-only
+])
+
+@weave.op()                                  # traces every call
+def my_agent(input: str) -> str:
+    return react_agent.run(input)
+
+@weave.op()
+def exact_match(output: str, expected: str) -> dict:
+    return {"score": 1.0 if expected and expected.lower() in output.lower() else 0.0}
+
+@weave.op()
+def judge(input: str, output: str, expected: str) -> dict:
+    return evaluator.evaluate_response(input, output, expected)
+
+results = await Evaluation(dataset=suite, scorers=[exact_match, judge]).evaluate(my_agent)
+```
+
+**Step by step:**
+
+1. **`@weave.op()`** decorates your agent and scorers so every call — inputs, outputs, tokens, latency, cost — is traced to the dashboard automatically.
+2. **A `Dataset` mixes ground-truth and judge-only cases**: `exact_match` handles the former, the LLM `judge` handles the latter (`expected=None`). Real suites need both.
+3. **`Evaluation(...).evaluate(agent)`** runs every case through every scorer and aggregates — this is your regression gate: run it on each prompt or model change and watch the scores, exactly as you'd run a unit-test suite.
+
+---
+
+## Production Reliability Patterns
+
+Evaluation tells you the agent is good *on average*; these patterns keep it safe on the bad runs. Three you'll always want:
+
+**1. Circuit breaker** — stop hammering a failing dependency:
+
+<CircuitBreaker caption="CLOSED: calls pass. After N failures it trips to OPEN and fails fast (no more doomed calls). After a timeout it goes HALF-OPEN and allows one trial — success returns to CLOSED, failure re-opens. Protects both cost and latency when a service degrades." />
+
+```python
+import time
+
+class CircuitBreaker:
+    def __init__(self, threshold=3, timeout=60):
+        self.threshold, self.timeout = threshold, timeout
+        self.failures, self.opened_at, self.state = 0, None, "closed"
+
+    def call(self, fn, *args, **kwargs):
+        if self.state == "open":
+            if time.time() - self.opened_at > self.timeout:
+                self.state = "half-open"          # time to test recovery
+            else:
+                raise RuntimeError("circuit OPEN — service unavailable")
+        try:
+            result = fn(*args, **kwargs)
+            if self.state == "half-open":         # trial succeeded
+                self.state, self.failures = "closed", 0
+            return result
+        except Exception:
+            self.failures += 1
+            if self.failures >= self.threshold:
+                self.state, self.opened_at = "open", time.time()
+            raise
+```
+
+**2. Cost tracking with a hard budget** — the fix for cost explosions (failure mode 5):
+
+```python
+class CostTracker:
+    # Per-million-token rates — illustrative; verify at anthropic.com/pricing
+    IN_PER_M, OUT_PER_M = 3.00, 15.00
+
+    def __init__(self, budget_usd: float):
+        self.budget, self.spent = budget_usd, 0.0
+
+    def track(self, in_tokens: int, out_tokens: int):
+        self.spent += in_tokens * self.IN_PER_M / 1e6 + out_tokens * self.OUT_PER_M / 1e6
+        if self.spent > self.budget:
+            raise RuntimeError(f"budget ${self.budget:.2f} exceeded (${self.spent:.2f})")
+
+    @property
+    def remaining(self) -> float:
+        return self.budget - self.spent
+```
+
+**3. Retry with exponential backoff** — survive transient failures (rate limits, blips):
+
+```python
+import time, random
+
+def with_retry(fn, max_retries=3, base_delay=1.0):
+    for attempt in range(max_retries + 1):
+        try:
+            return fn()
+        except Exception as e:
+            if attempt == max_retries:
+                raise
+            delay = base_delay * (2 ** attempt) + random.uniform(0, 1)  # backoff + jitter
+            print(f"attempt {attempt+1} failed: {e}; retry in {delay:.1f}s")
+            time.sleep(delay)
+```
+
+**Step by step:**
+
+1. **Circuit breaker** prevents *cascading* failures: once a dependency is clearly down, fail fast instead of making (and paying for) calls that will also fail — then probe for recovery via HALF-OPEN.
+2. **Cost tracker** enforces a *hard* budget per run: every LLM call updates `spent`, and crossing the budget raises — a circuit breaker for money. (Read pricing from the API or the pricing page; never hard-code rates as truth.)
+3. **Retry with backoff + jitter** handles *transient* errors gracefully; the exponential delay avoids stampeding a recovering service, and jitter prevents many clients retrying in lockstep.
+
+<Callout type="key" title="The seven reliability rules">
+
+The whole module distils to seven rules: **(1)** validate tool outputs with schemas; **(2)** always set `max_steps` and budget limits; **(3)** return errors as tool results, never raise into the loop; **(4)** log every LLM call and tool invocation; **(5)** test with adversarial inputs before production; **(6)** keep a human in the loop for irreversible actions; **(7)** checkpoint long-running agents. Every one maps to a failure mode from 9.1.
+
+</Callout>
+
+---
+
+## Recap
+
+- Agents are hard to evaluate because the **path matters**, reasoning can be flawed despite a right answer, solutions vary, behaviour is stochastic, and **edge cases dominate**.
+- The **five-level taxonomy** — final answer, tool calls, reasoning, efficiency, robustness — keeps you from over-trusting a passing final answer.
+- **LLM-as-judge** scores open-ended outputs against a rubric (return structured scores), but **must be calibrated against human labels** to be trustworthy; **Weave** turns this into a traced, repeatable regression suite.
+- **Reliability patterns** enforce safety on bad runs: **circuit breakers** (cascading failures), **cost tracking with hard budgets** (cost explosions), **retry with backoff + jitter** (transient errors).
+- It all reduces to the **seven reliability rules**, each mapping to a failure mode from 9.1.
+
+Next: assembling everything into a deployable system — **production agent architectures**.

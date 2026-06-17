@@ -305,6 +305,16 @@ import {
   // 9.6 Memory systems
   MemoryTiers,
   ContextCompression,
+  // 9.7 Structured outputs
+  StructuredVsFreeform,
+  SchemaValidationLoop,
+  // 9.8 Agentic RAG
+  BasicVsAgenticRAG,
+  ContextualCompression,
+  // 9.9 Evaluation & reliability
+  EvalTaxonomy,
+  LLMAsJudge,
+  CircuitBreaker,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -547,6 +557,13 @@ const components = {
   N8nVsLangGraph,
   MemoryTiers,
   ContextCompression,
+  StructuredVsFreeform,
+  SchemaValidationLoop,
+  BasicVsAgenticRAG,
+  ContextualCompression,
+  EvalTaxonomy,
+  LLMAsJudge,
+  CircuitBreaker,
 };
 
 export async function renderMDX(source: string) {

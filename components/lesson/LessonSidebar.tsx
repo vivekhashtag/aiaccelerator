@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { ModuleEntry } from "@/lib/content";
+import SearchTrigger from "@/components/search/SearchTrigger";
 
 interface LessonSidebarProps {
   modules: ModuleEntry[];
@@ -161,6 +162,11 @@ export default function LessonSidebar({
                 </div>
               </div>
             </Link>
+          </div>
+
+          {/* Search */}
+          <div className="px-3 pt-3">
+            <SearchTrigger tone="light" />
           </div>
 
           {/* Module tree */}

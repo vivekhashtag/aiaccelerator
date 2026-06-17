@@ -1,6 +1,6 @@
 # Project Status
 
-**Last updated:** 2026-06-17 — **🎉 ALL 10 MODULES COMPLETE.** Module 10 (End-to-End Systems, Scaling & Capstone, **10/10 lessons**) built this session from `10 End to End System Scaling/module-10-lesson.md.pdf` (10 topics, richer than curriculum.md's 8). **92 routes, `next build` green. 89 lessons total across Modules 1–10.** Emerald accent; **+25 diagrams** in `diagrams/module-10.tsx`. Same session: Module 8 finished (8.10–8.13), Module 9 built (11 lessons), global diagram font bump (DIAGRAM_SCALE 1.16). **Phase 2 (content scaling) is effectively DONE.**
+**Last updated:** 2026-06-17 — **🎉 ALL 10 MODULES COMPLETE.** Module 10 (End-to-End Systems, Scaling & Capstone, **10/10 lessons**) built this session from `10 End to End System Scaling/module-10-lesson.md.pdf` (10 topics, richer than curriculum.md's 8). **92 routes, `next build` green. 89 lessons total across Modules 1–10.** Emerald accent; **+25 diagrams** in `diagrams/module-10.tsx`. Same session: Module 8 finished (8.10–8.13), Module 9 built (11 lessons), global diagram font bump (DIAGRAM_SCALE 1.16), and **client-side full-text search** added (⌘K, no backend — see "🔎 Full-text search" below). **Phase 2 (content scaling) is DONE.** (Login/auth was discussed but deferred again — user chose search first.)
 
 ## ▶ RESUME HERE — Phase 2 content is complete; what's left is polish & deferred phases
 
@@ -14,6 +14,20 @@ All ten curriculum modules are built and pushed (89 lessons). No module remains.
 > Confirm direction with the user before starting — content phase is done, so the next move is a phase decision (auth vs labs vs polish), which is the user's call.
 
 > **Module 10 build notes (done 2026-06-17):** 10 lessons `10-01`…`10-10`, from the PDF (no `.md`; parsed via `pdftotext -layout`). Synthesis module — diagram-heavy (25 figures) with some code (cost calc, k8s HPA, JSON logs, router, allow-list). Emerald accent (`C.emerald` added to `_shared.tsx`; "10" already in `lib/colors.ts`). Capstone 10.10 has a `CourseArc` diagram summarising all 10 modules. Used `claude-opus-4-8`, hedged pricing. **MDX gotcha hit twice:** bare `<` before a **digit/`$`** in prose (e.g. `<5%`, `<$2/task`) also breaks the build — escape as `&lt;` (attribute strings like `caption="…<5%…"` are safe).
+
+---
+
+## 🔎 Full-text search added (2026-06-17)
+
+Course-wide search across all 89 lessons — **client-side, zero backend, no new dependencies** (fits the static site; hand-rolled scorer per CLAUDE.md). Open with **⌘K / Ctrl-K** anywhere, or **`/`** outside an input, or the **Search** button in the lesson sidebar and the home nav.
+
+**How it works (the pipeline):**
+1. **Build the index — `lib/search.ts` (`buildSearchIndex`).** Reads every `content/module-*/*.mdx`, takes the frontmatter (title, module, moduleTitle, lesson, slug) + extracts `## /###` headings + strips the body to plain prose (drops code fences, JSX components, import/export lines, markdown markup, HTML entities). Each lesson's body is capped at **2,500 chars** to bound index size. Output: one `SearchRecord[]`.
+2. **Ship it as one static file — `app/api/search-index/route.ts`.** A `dynamic = "force-static"` GET returns the index JSON; Next prerenders it at build to a static asset (`/api/search-index`, ~**288 KB** for 89 lessons). No server runtime needed.
+3. **Search in the browser — `components/search/SearchOverlay.tsx`** (mounted once globally in `app/layout.tsx`). Lazily `fetch`es the index on first open, lowercases fields once, then ranks on every keystroke with a **weighted hand-rolled scorer**: title (≈10–14, prefix-boosted) ≫ headings (5) > summary (4) > module/number (3) > body (1), **AND across query tokens** (every token must match somewhere) + a whole-phrase bonus. Top 8 results, each with a ~160-char snippet around the first match and `<mark>` highlighting. Keyboard: ↑/↓ to move, ↵ to open, Esc to close; results link to `/modules/{module}/{lessonPath}`.
+4. **Triggers — `components/search/SearchTrigger.tsx`.** A light variant in the sidebar header and a dark variant in the home nav; they just dispatch a `window` `"open-search"` event the overlay listens for (no prop drilling).
+
+**Why this design:** the site is fully static (free Vercel hosting, no server). Build-time index + client-side scoring keeps it static, makes search instant (no network per keystroke — one ~288 KB fetch, then in-memory), and adds no dependency. To rebuild the index after content changes, just `next build` (it's regenerated from the MDX every build).
 
 ---
 
@@ -332,6 +346,7 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 | Quiz (unregistered, kept for later) | `components/lesson/QuizBlock.tsx` |
 | Module colors | `lib/colors.ts` |
 | Content index | `lib/content.ts` |
+| **Search** | `lib/search.ts` (build index from MDX) · `app/api/search-index/route.ts` (static JSON) · `components/search/SearchOverlay.tsx` (⌘K overlay + scorer) · `SearchTrigger.tsx` (buttons) · mounted in `app/layout.tsx` |
 | MDX renderer | `lib/mdx.ts` |
 | Design tokens | `styles/tokens.css` |
 | Home page | `app/page.tsx` |

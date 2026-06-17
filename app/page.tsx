@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getAllModules } from "@/lib/content";
 import { MODULE_COLORS } from "@/lib/colors";
 import ModuleIllustration from "@/components/ui/ModuleIllustration";
+import SearchTrigger from "@/components/search/SearchTrigger";
 
 const ALL_MODULES = [
   { num: "01", title: "Semiconductor & Digital Foundations",      weeks: 2  },
@@ -152,7 +153,8 @@ export default function HomePage() {
             </div>
             <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>AI Inference &amp; Accelerator</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <SearchTrigger tone="dark" />
             <span className="home-nav-stat" style={{ color: "rgba(255,255,255,0.45)", fontSize: 13 }}>10 Modules</span>
             <span className="home-nav-stat" style={{ color: "rgba(255,255,255,0.45)", fontSize: 13 }}>42+ Labs</span>
             <Link

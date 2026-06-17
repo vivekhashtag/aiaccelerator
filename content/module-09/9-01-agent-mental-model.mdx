@@ -1,0 +1,115 @@
+---
+title: "The Agent Mental Model"
+module: "09"
+moduleTitle: "Agentic AI Systems & Orchestration"
+lesson: "9.1"
+slug: "9-01-agent-mental-model"
+summary: "The shift that defines this module: from treating the LLM as a passive function to treating it as a decision-maker that pursues a goal with tools. What an agent actually is, the single loop every framework implements, and the six ways agents fail in production — because the central challenge of agentic AI is not capability, it's reliability."
+prerequisites: ["7.1 The LLM Serving Problem", "4.9 Prompting"]
+---
+
+## The Shift This Module Represents
+
+Every module before this one treated the LLM as a **function**: input goes in, output comes out, done. The model was passive — it answered what it was asked and stopped.
+
+Agentic AI treats the LLM as a **decision-maker**: it receives a *goal*, chooses which tools to use, observes the results, adjusts its plan, and continues until the goal is achieved — or fails gracefully when it can't.
+
+<AgentVsFunction caption="A function call takes milliseconds and always terminates. An agentic loop can run for minutes, make dozens of API calls, write files, query databases, and spawn other agents — succeeding spectacularly or failing in creative ways." />
+
+<Callout type="key" title="The real problem is reliability, not capability">
+
+Getting an agent to do something impressive *once* is easy. Getting it to do the right thing **99% of the time** in production — with error handling, cost controls, human oversight, and auditability — is the engineering problem this entire module solves. Keep this lens on every pattern ahead: we are not chasing cleverness, we are buying reliability.
+
+</Callout>
+
+---
+
+## What Is an Agent?
+
+An **agent** is a system where a language model:
+
+1. **Receives a goal** — not just a prompt (e.g. *"Find the 3 most recent papers on speculative decoding, summarise each, and save them to `papers.md`"*).
+2. **Has access to tools** — functions it can call (search, fetch, write file, run code).
+3. **Decides** which tools to use and in what order.
+4. **Observes** tool results and uses them to decide the next step.
+5. **Terminates** when the goal is achieved — or when it determines the goal is impossible.
+
+A plain prompt cannot do this: it has no tools, no observation loop, no persistence. The agent's power comes entirely from the loop between *deciding* and *observing*.
+
+---
+
+## The Agent Loop
+
+Every agent framework — ReAct, LangGraph, n8n, the rest of this module — is a variation on **one core loop**:
+
+<AgentLoop caption="The loop continues as long as the LLM emits tool calls. When it instead emits plain text (no tool calls), the loop terminates and that text is the final answer. Everything else in this module is machinery around this loop: routing, memory, retries, oversight." />
+
+In its barest form, that loop is about 15 lines:
+
+```python
+def agent_loop(goal, tools, max_steps=15):
+    messages = [{"role": "user", "content": goal}]
+
+    for step in range(max_steps):
+        response = llm(messages, tools=tools)        # 1. LLM decides
+
+        if not response.tool_calls:                  # 2. plain text ⇒ done
+            return response.text
+
+        results = []
+        for call in response.tool_calls:             # 3. execute each tool
+            output = tools[call.name](**call.args)
+            results.append({"tool_use_id": call.id, "content": output})
+
+        messages.append(response)                    # 4. record the decision
+        messages.append({"role": "user", "content": results})  # 5. feed results back
+
+    return "Stopped: max steps reached."             # safety backstop
+```
+
+**Step by step:**
+
+1. **`llm(messages, tools=tools)`** — the model sees the conversation and the available tools, and decides whether to act or answer.
+2. **`if not response.tool_calls`** — the termination condition. No tool calls means the model believes it's done; that text is the answer.
+3. **Execute each tool** — the framework, not the model, actually runs the function. The model only *requests* a call; your code runs it.
+4. **Record the decision** — the assistant message (with its tool-call request) goes back into the history so the model remembers what it asked for.
+5. **Feed results back** — tool outputs return as a new message, and the loop repeats. This observe-then-decide cycle is the whole game.
+
+<Callout type="why" title="Notice the max_steps backstop">
+
+Even this 15-line loop already has a reliability guard: `max_steps`. Without it, a stuck agent loops forever and burns money. That single line is your first encounter with the theme of this module — **every powerful capability ships with a safety bound.**
+
+</Callout>
+
+---
+
+## Why Agents Fail
+
+Understanding failure modes *before* building is what separates production engineers from tutorial followers. There are six canonical ways agents break — and each has a standard fix you'll implement over the coming lessons:
+
+<AgentFailureModes caption="The six failure modes and their standard mitigations. These map directly onto later lessons: schema validation (9.2, 9.7), loop/cost bounds and circuit breakers (9.9), context compression and external memory (9.6), and human-in-the-loop gates (9.3, 9.9)." />
+
+- **Hallucinated tool calls** — the model calls a tool that doesn't exist or with parameters that violate the schema. *Fix:* strict schema validation; return clear error messages as tool results so the model can correct itself.
+- **Infinite loops** — the agent can't reach the goal and keeps trying variations forever. *Fix:* `max_steps`, loop detection, human escalation.
+- **Context overflow** — after many tool calls the conversation exceeds the context window and responses degrade. *Fix:* compress old observations, move history to external memory.
+- **Cascading errors** — an error in step 3 corrupts step 4, then 5, until the agent is lost. *Fix:* checkpoints, explicit error-recovery steps, the ability to backtrack.
+- **Cost explosions** — a stuck agent makes hundreds of LLM calls. *Fix:* per-run budget limits, cost tracking, circuit breakers.
+- **Tool side effects** — the agent sends an email or deletes a file when it shouldn't have. *Fix:* dry-run mode, human-in-the-loop for irreversible actions, confirmation gates.
+
+<Callout type="pitfall" title="The demo-to-production gap">
+
+A flashy agent demo hides all six of these. They only surface at scale — the 1-in-50 run that loops, the edge case that overflows context, the tool call that fires twice. Designing for these from the start is why this module spends as much time on evaluation, memory, and oversight as on the agent patterns themselves.
+
+</Callout>
+
+---
+
+## Recap
+
+- Agentic AI reframes the LLM from a **passive function** into a **goal-pursuing decision-maker** that chooses tools, observes results, and loops until done.
+- An **agent** = goal + tools + a decide→observe loop that terminates on success or impossibility — something a plain prompt fundamentally cannot do.
+- **Every framework implements one core loop**: call the LLM, run any requested tools, feed results back, repeat until the model emits plain text.
+- There are **six canonical failure modes** (hallucinated calls, infinite loops, context overflow, cascading errors, cost explosions, tool side effects), each with a standard mitigation that the rest of the module builds.
+- The defining challenge is **reliability** — doing the right thing 99% of the time — not raw capability.
+
+Next: the foundational agent pattern that structures the loop into explicit reasoning — **ReAct**.

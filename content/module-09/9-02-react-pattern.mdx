@@ -1,0 +1,223 @@
+---
+title: "ReAct: The Foundation Pattern"
+module: "09"
+moduleTitle: "Agentic AI Systems & Orchestration"
+lesson: "9.2"
+slug: "9-02-react-pattern"
+summary: "ReAct (Reason + Act) is the pattern under every agent framework: alternate explicit Thought, Action, and Observation steps so the model grounds its answers in real tool execution. We build a ReAct agent from scratch on the Claude tool-use API, then cover the tool-design principles that decide how reliably it runs."
+prerequisites: ["9.1 The Agent Mental Model"]
+---
+
+## What ReAct Is
+
+**ReAct** (Reason + Act, Yao et al. 2022) is the foundational agentic pattern. It structures the agent loop from 9.1 into alternating **Thought → Action → Observation** steps:
+
+<ReActCycle caption="Thought is the model's internal reasoning (visible, but not sent to tools). Action is a tool call. Observation is the tool result fed back in. The cycle repeats until the model has enough to give a Final Answer." />
+
+A worked trace makes the rhythm obvious:
+
+```text
+Question: What is Tokyo's population, and what percent of Japan's total is that?
+
+Thought: I need Tokyo's population and Japan's total.
+Action: search("Tokyo population 2024")
+Observation: Tokyo metro population ≈ 37.4 million.
+
+Thought: Now I need Japan's total.
+Action: search("Japan total population 2024")
+Observation: Japan population ≈ 124 million.
+
+Thought: I can compute the percentage now.
+Action: calculate(37.4 / 124 * 100)
+Observation: 30.16
+
+Thought: I have everything.
+Final Answer: Tokyo's ~37.4M is about 30.2% of Japan's 124M.
+```
+
+**Why ReAct works:** explicit reasoning traces are more reliable than implicit reasoning; thoughts help the model plan multi-step actions; observations ground it in reality (preventing pure hallucination); and the trace is **auditable** — you can see exactly why the model did what it did.
+
+---
+
+## ReAct vs Chain-of-Thought vs Standard Prompting
+
+ReAct is the third rung of a ladder you started climbing in Module 4:
+
+<ReActComparison caption="Standard prompting answers directly. Chain-of-Thought (4.9) makes reasoning visible but still relies on the model's own arithmetic/knowledge. ReAct adds the act-and-observe loop, so the answer is grounded in actual tool execution — strictly more reliable for factual tasks." />
+
+The difference is concrete: ask any of the three *"what is 37.4 / 124 × 100?"* and standard/CoT will do the arithmetic **in the model's head** (often subtly wrong on hard numbers). ReAct calls a real calculator and reports `30.16129…` — grounded, not guessed.
+
+---
+
+## Implementing ReAct From Scratch
+
+No framework needed — ReAct is ~70 lines on Anthropic's tool-use API. First, the tools, defined as plain Python functions plus a schema the model can read:
+
+```python
+import anthropic, json
+
+def calculator(expression: str) -> str:
+    """Evaluate a simple arithmetic expression safely."""
+    allowed = set("0123456789+-*/().% ")
+    if not all(c in allowed for c in expression):
+        return "ERROR: only basic arithmetic allowed"
+    try:
+        return str(eval(expression, {"__builtins__": {}}, {}))
+    except Exception as e:
+        return f"ERROR: {e}"
+
+def web_search(query: str) -> str:
+    """Search the web (mock here; use Tavily/Brave/Serper in production)."""
+    mock = {
+        "tokyo population": "Tokyo metro population: ~37.4 million (2024)",
+        "japan total population": "Japan population: ~124.0 million (2024)",
+    }
+    for key, val in mock.items():
+        if key in query.lower():
+            return val
+    return f"No results for: {query}"
+
+# Registry: the callable + the schema the model sees
+TOOLS = {
+    "calculator": {
+        "function": calculator,
+        "description": "Evaluate a mathematical expression.",
+        "parameters": {
+            "type": "object",
+            "properties": {"expression": {"type": "string"}},
+            "required": ["expression"],
+        },
+    },
+    "web_search": {
+        "function": web_search,
+        "description": "Search the web for current information.",
+        "parameters": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        },
+    },
+}
+```
+
+**Step by step:**
+
+1. **Tools are ordinary functions.** `calculator` and `web_search` have no LLM-specific code — they take typed inputs and return strings.
+2. **They return errors as strings, never raise.** Note `calculator` returns `"ERROR: …"` instead of throwing. This is tool-design Principle 2 (below) — a crash kills the loop; a string lets the model recover.
+3. **The registry pairs each callable with a JSON schema.** The schema is what the model reads to decide *how* to call the tool; the function is what your code actually runs.
+
+Now the agent — the 9.1 loop, made concrete on Claude's API:
+
+```python
+class ReActAgent:
+    def __init__(self, model="claude-opus-4-8", max_steps=10):
+        self.client = anthropic.Anthropic()   # reads ANTHROPIC_API_KEY
+        self.model, self.max_steps = model, max_steps
+
+    def run(self, goal: str) -> str:
+        tools_api = [
+            {"name": n, "description": t["description"], "input_schema": t["parameters"]}
+            for n, t in TOOLS.items()
+        ]
+        messages = [{"role": "user", "content": goal}]
+
+        for step in range(self.max_steps):
+            response = self.client.messages.create(
+                model=self.model, max_tokens=1024,
+                tools=tools_api, messages=messages,
+            )
+
+            tool_uses = [b for b in response.content if b.type == "tool_use"]
+            if not tool_uses:                                  # no calls ⇒ done
+                return "".join(b.text for b in response.content if b.type == "text")
+
+            tool_results = []
+            for tu in tool_uses:                               # run each call
+                output = TOOLS[tu.name]["function"](**tu.input)
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tu.id,
+                    "content": output,
+                })
+
+            messages.append({"role": "assistant", "content": response.content})
+            messages.append({"role": "user", "content": tool_results})
+
+        return "ERROR: max steps reached without finishing."
+```
+
+**Step by step:**
+
+1. **`tools_api`** reshapes the registry into Anthropic's format — note the key is `input_schema` (Claude's name for the parameter schema).
+2. **`messages.create(..., tools=tools_api)`** is one turn of the loop. Claude returns a list of content **blocks** — some `text` (its reasoning, the "Thought"), some `tool_use` (the "Action").
+3. **`if not tool_uses`** is the termination check from 9.1: no `tool_use` blocks means Claude answered in plain text — that's the Final Answer.
+4. **Executing each `tool_use`** produces a `tool_result` block keyed by `tool_use_id`. That ID is how Claude matches a result back to the call it made — never omit it.
+5. **Both messages are appended**: the assistant's full response (so the conversation records what Claude asked for), then a `user` message carrying the `tool_result` blocks (the "Observation"). The loop repeats with Claude now seeing the results.
+6. **`max_steps`** is the same backstop from 9.1 — the loop can never run unbounded.
+
+<Callout type="insight" title="Tool use is the whole API surface for agents">
+
+This is the entire mechanism. There is no special "agent endpoint" — an agent is just `messages.create` called in a loop with `tools=...`, where your code runs the requested functions and feeds results back as `tool_result` blocks. Every framework in this module (LangGraph, Pydantic AI, n8n) wraps exactly this. Understanding it raw means you can debug any of them.
+
+</Callout>
+
+---
+
+## Tool Design Principles
+
+The tools you give an agent determine what it *can* do and how *reliably* it does it. Four principles separate robust tools from fragile ones:
+
+<ToolDesignPrinciples caption="Structured results, errors-as-results, embedded metadata, and idempotency. Together they pre-empt three of the six failure modes from 9.1: hallucinated calls, cascading errors, and tool side effects." />
+
+**1. Return structured, parseable results.** Return JSON, not prose the model must re-parse:
+
+```python
+# Bad: natural language the LLM must interpret
+def search_files(q): return "I found 3 files: report.pdf, data.csv, notes.txt"
+
+# Good: structured data
+def search_files(q):
+    return json.dumps([
+        {"name": "report.pdf", "path": "/docs/report.pdf", "size_kb": 245},
+        {"name": "data.csv",   "path": "/data/data.csv",   "size_kb": 12},
+    ])
+```
+
+**2. Return explicit errors — don't raise.** An exception crashes the loop; an error string lets the agent reason about the failure and try something else:
+
+```python
+def read_file(path):
+    try:
+        with open(path) as f: return f.read()
+    except FileNotFoundError:
+        return f"ERROR: file not found: {path}. Check the path."
+    except PermissionError:
+        return f"ERROR: permission denied for {path}."
+```
+
+**3. Include metadata in responses** — query echoed back, timestamp, result count — so the agent can judge whether a result is fresh, complete, or empty.
+
+**4. Make tools idempotent where possible.** A tool that's safe to call twice is far safer than one with irreversible side effects. When you can't avoid a side effect, gate it with an idempotency key:
+
+```python
+# Dangerous to retry — sends duplicate emails
+def send_email(to, body): smtp.send(to, body)
+
+# Safe — the key makes a re-call a no-op
+def send_email(to, body, idempotency_key):
+    if db.exists(f"sent:{idempotency_key}"): return "already sent"
+    smtp.send(to, body)
+    db.set(f"sent:{idempotency_key}", True)
+    return "sent"
+```
+
+---
+
+## Recap
+
+- **ReAct** structures the agent loop into explicit **Thought → Action → Observation** cycles; the reasoning trace is auditable and the observations keep the model grounded in reality.
+- It beats standard and Chain-of-Thought prompting on factual tasks because answers are **grounded in real tool execution**, not the model's own arithmetic.
+- A ReAct agent is ~70 lines on Anthropic's tool-use API: loop `messages.create(tools=...)`, run the requested `tool_use` blocks, feed `tool_result` blocks back (keyed by `tool_use_id`), stop on plain text — bounded by `max_steps`.
+- **Tool design is reliability engineering**: structured results, errors-as-results (never raise), embedded metadata, and idempotency pre-empt three of the six failure modes.
+
+Next: when one loop isn't enough — **LangGraph** turns the agent into a stateful graph with branching, cycles, checkpoints, and human gates.

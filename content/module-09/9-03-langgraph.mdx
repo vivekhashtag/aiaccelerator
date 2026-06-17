@@ -1,0 +1,184 @@
+---
+title: "LangGraph: Stateful Agent Workflows"
+module: "09"
+moduleTitle: "Agentic AI Systems & Orchestration"
+lesson: "9.3"
+slug: "9-03-langgraph"
+summary: "A plain ReAct loop handles one goal well, but production systems need branching, cycles, parallelism, resumability, and human gates. LangGraph models the agent as a directed graph of typed state — nodes are functions, edges are transitions. We build the canonical agent graph, add a human-in-the-loop approval gate, and make it resumable with checkpointing."
+prerequisites: ["9.2 ReAct: The Foundation Pattern"]
+---
+
+## Why Graphs?
+
+The ReAct loop from 9.2 is great for a single goal. Real systems need more: **multi-step workflows** where different steps use different prompts/tools, **conditional branching** (*if the search returns nothing, do X, else Y*), **parallel execution**, **cycles** (retry up to N times), **checkpointing** (resume after a crash), and **human-in-the-loop** gates.
+
+LangGraph models all of this as a directed graph built from three primitives:
+
+<LangGraphAnatomy caption="Nodes are functions (LLM calls, tool calls, custom logic). Edges are transitions — fixed, or conditional via a routing function. State is a typed dictionary that flows through the graph and is updated by each node. The ReAct loop becomes one specific graph; LangGraph lets you build any graph." />
+
+---
+
+## The Core Concepts in Code
+
+A LangGraph agent has four parts: a **state** type, **node** functions, **edges** (some conditional), and a **compile** step. Start with state and nodes:
+
+```python
+from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import MemorySaver
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import HumanMessage, ToolMessage
+from typing import TypedDict, Annotated
+import operator
+
+# 1. State — what flows through the graph
+class AgentState(TypedDict):
+    messages:      Annotated[list, operator.add]  # append-only (operator.add)
+    attempt_count: int
+
+llm = ChatAnthropic(model="claude-opus-4-8").bind_tools(tools)
+
+# 2. Nodes — functions that take state and return a state update
+def call_llm(state: AgentState) -> dict:
+    response = llm.invoke(state["messages"])
+    return {"messages": [response]}            # appended, not replaced
+
+def execute_tools(state: AgentState) -> dict:
+    last = state["messages"][-1]
+    results = [
+        ToolMessage(content=str(tools[c["name"]].invoke(c["args"])),
+                    tool_call_id=c["id"])
+        for c in last.tool_calls
+    ]
+    return {"messages": results}
+```
+
+**Step by step:**
+
+1. **`AgentState`** is a `TypedDict`. The `Annotated[list, operator.add]` on `messages` is the key trick: it tells LangGraph to **append** each node's returned messages rather than overwrite — so history accumulates across the loop automatically.
+2. **`.bind_tools(tools)`** attaches your tool schemas to the model, the LangChain equivalent of passing `tools=` to `messages.create` in 9.2.
+3. **A node returns a partial state update**, not the whole state. `call_llm` returns just `{"messages": [response]}`; LangGraph merges it using the reducer (`operator.add`).
+4. **`execute_tools`** is the same tool-running step from the raw loop, wrapped as a node that emits `ToolMessage`s keyed by `tool_call_id`.
+
+Now wire the nodes with edges — including the **conditional** edge that makes it a loop:
+
+```python
+# 3. Routing function — decides the next node from current state
+def should_continue(state: AgentState) -> str:
+    last = state["messages"][-1]
+    if getattr(last, "tool_calls", None):
+        return "execute_tools"     # model wants to act
+    return "end"                   # plain text ⇒ finished
+
+# 4. Build the graph
+builder = StateGraph(AgentState)
+builder.add_node("call_llm", call_llm)
+builder.add_node("execute_tools", execute_tools)
+
+builder.add_edge(START, "call_llm")
+builder.add_conditional_edges(
+    "call_llm", should_continue,
+    {"execute_tools": "execute_tools", "end": END},
+)
+builder.add_edge("execute_tools", "call_llm")   # after tools, back to the LLM
+
+graph = builder.compile(checkpointer=MemorySaver())
+
+# 5. Run — thread_id namespaces this conversation's checkpoints
+config = {"configurable": {"thread_id": "session-001"}}
+result = graph.invoke(
+    {"messages": [HumanMessage("Find the top 3 AI papers of 2024")]},
+    config=config,
+)
+```
+
+<ConditionalAgentGraph caption="The compiled graph. START → call_llm; a conditional edge routes on whether the model emitted tool calls (yes → execute_tools, no → END); execute_tools loops back to call_llm. This IS the ReAct loop — but now every edge, branch, and cycle is explicit and inspectable." />
+
+**Step by step:**
+
+1. **`should_continue`** is a routing function: it returns a *string key*, and `add_conditional_edges` maps that key to the next node. This is how branching works — return different keys for different situations.
+2. **`add_edge(START, "call_llm")`** and **`add_edge("execute_tools", "call_llm")`** are unconditional transitions; the conditional edge sits on `call_llm`.
+3. **`compile(checkpointer=MemorySaver())`** turns the builder into a runnable graph and enables checkpointing — required for the resume and human-gate features below.
+4. **`thread_id`** namespaces state. Reuse the same `thread_id` to continue a conversation; use a new one to start fresh. This is how one graph serves many concurrent sessions.
+
+---
+
+## Human-in-the-Loop
+
+Failure mode 6 from 9.1 — irreversible tool side effects — is fixed by pausing the graph before a sensitive node so a human can approve. LangGraph does this with `interrupt_before`:
+
+<HumanInLoopGate caption="interrupt_before pauses execution before the named node. The human inspects the pending tool calls in the saved state, then either resumes (approve) or rewrites the state to cancel (reject). Checkpointing is what makes the pause survivable." />
+
+```python
+graph = builder.compile(
+    checkpointer=MemorySaver(),
+    interrupt_before=["execute_tools"],   # pause before ANY tool runs
+)
+
+config = {"configurable": {"thread_id": "session-001"}}
+graph.invoke({"messages": [HumanMessage("Delete stale records")]}, config)
+
+# The graph paused. Inspect what it wants to do:
+pending = graph.get_state(config).values["messages"][-1].tool_calls
+for t in pending:
+    print(f"Agent wants: {t['name']}({t['args']})")
+
+if input("Approve? (y/n): ") == "y":
+    graph.invoke(None, config=config)        # resume from the checkpoint
+else:
+    graph.update_state(config, {"messages": [
+        ToolMessage(content="User rejected this action.",
+                    tool_call_id=pending[0]["id"])
+    ]})                                      # inject a rejection, loop continues
+```
+
+**Step by step:**
+
+1. **`interrupt_before=["execute_tools"]`** halts the graph *before* tools execute, every time. Execution returns control to your code with the state checkpointed.
+2. **`get_state(config)`** reads the paused state so you can show the human exactly which tools, with which arguments, are about to run.
+3. **`invoke(None, config)`** resumes from the checkpoint — passing `None` means "continue where you paused," not "start over."
+4. **`update_state`** lets you *reject*: inject a `ToolMessage` saying the action was denied, and the loop continues with the model now aware its request was refused.
+
+---
+
+## Resumable Agents: Checkpointing
+
+For agents that run minutes or hours, swap the in-memory saver for a persistent one so state survives a process restart:
+
+```python
+from langgraph.checkpoint.sqlite import SqliteSaver
+import sqlite3
+
+checkpointer = SqliteSaver(sqlite3.connect("agent_checkpoints.db"))
+graph = builder.compile(checkpointer=checkpointer)
+
+# Process A: start a long research task
+config = {"configurable": {"thread_id": "research-001"}}
+graph.invoke({"messages": [HumanMessage("Research speculative decoding…")]}, config)
+# …process crashes after 20 minutes…
+
+# Process B (fresh Python process): resume from the last checkpoint
+graph.invoke(None, config=config)   # picks up exactly where it stopped
+```
+
+**Step by step:**
+
+1. **`SqliteSaver`** writes a checkpoint after *every node*, to a file on disk — so checkpoints outlive the process (`MemorySaver` would lose them on exit).
+2. **Same `thread_id`, new process** — invoking with `None` resumes that thread from its last saved checkpoint. This directly mitigates failure mode 4 (cascading errors): a crash mid-run loses at most one node's work, not the whole task.
+
+<Callout type="insight" title="Parallelism, too">
+
+The same graph model gives you fan-out for free: a node can return multiple `Send(...)` objects to run a node many times in parallel (e.g. research 10 topics at once), with results merged by the state reducer. Branching, cycles, checkpoints, human gates, and parallelism — all from *nodes + edges + typed state*. That generality is why LangGraph is the code-first default for serious agents.
+
+</Callout>
+
+---
+
+## Recap
+
+- LangGraph models an agent as a **directed graph**: **nodes** (functions), **edges** (fixed or conditional), and a **typed state** dict updated by each node via reducers (e.g. `operator.add` to append messages).
+- The canonical agent graph — `call_llm` → conditional route → `execute_tools` → back to `call_llm` — **is the ReAct loop**, but with every branch and cycle explicit and inspectable.
+- **`interrupt_before`** pauses the graph for **human-in-the-loop** approval; inspect pending tool calls, then resume (`invoke(None)`) or reject (`update_state`) — the fix for irreversible side effects.
+- **Checkpointing** (`MemorySaver` for sessions, `SqliteSaver` for persistence) makes agents **resumable** after crashes and is what enables both the human gates and long-running tasks.
+- The graph abstraction also delivers branching and **parallelism** (`Send`) — the capabilities a flat ReAct loop can't express.
+
+Next: more than one agent — **multi-agent systems** (supervisor, peer-to-peer handoff, and critic patterns).

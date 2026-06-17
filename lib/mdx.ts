@@ -282,6 +282,19 @@ import {
   // 8.13 Other edge accelerators + TFLite Micro
   EdgeAcceleratorMatrix,
   TFLiteMicroFlow,
+  // Module 9 — Agentic AI Systems & Orchestration
+  // 9.1 Agent mental model
+  AgentVsFunction,
+  AgentLoop,
+  AgentFailureModes,
+  // 9.2 ReAct
+  ReActCycle,
+  ReActComparison,
+  ToolDesignPrinciples,
+  // 9.3 LangGraph
+  LangGraphAnatomy,
+  ConditionalAgentGraph,
+  HumanInLoopGate,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -507,6 +520,16 @@ const components = {
   DrpReconfig,
   EdgeAcceleratorMatrix,
   TFLiteMicroFlow,
+  // Module 9
+  AgentVsFunction,
+  AgentLoop,
+  AgentFailureModes,
+  ReActCycle,
+  ReActComparison,
+  ToolDesignPrinciples,
+  LangGraphAnatomy,
+  ConditionalAgentGraph,
+  HumanInLoopGate,
 };
 
 export async function renderMDX(source: string) {

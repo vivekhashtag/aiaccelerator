@@ -49,7 +49,8 @@ Do not introduce new heavy dependencies without flagging the tradeoff first.
 
 ## 4. Phased Roadmap — build in this order, do not skip ahead
 
-> **CURRENT PHASE: Phase 2 (content scaling)** ← update this marker as we progress.
+> **CURRENT PHASE: Phase 2 (content scaling) — CONTENT COMPLETE (all 10 modules built, 2026-06-17).**
+> ← Next phase is a user decision: Phase 1 (Supabase auth + progress, deferred) or Phase 3 (Pyodide labs, polish). Do not start either without explicit direction.
 > Phase 0 is complete and live; **Phase 1 (Supabase auth + saved progress) is intentionally deferred** —
 > by user direction we are scaling content first (Modules 1–7 built; Module 8 in progress; then 9–10).
 >
@@ -208,7 +209,12 @@ In rough teaching order:
   multi-agent → n8n → memory → structured outputs → agentic RAG → eval & reliability ★ → production →
   Document Intelligence Agent capstone). Code-heavy (Claude tool-use API); used current `claude-opus-4-8`
   model id and Voyage AI embeddings (source had outdated `claude-opus-4-5` / non-existent
-  `AnthropicEmbeddings`). **79 lessons total.**
+  `AnthropicEmbeddings`).
+  **Module 10 — End-to-End Systems, Scaling & Capstone** (**10 lessons** `10-01`…`10-10`, **Emerald** accent,
+  +25 SVG diagrams in `diagrams/module-10.tsx`) **COMPLETE 2026-06-17**, the synthesis module from the
+  10-topic `module-10-lesson.md.pdf` (seven-layer stack → scaling/cost → reliability → design patterns →
+  build-vs-buy → observability → fine-tuning → security/safety → economics → reference-architecture
+  capstone, incl. a `CourseArc` diagram of all 10 modules). **🎉 ALL 10 MODULES COMPLETE — 89 lessons total.**
   - **DECISION (2026-06-16) — hands-on modules include inline code.** From **Module 7** on, lessons
     embed **code snippets with step-by-step explanations** (not diagrams-only — that still holds for
     the conceptual modules 1–6). New `CodeBlock`/`Pre` in `LessonBlocks.tsx` styles fenced ```lang
@@ -226,9 +232,10 @@ In rough teaching order:
   `styles/tokens.css` + the palette in `diagrams/_shared.tsx`. Lessons are also fully **mobile
   responsive** (overlay sidebar, hamburger). To revert to dark, restore the prior token/palette
   values (noted in-file).
-- Next concrete steps: **Module 10 — End-to-End Systems, Scaling & Capstone** (the final module) —
-  Modules 8 and 9 are complete. Check `10 End to End System Scaling/module-10-lesson.md` for a richer
-  source first (Module 9's md had 11 topics vs curriculum's 7). Code-heavy (use the `CodeBlock`/`Pre`
-  fenced-code infra + numbered steps). PDFs on disk are parsed with `pdftotext -layout` (poppler) — the built-in PDF
+- Next concrete steps: **content is complete (all 10 modules).** The next move is a **phase decision the
+  user must make** — Phase 1 (Supabase auth + per-user progress, long deferred) or Phase 3 (Pyodide
+  in-browser labs, the per-module `lab-*.ipynb` notebooks on disk, certificates/search/theme polish), plus a
+  course-wide QA pass. Do not start a new phase without explicit direction. PDFs on disk are parsed with
+  `pdftotext -layout` (poppler) — the built-in PDF
   reader needs `pdftoppm`. Verify builds with `NEXT_DIST_DIR=.next-verify npx next build`; in **prose**
   escape bare `<`/`{` (`&lt;`/`&#123;`), but inside fenced ```code``` blocks they're fine.

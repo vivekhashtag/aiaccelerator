@@ -611,3 +611,128 @@ export function AiCostStages({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   10.10 — Reference Architecture (capstone)
+   ════════════════════════════════════════════════════════════ */
+
+/* The production AI platform reference architecture. */
+export function ReferenceArchitecture({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 300" width="100%" role="img" aria-label="Production AI platform reference architecture">
+        <text x="240" y="14" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={C.muted}>a production AI platform at moderate scale (10k–100k users/day)</text>
+        {/* user */}
+        <rect x="160" y="22" width="160" height="22" rx="11" fill={`${C.off}14`} stroke={C.off} strokeWidth="1.1" />
+        <text x="240" y="37" textAnchor="middle" fontFamily={mono} fontSize="7.6" fontWeight="700" fill={C.off}>USER REQUEST</text>
+        {/* gateway */}
+        <rect x="100" y="54" width="280" height="30" rx="6" fill={`${C.gate}14`} stroke={C.gate} strokeWidth="1.3" />
+        <text x="240" y="68" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.gate}>API GATEWAY</text>
+        <text x="240" y="79" textAnchor="middle" fontFamily={mono} fontSize="6.4" fill={C.muted}>auth · rate limit · cost enforcement · logging</text>
+        {/* routing */}
+        <rect x="100" y="94" width="280" height="30" rx="6" fill={`${EMERALD}16`} stroke={EMERALD} strokeWidth="1.4" />
+        <text x="240" y="108" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={EMERALD}>ROUTING LAYER</text>
+        <text x="240" y="119" textAnchor="middle" fontFamily={mono} fontSize="6.4" fill={C.muted}>classify complexity → route to the right model</text>
+        {/* fast path / agent */}
+        <rect x="40" y="136" width="180" height="44" rx="6" fill={`${C.on}12`} stroke={C.on} strokeWidth="1.2" />
+        <text x="130" y="152" textAnchor="middle" fontFamily={mono} fontSize="7.4" fontWeight="700" fill={C.on}>FAST PATH (simple)</text>
+        <text x="130" y="164" textAnchor="middle" fontFamily={mono} fontSize="6.2" fill={C.muted}>self-hosted Llama-8B INT8</text>
+        <text x="130" y="174" textAnchor="middle" fontFamily={mono} fontSize="6.2" fill={C.muted}>vLLM · &lt;500ms</text>
+        <rect x="260" y="136" width="180" height="44" rx="6" fill={`${C.indigo}12`} stroke={C.indigo} strokeWidth="1.2" />
+        <text x="350" y="152" textAnchor="middle" fontFamily={mono} fontSize="7.4" fontWeight="700" fill={C.indigo}>AGENT ORCH. (complex)</text>
+        <text x="350" y="164" textAnchor="middle" fontFamily={mono} fontSize="6.2" fill={C.muted}>LangGraph · memory · tools</text>
+        <text x="350" y="174" textAnchor="middle" fontFamily={mono} fontSize="6.2" fill={C.muted}>HITL · checkpoint</text>
+        {/* model serving */}
+        <rect x="100" y="192" width="280" height="30" rx="6" fill={`${C.sky}14`} stroke={C.sky} strokeWidth="1.2" />
+        <text x="240" y="206" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.sky}>MODEL SERVING</text>
+        <text x="240" y="217" textAnchor="middle" fontFamily={mono} fontSize="6.4" fill={C.muted}>vLLM · PagedAttention · batching · prefix cache</text>
+        {/* data */}
+        <rect x="100" y="232" width="280" height="30" rx="6" fill={`${C.violet}14`} stroke={C.violet} strokeWidth="1.2" />
+        <text x="240" y="246" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.violet}>DATA LAYER</text>
+        <text x="240" y="257" textAnchor="middle" fontFamily={mono} fontSize="6.4" fill={C.muted}>vector store · Postgres · Redis · object store</text>
+        {/* arrows */}
+        {[44, 84, 124, 222].map((y, i) => <g key={`ra${i}`}><line x1="240" y1={y} x2="240" y2={y + 10} stroke={C.faint} strokeWidth="1.1" /><polygon points={`240,${y + 10} 236,${y + 4} 244,${y + 4}`} fill={C.faint} /></g>)}
+        <line x1="240" y1="124" x2="130" y2="136" stroke={C.faint} strokeWidth="1" /><line x1="240" y1="124" x2="350" y2="136" stroke={C.faint} strokeWidth="1" />
+        <line x1="130" y1="180" x2="240" y2="192" stroke={C.faint} strokeWidth="1" /><line x1="350" y1="180" x2="240" y2="192" stroke={C.faint} strokeWidth="1" />
+        {/* observability rail */}
+        <rect x="448" y="54" width="104" height="208" rx="8" fill={`${C.hole}0c`} stroke={C.hole} strokeWidth="1.3" strokeDasharray="5 3" />
+        <text x="500" y="72" textAnchor="middle" fontFamily={mono} fontSize="7.4" fontWeight="700" fill={C.hole}>OBSERVABILITY</text>
+        {["Prometheus", "+ Grafana", "LangSmith", "Weave", "cost attrib.", "all layers", "emit here"].map((o, i) => (
+          <text key={`ro${i}`} x="500" y={92 + i * 22} textAnchor="middle" fontFamily={mono} fontSize="6.6" fill={C.text}>{o}</text>
+        ))}
+        <text x="240" y="280" textAnchor="middle" fontFamily={mono} fontSize="7.6" fill={C.faint}>every layer here is an earlier module — Module 10 is the wiring diagram</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* The data flywheel. */
+export function DataFlywheel({ caption }: { caption?: string }) {
+  const nodes = [
+    { t: "more users", a: 270 },
+    { t: "more usage data", a: 330 },
+    { t: "better FT + eval data", a: 30 },
+    { t: "better model behaviour", a: 90 },
+    { t: "better product", a: 150 },
+    { t: "(→ more users)", a: 210 },
+  ];
+  const cx = 270, cy = 105, r = 66;
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 210" width="100%" role="img" aria-label="The data flywheel">
+        <text x="270" y="18" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>the durable moat isn&apos;t the model — it&apos;s the data flywheel</text>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={EMERALD} strokeWidth="1.4" strokeDasharray="3 3" />
+        {/* rotation arrows */}
+        <polygon points={`${cx + r},${cy} ${cx + r - 6},${cy - 6} ${cx + r + 4},${cy - 5}`} fill={EMERALD} />
+        {nodes.map((n, i) => {
+          const rad = (n.a * Math.PI) / 180;
+          const x = cx + Math.cos(rad) * r;
+          const y = cy + Math.sin(rad) * r;
+          return (
+            <g key={`fw${i}`}>
+              <circle cx={x} cy={y} r="3" fill={EMERALD} />
+              <text x={x} y={y - 6} textAnchor="middle" fontFamily={mono} fontSize="6.8" fontWeight="700" fill={C.text}>{n.t}</text>
+            </g>
+          );
+        })}
+        <text x="270" y="198" textAnchor="middle" fontFamily={mono} fontSize="7.6" fill={C.faint}>log everything · collect feedback · evaluate nightly · fine-tune periodically</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* The full course arc — silicon to production platform. */
+export function CourseArc({ caption }: { caption?: string }) {
+  const mods = [
+    { n: "1", t: "transistors / logic", c: C.teal },
+    { n: "2", t: "computer arch", c: C.blue },
+    { n: "3", t: "deep learning", c: C.violet },
+    { n: "4", t: "gen AI / LLMs", c: C.hole },
+    { n: "5", t: "inference systems", c: C.gate },
+    { n: "6", t: "optimization", c: C.lime },
+    { n: "7", t: "serving runtimes", c: C.sky },
+    { n: "8", t: "FPGA / edge", c: C.orange },
+    { n: "9", t: "agentic AI", c: C.indigo },
+    { n: "10", t: "production platform", c: EMERALD },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 190" width="100%" role="img" aria-label="The full course arc from silicon to production">
+        <text x="280" y="16" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>the whole course: from a single transistor to a production AI platform</text>
+        {mods.map((m, i) => {
+          const x = 18 + i * 53;
+          const h = 18 + i * 13;       // rising staircase
+          const y = 168 - h;
+          return (
+            <g key={`ca${i}`}>
+              <rect x={x} y={y} width="46" height={h} rx="4" fill={`${m.c}1c`} stroke={m.c} strokeWidth="1.2" />
+              <text x={x + 23} y={y - 4} textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={m.c}>{m.n}</text>
+              <foreignObject x={x - 1} y="170" width="48" height="18"><div style={{ fontFamily: mono, fontSize: "5.6px", color: C.muted, textAlign: "center", lineHeight: 1.1 }}>{m.t}</div></foreignObject>
+            </g>
+          );
+        })}
+        <text x="280" y="158" textAnchor="middle" fontFamily={mono} fontSize="7" fontWeight="700" fill={C.faint}>each module is a layer the next one stands on</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

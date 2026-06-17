@@ -350,6 +350,10 @@ import {
   // 10.9 Economics
   UnitEconomics,
   AiCostStages,
+  // 10.10 Reference architecture (capstone)
+  ReferenceArchitecture,
+  DataFlywheel,
+  CourseArc,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -623,6 +627,9 @@ const components = {
   SafetyStack,
   UnitEconomics,
   AiCostStages,
+  ReferenceArchitecture,
+  DataFlywheel,
+  CourseArc,
 };
 
 export async function renderMDX(source: string) {

@@ -1,12 +1,38 @@
 # Project Status
 
-**Last updated:** 2026-06-17 — **Module 9 COMPLETE** (Agentic AI Systems & Orchestration, **11/11 lessons live**). Built this session from `09 Agentic AI and Orchestration/module-09-lesson.md` (11 topics, richer than curriculum.md's 7). **82 routes, `next build` green. 79 lessons total.** Indigo accent; **+30 diagrams** in `diagrams/module-09.tsx`. Earlier this session: Module 8 finished (8.10–8.13) + global diagram font-size bump (DIAGRAM_SCALE 1.16). **▶ NEXT: Module 10 — End-to-End Systems, Scaling & Capstone.**
+**Last updated:** 2026-06-17 — **🎉 ALL 10 MODULES COMPLETE.** Module 10 (End-to-End Systems, Scaling & Capstone, **10/10 lessons**) built this session from `10 End to End System Scaling/module-10-lesson.md.pdf` (10 topics, richer than curriculum.md's 8). **92 routes, `next build` green. 89 lessons total across Modules 1–10.** Emerald accent; **+25 diagrams** in `diagrams/module-10.tsx`. Same session: Module 8 finished (8.10–8.13), Module 9 built (11 lessons), global diagram font bump (DIAGRAM_SCALE 1.16). **Phase 2 (content scaling) is effectively DONE.**
 
-## ▶ RESUME HERE — Module 10 (End-to-End Systems, Scaling & Capstone)
+## ▶ RESUME HERE — Phase 2 content is complete; what's left is polish & deferred phases
 
-Module 9 is done. Final module per `docs/curriculum.md`: **Module 10 — End-to-End Systems, Scaling & Capstone** (topics 10.1–10.8: API inference systems/FastAPI, microservices/Docker, load balancing/queuing, distributed inference/Ray/K8s, monitoring/Prometheus+Grafana, HW-SW integration CPU+GPU+FPGA, production cost engineering ★, production agent reliability ★ + capstone projects). **Check for a richer source first**: `10 End to End System Scaling/module-10-lesson.md(.pdf)` exists on disk — read it (it may have more topics than curriculum.md, as Module 9's did). Follow the recipe (memory `module-build-pattern`): MDX + `diagrams/module-10.tsx` + register in `index.ts` barrel **and** `lib/mdx.ts` (imports + `components` map). Accent **Emerald** is already in `lib/colors.ts` ("10"); add `C.emerald` to `_shared.tsx` if diagrams need it. **Code-heavy** — use `CodeBlock`/`Pre` + numbered steps. Build-verify with `NEXT_DIST_DIR=.next-verify npx next build`. This is the **final module** — after it, do a course-wide wrap-up pass.
+All ten curriculum modules are built and pushed (89 lessons). No module remains. Candidate next work, in rough priority:
 
-> **Module 9 build notes (done 2026-06-17):** 11 lessons `9-01`…`9-11`, source had 11 topics (capstone = Document Intelligence Agent). Indigo accent (`C.indigo` added to `_shared.tsx`; "09" already in `lib/colors.ts`). 30 new diagrams. Code uses the current **`claude-opus-4-8`** model id (source's `claude-opus-4-5` was outdated); corrected the source's non-existent `AnthropicEmbeddings` → **Voyage AI** (Anthropic's recommended embeddings partner) in 9.6. Recurring theme threaded through every lesson: the six failure modes (9.1) → seven reliability rules (9.11).
+1. **Course-wide QA pass** — click through on Vercel, check cross-module "Next:" links, sidebar order, any diagram overflow at the 1.16 scale, mobile.
+2. **Phase 1 (deferred): Supabase auth + per-user progress** — see CLAUDE.md §4. This was intentionally deferred to scale content first; content is now done, so this is the natural next phase if the user wants accounts/progress.
+3. **Phase 3 polish** — in-browser Python labs (Pyodide), the per-module lab notebooks already on disk (`NN …/lab-*.ipynb`, e.g. Module 10 has 10-A…10-D), certificates, search, dark/light toggle.
+4. **Hands-on labs track** — every module's PDF/folder ships labs (Logisim, Python, notebooks) that aren't yet in the app.
+
+> Confirm direction with the user before starting — content phase is done, so the next move is a phase decision (auth vs labs vs polish), which is the user's call.
+
+> **Module 10 build notes (done 2026-06-17):** 10 lessons `10-01`…`10-10`, from the PDF (no `.md`; parsed via `pdftotext -layout`). Synthesis module — diagram-heavy (25 figures) with some code (cost calc, k8s HPA, JSON logs, router, allow-list). Emerald accent (`C.emerald` added to `_shared.tsx`; "10" already in `lib/colors.ts`). Capstone 10.10 has a `CourseArc` diagram summarising all 10 modules. Used `claude-opus-4-8`, hedged pricing. **MDX gotcha hit twice:** bare `<` before a **digit/`$`** in prose (e.g. `<5%`, `<$2/task`) also breaks the build — escape as `&lt;` (attribute strings like `caption="…<5%…"` are safe).
+
+---
+
+## 🏁 Module 10 built (2026-06-17): End-to-End Systems, Scaling & Capstone — COURSE COMPLETE
+
+**10 lessons** under `content/module-10/`, from `10 End to End System Scaling/module-10-lesson.md.pdf` (10 topics — richer than curriculum.md's 8). **Emerald** accent (`C.emerald`). The synthesis module — diagram-heavy (**+25 SVG diagrams** in `diagrams/module-10.tsx`) with embedded code (cost calc, k8s HPA, structured JSON logs, complexity router, allow-list). `next build` green — **89 lessons total**, 92 routes.
+
+- `10-01-full-stack` — the seven layers (app→compute + cross-cutting observability), what each inherits from earlier modules, optimise the real bottleneck.
+- `10-02-scaling` — three scaling regimes, the cost equation + seven cost levers, the quality/cost/latency triangle (routed per query).
+- `10-03-reliability-engineering` — four-level reliability stack (infra/quality/agent/safety), multi-provider fallback, five-stage deployment pipeline.
+- `10-04-design-patterns` — the five core architectures + the pattern decision tree (RAG quality = min(retrieval, synthesis)).
+- `10-05-infrastructure-decision` — build vs buy, ~$50–100k/mo self-host break-even, GPU provider ~6× spread, autoscaling + spot.
+- `10-06-observability` — the 3am questions, four pillars (metrics/logs/traces/**quality eval**), the P0–P3 alert stack.
+- `10-07-fine-tuning-production` — the ladder (prompt→RAG→cache→FT), what FT can/can't fix, 80/20 data rule, CPT vs SFT vs RLHF.
+- `10-08-security-safety` — AI attack surface (injection/exfiltration/inversion) + mitigations, the five-layer safety stack (defence in depth).
+- `10-09-economics` — unit economics (linear cost scaling), three business models, four AI-cost-to-revenue stages.
+- `10-10-reference-architecture` — **capstone**: the full production platform (every box = an earlier module), the data flywheel, launch checklist, and a `CourseArc` diagram of all 10 modules.
+
+> **🎉 All 10 curriculum modules are now built and live.** Phase 2 (content scaling) complete: Modules 1–10, 89 lessons, ~258+25 SVG diagrams, light theme, mobile responsive. Remaining work is the deferred phases (Phase 1 auth, Phase 3 polish/labs) — see RESUME HERE.
 
 ---
 
@@ -283,7 +309,7 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 - [x] Module 7 — Inference Frameworks & LLM Runtimes (8 lessons, ~17 diagrams, **inline code + step explanations**) ✓ built & pushed 2026-06-16
 - [x] **Module 8 — Hardware Acceleration: FPGA + Edge NPUs** (13 lessons; expanded from `module-08.pdf` + new edge-MCU content). FPGA half 8.1–8.7, MCU/edge half 8.8–8.13. ✓ **complete 2026-06-17** (8.10–8.13 = STM32 N6, NXP i.MX RT, Renesas RA, others+TFLite-Micro).
 - [x] **Module 9 — Agentic AI Systems & Orchestration** (11 lessons, 30 diagrams, **inline code + step explanations**, Indigo accent) ✓ built 2026-06-17 (from the richer 11-topic source markdown).
-- [ ] **▶ NEXT:** Module 10 — End-to-End Systems, Scaling & Capstone (the final module).
+- [x] **Module 10 — End-to-End Systems, Scaling & Capstone** (10 lessons, 25 diagrams, synthesis/capstone, Emerald accent) ✓ built 2026-06-17 (from the 10-topic PDF). **🎉 ALL 10 MODULES DONE.**
 
 > The old "Module 1 interactive backlog" (CMOS NAND, live truth tables, bit-flipper, MAC
 > animation, systolic array, etc.) is **shelved** as of the 2026-06-11 direction change. Each is
@@ -299,7 +325,7 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 | Route | `app/modules/[module]/[lesson]/page.tsx` |
 | Lesson shell | `components/lesson/LessonLayout.tsx` |
 | Sidebar | `components/lesson/LessonSidebar.tsx` |
-| **SVG diagrams** | `components/lesson/diagrams/` (~258 figures — 29 M1 + 22 M2 + 30 M3 + 38 M4 + 20 M5 + 20 M6 + ~17 M7 + ~26 M8 + 30 M9 — the course "images"). Split per module: `_shared.tsx` (palette `C`, light-theme + `DiagramFrame` w/ `DIAGRAM_SCALE` zoom), `module-01…09.tsx`, `index.ts` barrel. M8 has reusable `McuSoc`/`VendorFlow` helpers. |
+| **SVG diagrams** | `components/lesson/diagrams/` (~283 figures — 29 M1 + 22 M2 + 30 M3 + 38 M4 + 20 M5 + 20 M6 + ~17 M7 + ~26 M8 + 30 M9 + 25 M10 — the course "images"). Split per module: `_shared.tsx` (palette `C`, light-theme + `DiagramFrame` w/ `DIAGRAM_SCALE` zoom), `module-01…10.tsx`, `index.ts` barrel. M8 has reusable `McuSoc`/`VendorFlow` helpers. |
 | **Code blocks (M7+)** | `CodeBlock` + `Pre` in `components/lesson/LessonBlocks.tsx`; fenced ```lang blocks render with editor chrome (registered as `pre` in `lib/mdx.ts`). |
 | MDX content blocks | `components/lesson/LessonBlocks.tsx` (Callout / Formula / Figure / StatGrid) |
 | Prev/next nav | `components/lesson/LessonNav.tsx` |

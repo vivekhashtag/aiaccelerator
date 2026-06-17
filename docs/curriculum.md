@@ -233,17 +233,24 @@ Goal: implement neural nets from scratch in NumPy, reproduce them in PyTorch, th
 ---
 
 ## Module 10 — End-to-End Systems, Scaling & Capstone
-*3 weeks · Laptop + RPi 4 + PYNQ-Z2 + Jetson/cloud*
+*4 weeks · Laptop + cloud account (the culminating, synthesis module)*
 
-**Topics**
-10.1 API inference systems (FastAPI, async, health checks)
-10.2 Microservices and deployment (Docker, Docker Compose)
-10.3 Load balancing and queuing (Nginx, Redis queue, rate limiting)
-10.4 Distributed inference (Ray Serve, tensor parallelism, Kubernetes)
-10.5 Monitoring (Prometheus, Grafana, dashboards, alerting)
-10.6 Hardware-software integration (CPU+GPU+FPGA pipeline, PCIe)
-10.7 Production cost engineering ★ — real-time cost dashboard, autoscaling, spot instances, multi-model routing, budget alerts, TCO report
-10.8 Production agent reliability ★ — full guardrail stack, agent CI/CD, A/B testing, incident response, rollback
+> **Built (2026-06-17): 10 lessons.** Authored from `10 End to End System Scaling/module-10-lesson.md.pdf`
+> (10 topics — richer/reframed vs the 8 below; the original FastAPI/Docker/K8s topics are folded into the
+> stack, infra-decision, and reliability lessons). Emerald accent, synthesis/diagram-heavy. The lesson list
+> below is the source of truth for what shipped.
+
+**Topics (as built — 10 lessons `10-01`…`10-10`)**
+10.1 The full stack — the seven layers (app → compute + cross-cutting observability) and what each inherits
+10.2 Scaling — three regimes, the cost equation + seven cost levers, the quality/cost/latency triangle
+10.3 Production reliability engineering — four-level reliability stack, deployment pipeline (shadow→canary→rollout)
+10.4 System design patterns — the five core architectures + the selection decision tree
+10.5 The inference infrastructure decision — build vs buy, GPU cloud comparison, autoscaling + spot
+10.6 Observability at scale — the four pillars (metrics/logs/traces/quality eval), the P0–P3 alert stack
+10.7 Fine-tuning in production — the prompt→RAG→cache→FT ladder, the data problem, CPT vs SFT vs RLHF
+10.8 Security & safety — the AI attack surface (injection/exfiltration/inversion), the five-layer safety stack
+10.9 The economics of AI products — unit economics, three business models, four cost-to-revenue stages
+10.10 Capstone — the production reference architecture, the data flywheel, the launch checklist, the course arc
 
 **Capstone projects (choose 1–2)**
 - A — Full Agentic AI System (production-grade, with eval harness + guardrails + cost tracking)

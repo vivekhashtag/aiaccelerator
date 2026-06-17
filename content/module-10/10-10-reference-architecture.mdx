@@ -1,0 +1,88 @@
+---
+title: "Capstone: Putting It All Together"
+module: "10"
+moduleTitle: "End-to-End Systems, Scaling & Capstone"
+lesson: "10.10"
+slug: "10-10-reference-architecture"
+summary: "The whole course in one diagram. A concrete reference architecture for a production AI platform — gateway, router, fast path and agent orchestration, model serving, data, and cross-cutting observability — every box of which is an earlier module. Then the data flywheel that makes a product durable, the launch checklist, and a look back across all ten modules."
+prerequisites: ["10.9 The Economics of AI Products", "9.11 The Document Intelligence Agent"]
+---
+
+## The Production AI Platform
+
+Everything in this module assembles into one reference architecture for a production-grade AI application at moderate scale (10,000–100,000 users/day):
+
+<ReferenceArchitecture caption="USER → API Gateway (auth, rate limit, cost enforcement) → Routing Layer (classify complexity) → Fast Path (self-hosted small model, <500ms) or Agent Orchestration (LangGraph, memory, tools, HITL) → Model Serving (vLLM, PagedAttention, batching, prefix cache) → Data Layer (vector store, Postgres, Redis). Observability cuts across every layer." />
+
+Read it top to bottom and notice that **every box is an earlier module**:
+
+- **API Gateway** — the safety belt from 10.3/10.10: auth, rate limiting, cost enforcement (the budgets from 9.9), request logging.
+- **Routing Layer** — the cost lever from 10.2: a cheap classifier sends simple queries to the fast path, complex ones to the agent.
+- **Fast Path** — a self-hosted quantized model (Modules 6, 8) on **vLLM** (Module 7) for sub-500ms responses.
+- **Agent Orchestration** — **LangGraph** with all four memory types, tools, human-in-the-loop, and checkpointing (Module 9).
+- **Model Serving** — vLLM with PagedAttention, continuous batching, prefix caching (Modules 5, 7).
+- **Data Layer** — vector store, relational DB, semantic + exact cache, object store (Modules 4, 9).
+- **Observability** — Prometheus + Grafana, LangSmith/Weave, per-feature cost attribution, cross-cutting (10.6).
+
+<Callout type="key" title="Module 10 is the wiring diagram">
+
+There is almost nothing new in this architecture — it's the seven layers from 10.1, populated with the specific tools each earlier module taught, connected by the routing, reliability, and observability disciplines of this module. That was the promise at the start: Module 10 doesn't add components, it shows how the components you already know **connect** into a system that scales, stays in budget, and recovers from failure.
+
+</Callout>
+
+---
+
+## The Data Flywheel
+
+The most durable competitive advantage in AI products is **not the model** — models are increasingly commoditised. It's the **data flywheel**:
+
+<DataFlywheel caption="More users → more real usage data → better fine-tuning and evaluation data → better model behaviour → better product → more users. Each turn compounds, and the loop is what a new competitor cannot easily replicate." />
+
+Building the flywheel requires four habits, all of which this module already gave you: **log everything** (structured, queryable, with consent — 10.6), **collect feedback signals** (explicit ratings, implicit signals like copy/paste and regeneration), **evaluate continuously** (the nightly run from 10.6), and **fine-tune periodically** (10.7, when you have enough new examples). This is why established AI products are hard to compete with: years of curated interaction data a newcomer can't replicate overnight.
+
+---
+
+## The Launch Checklist
+
+Before any AI product reaches production, four categories must be green:
+
+<StatGrid items={[
+  { value: "Infrastructure", label: "won't fall over", sub: "autoscaling, health checks, graceful shutdown, circuit breakers, rate limits, secrets mgmt" },
+  { value: "Reliability", label: "survives failures", sub: "retries w/ backoff, timeouts, fallback model, connection pooling, async for non-real-time" },
+  { value: "Observability", label: "you can see it", sub: "structured per-call logs, P50/95/99 dashboards, cost tracking, alerting, on-call runbook" },
+  { value: "Safety + legal", label: "won't get you sued", sub: "in/out classification, PII handling, audit logs, data-retention + GDPR/CCPA, HIPAA/SOC2 if applicable" }
+]} caption="The four-category launch checklist. Each maps directly to a topic in this module — infrastructure & reliability (10.3, 10.5), observability (10.6), safety & legal (10.8). A green checklist is the difference between a demo and a product." />
+
+---
+
+## The Complete Picture
+
+This module — and the course — comes down to seeing the whole:
+
+<CourseArc caption="The ten-module arc: transistors and logic (1) → computer architecture (2) → deep learning (3) → generative AI & LLMs (4) → inference systems (5) → optimization (6) → serving runtimes (7) → FPGA & edge hardware (8) → agentic AI (9) → the production platform (10). Each module is a layer the next stands on — silicon to system." />
+
+The throughlines, one last time:
+
+- **The seven layers** form a dependency chain from silicon to UX — invest where the bottleneck actually is, measured end-to-end.
+- **The scaling regimes** demand different engineering; the biggest waste is applying Regime-3 work to a Regime-1 problem.
+- **The production triangle** (quality/cost/latency) is a live trade-off routed per query, not a one-time choice.
+- **The five patterns** cover almost every application; the right one is the simplest that solves the problem.
+- **Reliability is four-dimensional** (infrastructure, quality, agent, safety) — and safety is defence in depth.
+- **The data flywheel** turns a one-time integration into a durable product.
+
+<Callout type="insight" title="From a transistor to a platform">
+
+You began Module 1 by dragging a gate voltage to form a channel in a single MOSFET. You end here wiring a multi-layer platform that routes millions of requests across self-hosted and frontier models, recovers from failure, stays in budget, and improves itself from its own usage data. Every layer of that platform rests on a layer you built earlier in the course. **That span — silicon to system — is the whole point.**
+
+</Callout>
+
+---
+
+## Recap
+
+- The **reference architecture** (gateway → router → fast-path/agent → serving → data, with cross-cutting observability) assembles the entire course; **every box is an earlier module**, and Module 10 is the wiring diagram.
+- The **data flywheel** — log, collect feedback, evaluate, fine-tune — is the durable moat, because the model is commoditised but years of curated usage data are not.
+- The **launch checklist** spans infrastructure, reliability, observability, and safety/legal — each mapping to a Module 10 topic; a green checklist separates a demo from a product.
+- The course arc runs **silicon → system**: ten modules, each a layer the next stands on — and building the whole span is the point.
+
+This is the final lesson. From transistors to a production AI platform — you've built the entire stack.

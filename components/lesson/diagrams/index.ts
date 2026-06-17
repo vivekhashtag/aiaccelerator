@@ -10,3 +10,4 @@ export * from "./module-06";
 export * from "./module-07";
 export * from "./module-08";
 export * from "./module-09";
+export * from "./module-10";

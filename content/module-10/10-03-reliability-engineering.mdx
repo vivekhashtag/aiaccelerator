@@ -1,0 +1,87 @@
+---
+title: "Production Reliability Engineering"
+module: "10"
+moduleTitle: "End-to-End Systems, Scaling & Capstone"
+lesson: "10.3"
+slug: "10-03-reliability-engineering"
+summary: "Reliability in AI systems differs from traditional software: failures are probabilistic, often silent, and compound in agents. We cover the four-level reliability stack (infrastructure, response quality, agent, safety) — each with its own SLA — and the five-stage deployment pipeline that moves a prompt or model change safely from laptop to production."
+prerequisites: ["10.2 Scaling", "9.9 Agent Evaluation & Reliability"]
+---
+
+## Why AI Reliability Is Different
+
+"Reliability" means something different here than in traditional software:
+
+1. **AI failures are probabilistic.** A sort either works or it doesn't. An LLM response is sometimes excellent, sometimes mediocre, occasionally wrong, rarely harmful. Reliability is about **controlling the distribution of outcomes**, not eliminating failures.
+2. **Failures are often silent.** A normal API returns 200 or throws. An LLM returns **200 with a confidently wrong answer** — invisible to standard uptime checks.
+3. **Failures compound in agents.** A wrong answer in step 3 of a 10-step agent corrupts every later step, even when steps 4–10 execute without technical errors.
+
+<Callout type="key" title="You cannot monitor AI reliability with uptime checks">
+
+A green status page can sit on top of an agent that's quietly wrong 8% of the time. That's why this lesson — and Module 9's evaluation work — exists: AI reliability must be measured at the level of *output quality and task success*, not just *was the service reachable*.
+
+</Callout>
+
+---
+
+## The Reliability Stack
+
+Production AI reliability is engineered at four independent levels, each with its own SLA and measurement:
+
+<ReliabilityStack caption="Level 1 Infrastructure (retry/backoff, circuit breaker, provider fallback — 99.9% uptime). Level 2 Response quality (schema validation, LLM-judge, canary — <5% low-quality). Level 3 Agent (task success, budget, escalation — >90% success, <$2/task). Level 4 Safety (in/out classifiers, PII, audit — <0.1% harmful)." />
+
+- **Level 1 — Infrastructure.** Standard concerns: retry with backoff, circuit breakers (Module 9), **multi-provider fallback**, rate-limit queues, health checks. *SLA:* 99.9% uptime (8.7 h/year). *Measure:* error rate, P50/P95/P99 latency.
+- **Level 2 — Response quality.** Output validation (Pydantic), LLM-as-judge on production traffic, A/B and canary before rollout, semantic similarity checks. *SLA:* &lt;5% low-quality (judge &lt; 3.5/5). *Measure:* judge scores sampled at ~1% of traffic.
+- **Level 3 — Agent.** Task success rate, step efficiency, cost per task, human-escalation paths, replay testing. *SLA:* &gt;90% success, &lt;$2/task. *Measure:* structured logging of goal/success/cost per run.
+- **Level 4 — Safety.** Input/output classifiers (Llama Guard), prompt-injection detection, PII redaction, audit logging, red-teaming. *SLA:* &lt;0.1% harmful. *Measure:* automated classifiers + human-review sampling.
+
+Level 1 reliability has one AI-specific addition worth showing — **fall back to another provider** when your primary is down:
+
+```python
+def generate(messages, primary="claude-opus-4-8"):
+    for model, client in [(primary, anthropic_client), ("gpt-4o", openai_client)]:
+        try:
+            return with_retry(lambda: client.create(model=model, messages=messages))
+        except (RateLimitError, ServiceUnavailable):
+            continue        # primary down → try the next provider
+    raise RuntimeError("all providers unavailable")
+```
+
+**Step by step:**
+
+1. **`with_retry`** (from Module 9.9) handles transient blips on each provider before giving up — the inner reliability layer.
+2. **The loop is the outer layer**: if the whole primary provider is rate-limited or down, it falls through to a second provider rather than failing the user. Provider diversity is an availability strategy unique to API-based AI.
+3. **Only after all options are exhausted** does it raise — and even then, a production system would degrade gracefully (cached answer, "try later") rather than error.
+
+---
+
+## The Deployment Pipeline
+
+A prompt or model change is a production change with real cost and quality stakes — so it ships through five gated stages, not a direct push:
+
+<DeploymentPipeline caption="Offline eval (must beat baseline on the test suite) → shadow (real traffic, outputs hidden, compare old vs new) → canary (1–5% of users, watch 24–48h) → progressive rollout (10→25→50→100%, auto-rollback on regression) → full production (keep old version deployable for 7 days)." />
+
+**Step by step through the gates:**
+
+1. **Offline eval** — run the Module 9.9 test suite against the new version; it must match or beat the baseline on every category, and you check the cost impact (did token count change?).
+2. **Shadow** — the new version receives *copies* of real traffic, but its outputs are **not** shown to users; you compare old vs new on real inputs with zero user risk.
+3. **Canary** — 1–5% of real users get the new version; you watch quality, latency, error rate, and satisfaction signals for 24–48 hours.
+4. **Progressive rollout** — 10 → 25 → 50 → 100% over days, with **automated rollback** if any metric degrades.
+5. **Full production** — all traffic on the new version, but the old one stays deployable for 7 days for emergency rollback.
+
+<Callout type="why" title="Why so much ceremony for 'just a prompt'?">
+
+Because at scale a prompt change *is* an infrastructure change. A revision that costs 20% more tokens, or is wrong 2% more often, can mean tens of thousands of dollars or serious erosion of user trust — silently, because the service still returns 200s. The pipeline converts a probabilistic, silent-failure-prone change into a measured, reversible one. This is the deployment-side answer to "AI failures are silent."
+
+</Callout>
+
+---
+
+## Recap
+
+- AI reliability differs from software reliability: failures are **probabilistic, often silent, and compound in agents** — uptime checks miss them entirely.
+- Reliability is engineered at **four levels** — infrastructure, response quality, agent, safety — each with its own SLA and measurement; ignoring any one leaves the system exposed.
+- **Multi-provider fallback** is an AI-specific availability lever at the infrastructure level (retry → fall back → degrade gracefully).
+- A prompt/model change ships through a **five-stage gated pipeline** (offline eval → shadow → canary → progressive → full) with automated rollback — because at scale a prompt change is an infrastructure change with silent failure modes.
+
+Next: choosing the right shape for the application itself — **system design patterns for AI**.

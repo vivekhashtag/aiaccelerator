@@ -1,0 +1,72 @@
+---
+title: "The Full Stack: Every Layer, Named and Connected"
+module: "10"
+moduleTitle: "End-to-End Systems, Scaling & Capstone"
+lesson: "10.1"
+slug: "10-01-full-stack"
+summary: "Module 10 synthesises everything. A production AI application is not one thing — it's a stack of seven layers, each with its own engineering concerns, forming a dependency chain from silicon to user experience. We name all seven, show what each inherits from earlier modules, and explain why optimising one layer in isolation is the most common system-design mistake."
+prerequisites: ["9.10 Production Agent Architectures", "2.5 The Roofline Model"]
+---
+
+## The Question This Module Answers
+
+By now you can design silicon for inference (Modules 1–2), train/fine-tune/compress networks (3–6), serve LLMs at low latency (5, 7), program custom accelerators (8), and build agentic systems (9). But knowing each piece **separately** is not the same as knowing how to combine them into a system that scales to millions of requests, stays in budget, recovers from failure, evolves over time, and can be maintained by a team.
+
+**Module 10 answers: what does it look like when you put it all together?** Almost nothing here is new — this module *connects*.
+
+---
+
+## The Seven Layers
+
+A production AI application is a stack of seven distinct layers, each with its own engineering concerns:
+
+<SevenLayerStack caption="L7 Application → L6 Orchestration → L5 Inference Serving → L4 Model → L3 Data → L2 Compute, with L1 Observability cutting across all of them. This is a dependency chain, not a ranking — L7 depends on L6 depends on L5… and a failure anywhere cascades up." />
+
+- **L7 Application** — what the user sees (web, mobile, API, Slack bot). Concerns: UX, auth, latency *perception*, trust.
+- **L6 Orchestration** — agent frameworks, workflow engines, prompt management (LangGraph, n8n, Temporal). Concerns: reliability, cost, observability.
+- **L5 Inference Serving** — serving infra, load balancing, routing (vLLM, TGI, Triton, Ray Serve). Concerns: latency, throughput, cost per token.
+- **L4 Model** — weights, quantization, LoRA adapters, fine-tunes (HuggingFace, GGUF, AWQ, GPTQ). Concerns: quality, size, inference efficiency.
+- **L3 Data** — vector stores, databases, caches (Qdrant, Pinecone, Redis, pgvector). Concerns: retrieval quality, freshness, cost.
+- **L2 Compute** — the physical GPUs/FPGAs/CPUs (AWS, GCP, Lambda, RunPod). Concerns: utilisation, cost, availability.
+- **L1 Observability** — monitoring, logging, tracing, alerting. **Cross-cutting** — it spans every layer above.
+
+<Callout type="key" title="It's a dependency chain, not a hierarchy">
+
+No layer is "more important." L7 depends on L6, which depends on L5, all the way down — so a failure or bottleneck anywhere **cascades up** to the user. This reframes system design: you don't improve "the AI," you improve whichever layer is currently limiting the whole chain.
+
+</Callout>
+
+---
+
+## What Each Layer Inherits
+
+The reason this module can be pure synthesis is that every layer's hard problems were already solved in earlier modules:
+
+<LayerModuleMap caption="Compute carries the roofline model and DSP/BRAM budgets (Modules 1-2, 8); Model carries quantization, LoRA, distillation (3, 4, 6); Serving carries KV cache, PagedAttention, continuous batching (5, 7); Orchestration and Observability carry ReAct, LangGraph, memory, circuit breakers, tracing (9)." />
+
+Read this table as a map of the whole course: the roofline model from Module 2 governs the compute layer; the INT8/INT4 quantization from Module 6 governs the model layer; PagedAttention from Module 7 governs the serving layer; the circuit breakers and tracing from Module 9 govern orchestration and observability. **Module 10 adds only one thing: how these layers interact under real production conditions.**
+
+---
+
+## The Most Common Mistake
+
+<Callout type="pitfall" title="Optimising one layer in isolation">
+
+A team spends three months fine-tuning a model (L4) to squeeze out 2% more quality — then discovers the real bottleneck was retrieval quality in their vector store (L3) or serving latency (L5). The fine-tuning was wasted effort because they optimised a layer that wasn't the constraint.
+
+**Real system improvement requires measuring the whole stack end-to-end *first*, then investing where the actual bottleneck is.** This is the roofline mindset from Module 2 — find the limiting resource before optimising — applied to the entire system instead of a single kernel.
+
+</Callout>
+
+This is why **observability (L1) is cross-cutting and comes first** in practice: you cannot find the limiting layer without measuring all of them. Every topic in this module — scaling, reliability, cost, security — ultimately routes back to "measure the whole chain, fix the real bottleneck."
+
+---
+
+## Recap
+
+- A production AI application is a **stack of seven layers**: Application, Orchestration, Inference Serving, Model, Data, Compute, and cross-cutting Observability.
+- It's a **dependency chain, not a hierarchy** — each layer depends on the one below, and a failure or bottleneck anywhere cascades up to the user.
+- **Every layer inherits its hard problems from earlier modules** (roofline, quantization, PagedAttention, ReAct, circuit breakers); Module 10 adds how they **interact** in production.
+- The cardinal mistake is **optimising one layer in isolation** — measure the whole stack end-to-end, then fix the layer that's actually the bottleneck (the roofline mindset, system-wide).
+
+Next: what changes as the system grows — **scaling from 1 to 1,000,000 users**.

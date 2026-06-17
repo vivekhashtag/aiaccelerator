@@ -28,6 +28,7 @@ export const C = {
   sky: "#0284c7", // module-7 accent (serving / runtimes) — dark sky for white cards
   orange: "#ea580c", // module-8 accent (FPGA / edge hardware) — dark orange for white cards
   indigo: "#4f46e5", // module-9 accent (agentic AI / orchestration) — dark indigo for white cards
+  emerald: "#059669", // module-10 accent (end-to-end systems / capstone) — dark emerald for white cards
   violet: "#7c3aed", // secondary accent (memory / model parallel)
   hole: "#e11d48", // holes / P-type
   ink: "#eef2f7", // deepest fill (lightest gray)

@@ -1,0 +1,119 @@
+---
+title: "Scaling: From 1 to 1,000,000 Users"
+module: "10"
+moduleTitle: "End-to-End Systems, Scaling & Capstone"
+lesson: "10.2"
+slug: "10-02-scaling"
+summary: "AI systems pass through three scaling regimes, each demanding different engineering. We work the cost equation that drives serving economics, derive the seven cost levers, and map the quality–cost–latency triangle that every production system must position itself within — per use case, not once."
+prerequisites: ["10.1 The Full Stack"]
+---
+
+## The Three Scaling Regimes
+
+The same product needs fundamentally different engineering at different scales. The biggest mistake is applying tomorrow's engineering to today's problem.
+
+<ScalingRegimes caption="Prototype (1–100/day): make it work, instrument everything, stay simple. Growth (100–10k/day): caching, batching, cost attribution. Production (10k+/day): routing, autoscaling, multi-region, real SLAs. The right decision at one regime is the wrong decision at another." />
+
+- **Regime 1 — Prototype (1–100/day):** almost nothing matters except whether the product is valuable. A distributed serving cluster or P99 tuning here is premature. *Right* moves: instrument everything (you'll need the data soon), nail the core use case, keep the architecture easy to change.
+- **Regime 2 — Growth (100–10k/day):** the first real performance and cost problems appear, and you can finally see actual usage patterns. *Right* moves: KV/prefix caching, continuous batching, semantic output caching, async processing, per-feature cost attribution, a first pass at prompt optimisation.
+- **Regime 3 — Production (10k+/day):** where AI engineering gets genuinely hard and the decisions determine profitability. *Right* moves: model selection by cost/quality (not quality alone), request routing, full autoscaling, multi-model serving, multi-region failover, a caching hierarchy.
+
+<Callout type="pitfall" title="Premature scaling is the classic trap">
+
+Building Regime 3 infrastructure for a Regime 1 product wastes months *and* prevents the fast iteration that teaches you what users actually need. The one Regime-1 investment that always pays off is **instrumentation** — you cannot make Regime-2 decisions without Regime-1 data.
+
+</Callout>
+
+---
+
+## The Cost Equation
+
+At scale, serving cost is dominated by a simple equation:
+
+```text
+Cost per request = (input_tokens × input_price + output_tokens × output_price)
+                   + infrastructure_cost / requests_per_hour
+```
+
+Worked example — a customer-support agent (illustrative pricing; verify at anthropic.com/pricing):
+
+```python
+# Approximate per-million-token rates for a frontier model
+IN_PER_M, OUT_PER_M = 3.00, 15.00   # USD
+
+# Token budget for one request
+sys_prompt, user_msg, response = 500, 100, 300
+tool_calls = 3                       # each ~200 in + 100 out
+
+in_tokens  = sys_prompt + user_msg + tool_calls * 200   # 1,200
+out_tokens = response + tool_calls * 100                # 600
+
+cost = (in_tokens * IN_PER_M + out_tokens * OUT_PER_M) / 1_000_000
+# = (1,200·3 + 600·15) / 1e6 = (3,600 + 9,000)/1e6 = $0.0126 per request
+
+# At 100,000 requests/day:
+daily = cost * 100_000      # ≈ $1,260/day  →  ≈ $37,800/month
+```
+
+**Step by step:**
+
+1. **Tool calls dominate the input budget.** Three tool round-trips add 600 input tokens — half the total. In agentic systems (Module 9), the *trajectory*, not the user message, drives cost.
+2. **Output tokens cost 5× input** in this example, so a rambling response is far more expensive than a long prompt. Output-length control is a first-class cost lever.
+3. **$0.0126 looks trivial until you multiply** — at 100k requests/day it's ~$37,800/month. This is why **prompt engineering is cost engineering**: every token you cut from the system prompt saves real money at scale.
+
+---
+
+## The Seven Cost Levers
+
+That equation exposes exactly where to push:
+
+<CostLevers caption="Model selection (Haiku vs Opus, 20–50×), prompt compression (−60%), output-length control (5–10×), caching (up to −90%), quantization (−2–4× VRAM), batching (higher GPU utilisation), and request routing. A well-tuned router alone can cut API spend 70–80%." />
+
+Routing is the highest-leverage lever — a tiny, cheap classifier sorts easy from hard queries before the expensive model is ever called:
+
+```python
+def route(query: str) -> str:
+    # A small, fast model (~1ms, ~$0.00001) classifies complexity.
+    verdict = cheap_classifier(query)          # "simple" | "complex"
+    if verdict == "simple":
+        return small_model(query)              # Haiku / self-hosted Llama-8B  (~$0.001)
+    return frontier_model(query)               # Claude Opus / GPT-4           (~$0.015)
+```
+
+**Step by step:**
+
+1. **The classifier is ~1000× cheaper than the frontier model**, so it pays for itself the moment it diverts one query to the small model.
+2. **Most real traffic is "simple."** Sending only genuinely hard queries to the frontier model is what produces the 70–80% cost reduction — the bulk of requests never touch the expensive path.
+3. **This is the same idea as cascade routing from Module 5** (5.6), now as a production cost control rather than a latency optimisation.
+
+---
+
+## The Production Triangle
+
+Cost is one corner of a three-way trade-off every system must position itself within:
+
+<ProductionTriangle caption="Quality vs cost vs latency. Frontier models (Opus) sit high-quality/high-cost; quantized small models (Llama-8B INT4, Haiku) sit low-cost/low-latency; the third axis (out of the page) is latency. The art is routing each use case to the right point — it is not a single decision." />
+
+The corner you want depends on the use case, and **most products serve several at once**:
+
+- A **real-time chatbot** needs low latency (&lt;1s to first token) → push toward smaller, faster models.
+- An **overnight batch pipeline** has no latency constraint → maximise quality with large models.
+- A **compliance-sensitive** application needs maximum quality and auditability → pay the premium.
+- An **edge application** needs zero cloud cost → a quantized local model (Module 8).
+
+<Callout type="insight" title="It's a live trade-off, routed per query — not a one-time choice">
+
+The mistake is treating the triangle as a single architectural decision. Real systems sit at *multiple* points simultaneously, and the right architecture (the router above) sends each query to the model whose position in the triangle fits that query's needs. Position is per-request, not per-product.
+
+</Callout>
+
+---
+
+## Recap
+
+- AI systems pass through **three scaling regimes** — Prototype, Growth, Production — each needing different engineering; applying Regime 3 work to a Regime 1 problem wastes months.
+- The **cost equation** (token cost + amortised infra) shows tool calls and output tokens dominate; at scale, **prompt engineering is cost engineering**.
+- The **seven cost levers** are model selection, prompt compression, output control, caching, quantization, batching, and routing — and **routing alone can cut spend 70–80%**.
+- The **production triangle** (quality/cost/latency) is a live trade-off **routed per query**, not a one-time decision — most products serve several corners at once.
+
+Next: keeping all of this dependable — **production reliability engineering**.

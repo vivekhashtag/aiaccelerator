@@ -321,6 +321,17 @@ import {
   // 9.11 Capstone
   DocumentAgentGraph,
   AgenticStackSummary,
+  // Module 10 — End-to-End Systems, Scaling & Capstone
+  // 10.1 Full stack
+  SevenLayerStack,
+  LayerModuleMap,
+  // 10.2 Scaling
+  ScalingRegimes,
+  ProductionTriangle,
+  CostLevers,
+  // 10.3 Reliability
+  ReliabilityStack,
+  DeploymentPipeline,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -574,6 +585,14 @@ const components = {
   TraceTree,
   DocumentAgentGraph,
   AgenticStackSummary,
+  // Module 10
+  SevenLayerStack,
+  LayerModuleMap,
+  ScalingRegimes,
+  ProductionTriangle,
+  CostLevers,
+  ReliabilityStack,
+  DeploymentPipeline,
 };
 
 export async function renderMDX(source: string) {

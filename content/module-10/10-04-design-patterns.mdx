@@ -1,0 +1,61 @@
+---
+title: "System Design Patterns for AI Applications"
+module: "10"
+moduleTitle: "End-to-End Systems, Scaling & Capstone"
+lesson: "10.4"
+slug: "10-04-design-patterns"
+summary: "Almost every AI application is one of five architectural patterns — single-turn Q&A, RAG, conversational agent with memory, tool-using agent, and multi-agent pipeline. Knowing which pattern fits determines most downstream engineering. We cover all five, their failure modes, and the decision tree for choosing — which is simpler than most engineers expect."
+prerequisites: ["10.1 The Full Stack", "9.4 Multi-Agent Systems"]
+---
+
+## The Five Core Architectures
+
+Every AI application falls into one of five patterns. Picking the right one settles most of the subsequent engineering decisions, so it's the first design choice to make.
+
+<FiveArchitectures caption="1 Single-turn Q&A (no state) → 2 RAG (retrieved context) → 3 Conversational + memory (state across turns) → 4 Tool-using agent (actions + observations) → 5 Multi-agent pipeline (specialised agents + critic). Each adds capability and complexity over the last." />
+
+- **Pattern 1 — Single-turn Q&A.** One prompt, one response, no state. *Use:* FAQ bots, summarisation, translation, code explanation. *Optimise:* prompt caching, output-length control, small models. *Fails on:* fact hallucination → fix with RAG.
+- **Pattern 2 — RAG.** Inject retrieved documents so the LLM synthesises rather than recalls. *Use:* anything referencing specific, changing knowledge. *Optimise:* chunking, embedding quality, top-k, contextual compression (9.8). *Fails on:* retrieval misses → query rewriting, hybrid search, agentic RAG.
+- **Pattern 3 — Conversational + memory.** RAG plus conversation memory across sessions. *Use:* assistants, tutors, returning-user support. *Optimise:* memory compression, selective storage, semantic retrieval over past turns (9.6). *Fails on:* false memories, privacy leaks, staleness.
+- **Pattern 4 — Tool-using agent.** The ReAct loop (Module 9): act, observe, repeat. *Use:* research, code execution, multi-step processes touching external systems. *Optimise:* tool schema design, structured results, step/budget limits. *Fails on:* tool misuse, loops, cost explosions, irreversible actions.
+- **Pattern 5 — Multi-agent pipeline.** Specialised agents coordinated and reviewed by a critic. *Use:* complex tasks needing specialisation, work too large for one context, independent verification. *Optimise:* narrow agent roles, handoff schemas, shared state. *Fails on:* coordination overhead dominating, error cascades.
+
+<Callout type="key" title="The RAG quality equation">
+
+For Pattern 2 (and everything built on it): **answer quality = min(retrieval quality, synthesis quality)**. The best LLM in the world gives a wrong answer if it retrieves the wrong documents. Retrieval is usually the limiting factor — target **Recall@3 > 80%** on your domain's test queries before touching the generator (echoing 9.8: retrieval caps RAG quality).
+
+</Callout>
+
+---
+
+## Choosing the Right Pattern
+
+The decision tree is simpler than most engineers expect:
+
+<PatternDecisionTree caption="Knowledge that changes over time? → RAG. Else multiple steps / tool use? → Tool-using agent. Else returning user expecting continuity? → Conversational + memory. Else → Single-turn Q&A. Reach for Multi-agent ONLY when simpler patterns are proven insufficient." />
+
+Walk it top to bottom and stop at the first match:
+
+1. **Does the task need knowledge that changes over time?** → RAG (Pattern 2). Stop here if it works.
+2. **Does it need multiple steps or tool use?** → Tool-using agent (Pattern 4).
+3. **Does the user return repeatedly and expect continuity?** → Conversational + memory (Pattern 3).
+4. **Otherwise** → Single-turn Q&A (Pattern 1).
+
+Reach for **Multi-agent (Pattern 5)** only when Pattern 4 consistently fails on task complexity, *or* the task clearly benefits from parallel specialised work — *and* you've evaluated simpler patterns and found them insufficient.
+
+<Callout type="pitfall" title="The multi-agent trap">
+
+The most common architecture mistake is jumping to multi-agent (Pattern 5) for problems a single RAG call or one tool-using agent would solve. Multi-agent systems are significantly harder to debug, more expensive to run, and harder to make reliable (the coordination overhead from 9.4). **Use the simplest pattern that solves the actual problem** — complexity is a cost you pay continuously, not a one-time setup.
+
+</Callout>
+
+---
+
+## Recap
+
+- Almost every AI application is one of **five patterns**: single-turn Q&A, RAG, conversational+memory, tool-using agent, multi-agent pipeline — each adding capability *and* complexity.
+- Choosing the pattern settles most downstream engineering; the **decision tree** is short: changing knowledge → RAG; steps/tools → agent; returning users → memory; else → single-turn.
+- **RAG quality = min(retrieval, synthesis)** — retrieval is usually the ceiling (Recall@3 > 80%).
+- **Don't over-reach for multi-agent** — it's the simplest-pattern principle restated: complexity is a recurring cost, so use the least that works.
+
+Next: where to actually run all this — **the build-vs-buy infrastructure decision**.

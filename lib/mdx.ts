@@ -332,6 +332,15 @@ import {
   // 10.3 Reliability
   ReliabilityStack,
   DeploymentPipeline,
+  // 10.4 Design patterns
+  FiveArchitectures,
+  PatternDecisionTree,
+  // 10.5 Infrastructure decision
+  BuildVsBuy,
+  GpuProviderCompare,
+  // 10.6 Observability
+  ObservabilityPillars,
+  AlertStack,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -593,6 +602,12 @@ const components = {
   CostLevers,
   ReliabilityStack,
   DeploymentPipeline,
+  FiveArchitectures,
+  PatternDecisionTree,
+  BuildVsBuy,
+  GpuProviderCompare,
+  ObservabilityPillars,
+  AlertStack,
 };
 
 export async function renderMDX(source: string) {

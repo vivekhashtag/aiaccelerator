@@ -1,0 +1,88 @@
+---
+title: "The Inference Infrastructure Decision"
+module: "10"
+moduleTitle: "End-to-End Systems, Scaling & Capstone"
+lesson: "10.5"
+slug: "10-05-infrastructure-decision"
+summary: "Build vs buy: cloud APIs versus self-hosting open models, and the hybrid router that most large systems converge on. We compare GPU cloud providers (a ~6× cost spread), find the break-even where self-hosting pays off, and cover autoscaling GPUs — including why a minimum replica floor and spot instances both matter."
+prerequisites: ["10.2 Scaling", "8.4 FPGA vs GPU vs CPU"]
+---
+
+## Build vs Buy
+
+Every organisation running AI at scale faces the same decision: call a frontier API, or self-host an open model? The answer depends on scale, team, regulation, and cost tolerance — and most large systems end up doing **both**.
+
+<BuildVsBuy caption="API-first: zero infra, SOTA models, instant scale — but data leaves and cost is linear. Self-hosted: data stays, fixed cost, fine-tunable — but you own GPU ops. Hybrid: a complexity router sends simple queries to a self-hosted small model and complex ones to a frontier API — the most common architecture at scale." />
+
+- **API-first** (Claude, GPT, Gemini). *+* zero infrastructure, always-current SOTA, instant scale, no GPU expertise. *−* data leaves your infra, cost scales **linearly** with usage, rate limits, provider-dependent uptime, no core-model fine-tuning. *Right for:* most startups and mid-size companies — until cost dominates.
+- **Self-hosted open models** (Llama, Mistral, Qwen, Gemma). *+* data never leaves, **fixed** cost (GPU leases), fine-tunable on proprietary data, no rate limits, can run on custom hardware (Module 8). *−* needs GPU-ops expertise, quality typically lags the frontier (gap closing), you own uptime and scaling. *Right for:* high-volume stable tasks; compliance-sensitive industries; teams with strong infra.
+- **Hybrid** (most common at scale). A tiny classifier routes each request — simple to a self-hosted small model (~$0.001), complex to a frontier API (~$0.015).
+
+<Callout type="key" title="The self-hosting break-even">
+
+The typical threshold where self-hosting becomes economical is around **$50,000–100,000/month in API spend**. Below it, API-first almost always wins on total cost (including the engineering salaries self-hosting demands). Above it, the fixed cost of GPUs starts beating per-token pricing — and a hybrid router can defer that crossover by cutting API spend 70–80% first.
+
+</Callout>
+
+---
+
+## GPU Cloud Providers
+
+If you self-host, the provider choice swings cost by roughly **6×** for the same hardware:
+
+<GpuProviderCompare caption="Running Llama-3-70B (4× A100 80GB), approximate $/month: hyperscalers (AWS, Azure, GCP) run ~$26–35k; AI-specialised clouds (Lambda Labs, RunPod) run ~$4–6k. Hyperscalers charge for ecosystem, networking, and compliance certifications; AI-clouds charge for raw GPU hours." />
+
+The trade is ecosystem and compliance versus raw price:
+
+- **Hyperscalers (AWS p4d/p5, Azure NDv5, GCP A3):** mature ecosystem, excellent networking, compliance certifications — at ~$10–30/hr per 8-GPU node.
+- **AI-specialised (Lambda Labs, RunPod, CoreWeave):** much cheaper per GPU ($0.79–2.89/hr), simpler pricing, AI-optimised — but smaller ecosystems and (for community tiers) variable reliability.
+
+The question isn't "which is cheapest" but "is the hyperscaler's ecosystem and reliability worth the premium for *this* workload?" — production customer-facing serving often justifies it; batch jobs rarely do.
+
+---
+
+## Autoscaling GPUs
+
+The core tension of GPU serving: GPUs are **expensive to keep running** but **slow to spin up** (2–5 minutes to load a model). Your scaling strategy must balance cost against availability.
+
+```yaml
+# Kubernetes HPA for a GPU-backed serving deployment
+targetGPUUtilisation: 70%      # add replicas above this
+minReplicas: 1                 # a floor — never scale to zero for live traffic
+maxReplicas: 10
+scaleUpCooldown: 60s           # add capacity quickly
+scaleDownCooldown: 600s        # remove slowly — avoid thrashing
+```
+
+**Step by step:**
+
+1. **`minReplicas: 1`** is the key line. Because a cold GPU pod takes 2–5 minutes to load the model, scaling to **zero** would make the next user wait minutes. Keep a floor of warm capacity for live traffic; only batch/async workloads may scale to zero.
+2. **Asymmetric cooldowns** — scale **up fast** (60s) to absorb traffic spikes, scale **down slow** (600s) to avoid "thrashing" (repeatedly killing and recreating costly pods as load wobbles).
+3. **70% target utilisation** leaves headroom: at 100% you have no buffer for the spin-up lag, so requests queue while new pods load.
+
+For non-real-time work, **spot/preemptible instances** cut cost 60–80%:
+
+```text
+Spot strategy:
+  Use spot for:    fine-tuning, batch embeddings, offline eval, data processing
+  Never spot for:  customer-facing real-time serving
+  Always:          checkpoint every ~5 min (spot can be reclaimed with 2-min notice)
+  Diversify:       fall back across instance types if your first choice is unavailable
+```
+
+**Step by step:**
+
+1. **Spot is for interruptible work** — a fine-tuning run or batch embedding job can survive a node being reclaimed; a user waiting on a chat response cannot.
+2. **Frequent checkpointing is mandatory** — spot nodes get a ~2-minute eviction warning, so saving every ~5 minutes means you lose minutes, not hours, of work (the same checkpointing instinct as Module 9's resumable agents).
+3. **Instance-type diversity** keeps jobs running when your preferred GPU's spot pool dries up.
+
+---
+
+## Recap
+
+- The infrastructure choice is **API-first vs self-hosted vs hybrid**; most systems at scale converge on **hybrid** — a complexity router splitting traffic between a self-hosted small model and a frontier API.
+- **Self-hosting breaks even around $50k–100k/month** in API spend; a router can defer that crossover by cutting API spend 70–80%.
+- GPU providers span **~6×** in cost for the same hardware — hyperscalers sell ecosystem/compliance, AI-clouds sell cheap GPU-hours.
+- **Autoscaling GPUs** needs a **warm replica floor** (cold start is 2–5 min) and asymmetric cooldowns; **spot instances** cut batch cost 60–80% if you checkpoint frequently and never use them for live serving.
+
+Next: seeing inside the running system — **observability at scale**.

@@ -1,0 +1,101 @@
+---
+title: "Observability at Scale"
+module: "10"
+moduleTitle: "End-to-End Systems, Scaling & Capstone"
+lesson: "10.6"
+slug: "10-06-observability"
+summary: "When a production AI system breaks at 3am, you need to answer five questions fast. That requires the four pillars of AI observability — metrics, logs, traces, and the AI-specific fourth pillar, continuous quality evaluation — plus an alert stack precise enough to wake someone without crying wolf."
+prerequisites: ["10.3 Production Reliability Engineering", "9.10 Production Agent Architectures"]
+---
+
+## What You Must Answer at 3am
+
+When something breaks in production, you need fast answers to five questions:
+
+1. **Is it happening?** Are errors occurring, and how many?
+2. **Who is affected?** Which users, features, requests?
+3. **What is broken?** Which layer — model, serving, retrieval, agent?
+4. **Why did it break?** What changed recently (model version, prompt, data)?
+5. **How bad is it?** Revenue, user, and safety impact?
+
+<Callout type="key" title="Observability turns 2–4 hours into 10–15 minutes">
+
+Without observability infrastructure, the average time to diagnose an incident is **2–4 hours**. With it, **10–15 minutes**. That difference — multiplied by every incident, at every hour — is why observability (Layer 1 from 10.1) is cross-cutting and built first, not bolted on after an outage.
+
+</Callout>
+
+---
+
+## The Four Pillars
+
+Traditional software has three observability pillars — metrics, logs, traces. AI systems need a **fourth**: continuous quality evaluation, because an AI failure can return a 200 with a wrong answer.
+
+<ObservabilityPillars caption="Metrics (GPU util, RPS, P50/95/99 latency, TTFT, cost/req, cache hit). Logs (structured JSON per LLM call). Traces (the 10–30-span call chain per agent request). Quality evaluation (AI-specific: 1% judge sampling, 100% on edge cases, nightly eval runs)." />
+
+**Pillar 1 — Metrics.** Infrastructure (`gpu_utilisation`, `requests_per_second`, `p99_latency_ms`, `error_rate_5xx`), LLM-specific (`time_to_first_token_ms`, `tokens_per_request`, `cost_per_request_usd`, `cache_hit_rate`), and agent-specific (`steps_per_task`, `task_success_rate`, `cost_per_task_usd`, `human_escalation_rate`).
+
+**Pillar 2 — Logs.** Every LLM call logged with enough detail to reproduce and debug it:
+
+```json
+{
+  "timestamp": "2026-01-15T03:42:17.234Z",
+  "request_id": "req_abc123",
+  "user_id": "usr_xyz789",
+  "feature": "customer_support_chat",
+  "model": "claude-opus-4-8",
+  "input_tokens": 1247,
+  "output_tokens": 312,
+  "latency_ms": 1842,
+  "cost_usd": 0.0084,
+  "prompt_hash": "sha256:a3f8...",
+  "cache_hit": false,
+  "judge_score": 4.2,
+  "tool_calls": ["web_search", "calculator"],
+  "error": null
+}
+```
+
+**Step by step:**
+
+1. **`request_id` + `user_id` + `feature`** answer "who is affected" and enable per-user/per-feature **cost attribution** — you can't optimise spend you can't attribute.
+2. **`prompt_hash`** lets you group identical prompts (cache analysis, A/B) without storing raw prompt text (privacy); `judge_score` carries Pillar 4 quality inline.
+3. **`tokens`, `cost_usd`, `latency_ms`, `cache_hit`** make every cost and performance metric reconstructable from logs — and `error: null` means even successes are logged, which is what lets you spot *silent* quality drops.
+
+**Pillar 3 — Traces.** One agent request can fire 10–30 LLM calls, tool executions, and DB queries; distributed tracing connects them into a single end-to-end view (LangSmith/Jaeger), so you can see *which span* was the bottleneck or the failure — exactly the trace tree from 9.10.
+
+**Pillar 4 — Quality evaluation.** The AI-specific pillar. Quality is probabilistic, so you sample continuously:
+
+```text
+1% sampling:           every 1-in-100 requests scored by LLM judge → quality trend + alerts
+100% of edge cases:    very short responses (refusals?), very long (rambling?), tool errors,
+                       explicit user feedback (thumbs up/down)
+Nightly eval run:      full test suite vs last week; alert if any category drops > 0.3 points
+```
+
+**Step by step:**
+
+1. **1% judge sampling** gives a continuous quality signal cheaply — you don't judge every request, just enough to trend the distribution and alert on drops.
+2. **100% on edge cases** catches the failures sampling would miss: very short responses (silent refusals), very long ones (rambling), and any tool error — immediate degradation signals.
+3. **The nightly run** is the regression gate from 9.9 applied to *production* traffic — comparing this week to last catches slow quality decay that day-to-day noise hides.
+
+---
+
+## The Alert Stack
+
+Alerts must be precise enough to wake someone at 3am without crying wolf — so they're tiered by **response urgency**:
+
+<AlertStack caption="P0 wake-up-now (error >10%, service down, safety classifier >5%, cost >10× normal). P1 respond &lt;30min (P99 >30s, error 1–10%, GPU >95%, judge &lt;3.0). P2 investigate &lt;4h (P99 >10s, cache hit drop, cost/req +20%). P3 next sprint (slow quality/latency trends)." />
+
+The severity is the *response time it demands*, not the metric itself. Two rules of thumb: **cost-explosion and safety alerts are always P0** (they cause irreversible money or trust damage fast), and a P3 trend left unattended becomes next quarter's P1 — so the slow lines on the dashboard matter as much as the spikes.
+
+---
+
+## Recap
+
+- Production incidents demand fast answers to five questions (is it happening / who / what / why / how bad); observability cuts diagnosis from **2–4 hours to 10–15 minutes**.
+- AI observability has **four pillars**: metrics, logs, traces, and the AI-specific **quality evaluation** (because failures return 200s with wrong answers).
+- **Structured per-call logs** (ids, tokens, cost, latency, prompt hash, judge score) make cost, performance, and quality all reconstructable — and surface *silent* failures.
+- **Quality evaluation** combines 1% judge sampling, 100% edge-case coverage, and a nightly regression run.
+- The **alert stack (P0–P3)** tiers by response urgency; cost-explosion and safety are always P0.
+
+Next: when adapting the model itself is the right move — **fine-tuning in production**.

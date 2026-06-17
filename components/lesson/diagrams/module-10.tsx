@@ -238,3 +238,191 @@ export function DeploymentPipeline({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   10.4 — System Design Patterns
+   ════════════════════════════════════════════════════════════ */
+
+/* The five core AI application architectures. */
+export function FiveArchitectures({ caption }: { caption?: string }) {
+  const pats = [
+    { n: "1", t: "Single-turn Q&A", f: "user → LLM → answer", u: "FAQ, summarise, translate", c: C.on },
+    { n: "2", t: "RAG", f: "user → retrieve → context+LLM → answer", u: "reference docs/policies", c: C.gate },
+    { n: "3", t: "Conversational + memory", f: "+ memory store, updated each turn", u: "assistants, tutors, support", c: C.violet },
+    { n: "4", t: "Tool-using agent", f: "user → LLM ⇄ tools → answer", u: "research, code, multi-step", c: C.indigo },
+    { n: "5", t: "Multi-agent pipeline", f: "orchestrator → A → B → C (+ critic)", u: "complex / specialised work", c: EMERALD },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 200" width="100%" role="img" aria-label="The five core AI architectures">
+        <text x="280" y="18" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>almost every AI app is one of five patterns — increasing in power and complexity</text>
+        {pats.map((p, i) => {
+          const y = 28 + i * 33;
+          return (
+            <g key={`fa${i}`}>
+              <rect x="30" y={y} width="500" height="29" rx="5" fill={`${p.c}12`} stroke={p.c} strokeWidth="1.2" />
+              <text x="42" y={y + 13} fontFamily={mono} fontSize="8.2" fontWeight="700" fill={p.c}>{p.n}. {p.t}</text>
+              <text x="42" y={y + 24} fontFamily={mono} fontSize="6.8" fill={C.muted}>{p.f}</text>
+              <text x="335" y={y + 19} fontFamily={mono} fontSize="7" fill={C.text}>use: {p.u}</text>
+            </g>
+          );
+        })}
+        <text x="280" y="196" textAnchor="middle" fontFamily={mono} fontSize="7.6" fill={C.faint}>RAG quality = min(retrieval quality, synthesis quality) — retrieval is usually the limit</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* Decision tree for choosing a pattern. */
+export function PatternDecisionTree({ caption }: { caption?: string }) {
+  const steps = [
+    { q: "Knowledge that changes over time?", yes: "→ RAG (Pattern 2)", c: C.gate },
+    { q: "Multiple steps or tool use?", yes: "→ Tool-using agent (Pattern 4)", c: C.indigo },
+    { q: "User returns, expects continuity?", yes: "→ Conversational + memory (Pattern 3)", c: C.violet },
+    { q: "Otherwise", yes: "→ Single-turn Q&A (Pattern 1)", c: C.on },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 200" width="100%" role="img" aria-label="Pattern selection decision tree">
+        <text x="280" y="18" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>the decision tree is simpler than engineers expect — use the simplest pattern that works</text>
+        {steps.map((s, i) => {
+          const y = 30 + i * 34;
+          return (
+            <g key={`pd${i}`}>
+              <rect x="40" y={y} width="300" height="26" rx="5" fill={`${C.panel}`} stroke={C.line} strokeWidth="1" />
+              <text x="52" y={y + 17} fontFamily={mono} fontSize="7.8" fill={C.text}>{s.q}</text>
+              <rect x="352" y={y} width="178" height="26" rx="5" fill={`${s.c}16`} stroke={s.c} strokeWidth="1.2" />
+              <text x="362" y={y + 17} fontFamily={mono} fontSize="7.4" fontWeight="700" fill={s.c}>{s.yes}</text>
+              {i < 3 && <text x="190" y={y + 33} textAnchor="middle" fontFamily={mono} fontSize="6.6" fill={C.faint}>no ↓</text>}
+            </g>
+          );
+        })}
+        <rect x="40" y="172" width="490" height="22" rx="5" fill={`${EMERALD}10`} stroke={EMERALD} strokeWidth="1.1" strokeDasharray="4 3" />
+        <text x="285" y="187" textAnchor="middle" fontFamily={mono} fontSize="7.2" fontWeight="700" fill={EMERALD}>Multi-agent (Pattern 5) ONLY when simpler patterns are proven insufficient</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   10.5 — Inference Infrastructure Decision
+   ════════════════════════════════════════════════════════════ */
+
+/* API-first vs self-hosted vs hybrid router. */
+export function BuildVsBuy({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 190" width="100%" role="img" aria-label="Build versus buy: API, self-hosted, hybrid">
+        <text x="280" y="16" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>build vs buy — most systems at scale end up hybrid</text>
+        {/* API-first */}
+        <rect x="20" y="28" width="166" height="92" rx="8" fill={`${C.sky}12`} stroke={C.sky} strokeWidth="1.4" />
+        <text x="103" y="46" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.sky}>API-first</text>
+        <foreignObject x="28" y="52" width="150" height="64"><div style={{ fontFamily: mono, fontSize: "6.8px", color: C.text, lineHeight: 1.35 }}>+ zero infra, SOTA, instant scale<br />− data leaves, linear cost, rate limits<br /><b>most startups → mid-size</b></div></foreignObject>
+        {/* self-hosted */}
+        <rect x="197" y="28" width="166" height="92" rx="8" fill={`${C.on}12`} stroke={C.on} strokeWidth="1.4" />
+        <text x="280" y="46" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.on}>Self-hosted</text>
+        <foreignObject x="205" y="52" width="150" height="64"><div style={{ fontFamily: mono, fontSize: "6.8px", color: C.text, lineHeight: 1.35 }}>+ data stays, fixed cost, fine-tune<br />− GPU expertise, you own uptime<br /><b>compliance / high-volume</b></div></foreignObject>
+        {/* hybrid */}
+        <rect x="374" y="28" width="166" height="92" rx="8" fill={`${EMERALD}12`} stroke={EMERALD} strokeWidth="1.6" />
+        <text x="457" y="46" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={EMERALD}>Hybrid (router)</text>
+        <foreignObject x="382" y="52" width="150" height="64"><div style={{ fontFamily: mono, fontSize: "6.8px", color: C.text, lineHeight: 1.35 }}>classifier routes per request:<br />simple → self-hosted small<br />complex → frontier API<br /><b>most common at scale</b></div></foreignObject>
+        <text x="280" y="146" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.text}>self-hosting typically becomes economical around ~$50k–100k/month in API spend</text>
+        <text x="280" y="166" textAnchor="middle" fontFamily={mono} fontSize="7.6" fontWeight="700" fill={C.faint}>a good complexity router sends only genuinely hard queries to the expensive model</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* GPU cloud provider cost comparison. */
+export function GpuProviderCompare({ caption }: { caption?: string }) {
+  // Llama-3-70B (4× A100 80GB) approx $/month, illustrative
+  const rows = [
+    { t: "AWS (p4d/p5)", k: 34560, c: C.hole },
+    { t: "Azure (NDv5)", k: 30000, c: C.hole },
+    { t: "GCP (A3)", k: 26000, c: C.gate },
+    { t: "CoreWeave", k: 9000, c: C.violet },
+    { t: "Lambda Labs", k: 5760, c: C.on },
+    { t: "RunPod", k: 4320, c: EMERALD },
+  ];
+  const max = 34560;
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 200" width="100%" role="img" aria-label="GPU cloud provider cost comparison">
+        <text x="280" y="18" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>running Llama-3-70B (4× A100 80GB) — approx $/month (illustrative)</text>
+        {rows.map((r, i) => {
+          const y = 30 + i * 25;
+          const w = (r.k / max) * 330;
+          return (
+            <g key={`gp${i}`}>
+              <text x="20" y={y + 15} fontFamily={mono} fontSize="7.6" fill={C.text}>{r.t}</text>
+              <rect x="150" y={y + 2} width={w} height="17" rx="3" fill={`${r.c}30`} stroke={r.c} strokeWidth="1.1" />
+              <text x={156 + w} y={y + 15} fontFamily={mono} fontSize="7.4" fontWeight="700" fill={r.c}>${(r.k / 1000).toFixed(1)}k</text>
+            </g>
+          );
+        })}
+        <text x="280" y="192" textAnchor="middle" fontFamily={mono} fontSize="7.8" fill={C.faint}>~6× spread: hyperscalers buy ecosystem/compliance; AI-clouds (Lambda, RunPod) buy raw $/GPU</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   10.6 — Observability at Scale
+   ════════════════════════════════════════════════════════════ */
+
+/* The four pillars of AI observability. */
+export function ObservabilityPillars({ caption }: { caption?: string }) {
+  const pillars = [
+    { t: "Metrics", d: "GPU util, RPS, P50/95/99, TTFT, cost/req, cache hit", c: C.on },
+    { t: "Logs", d: "structured JSON per LLM call — reproduce, attribute, trend", c: C.gate },
+    { t: "Traces", d: "end-to-end call chain — 10–30 spans per agent request", c: C.indigo },
+    { t: "Quality eval", d: "AI-specific — 1% judge sampling, edge-case 100%, nightly", c: EMERALD },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 160" width="100%" role="img" aria-label="The four pillars of AI observability">
+        <text x="280" y="18" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>traditional software has 3 pillars — AI needs a 4th: quality evaluation</text>
+        {pillars.map((p, i) => {
+          const x = 12 + i * 137;
+          return (
+            <g key={`op${i}`}>
+              <rect x={x} y="32" width="126" height="96" rx="8" fill={`${p.c}12`} stroke={p.c} strokeWidth={i === 3 ? 1.7 : 1.4} />
+              <text x={x + 63} y="52" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={p.c}>{p.t}</text>
+              <foreignObject x={x + 6} y="60" width="114" height="64"><div style={{ fontFamily: mono, fontSize: "7px", color: C.text, textAlign: "center", lineHeight: 1.35 }}>{p.d}</div></foreignObject>
+            </g>
+          );
+        })}
+        <text x="280" y="150" textAnchor="middle" fontFamily={mono} fontSize="7.8" fill={C.faint}>without observability, diagnosing an incident takes 2–4h; with it, 10–15 min</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* The P0–P3 alert severity ladder. */
+export function AlertStack({ caption }: { caption?: string }) {
+  const tiers = [
+    { p: "P0", r: "wake up now (<5 min)", e: "error >10%, service down, safety >5%, cost >10× normal", c: C.hole },
+    { p: "P1", r: "respond <30 min", e: "P99 >30s, error 1–10%, GPU >95%, judge <3.0", c: C.gate },
+    { p: "P2", r: "investigate <4h", e: "P99 >10s, cache hit −20pts, cost/req +20%", c: C.violet },
+    { p: "P3", r: "next sprint", e: "slow quality decline, gradual latency creep", c: C.on },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 168" width="100%" role="img" aria-label="The P0 to P3 alert severity ladder">
+        <text x="280" y="18" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>alerts must be precise enough to wake someone at 3am without crying wolf</text>
+        {tiers.map((t, i) => {
+          const y = 28 + i * 32;
+          return (
+            <g key={`as${i}`}>
+              <rect x="28" y={y} width="56" height="26" rx="5" fill={`${t.c}1c`} stroke={t.c} strokeWidth="1.3" />
+              <text x="56" y={y + 17} textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={t.c}>{t.p}</text>
+              <text x="96" y={y + 11} fontFamily={mono} fontSize="7.4" fontWeight="700" fill={t.c}>{t.r}</text>
+              <text x="96" y={y + 22} fontFamily={mono} fontSize="6.8" fill={C.muted}>{t.e}</text>
+            </g>
+          );
+        })}
+        <text x="280" y="162" textAnchor="middle" fontFamily={mono} fontSize="7.8" fill={C.faint}>severity = response urgency; cost-explosion and safety alerts are always P0</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

@@ -1,0 +1,107 @@
+---
+title: "Renesas RA, e-AI & the Reconfigurable DRP-AI"
+module: "08"
+moduleTitle: "Hardware Acceleration: FPGA & Edge NPUs"
+lesson: "8.12"
+slug: "8-12-renesas-ra"
+summary: "Renesas takes a different architectural bet. For small RA microcontrollers it offers the e-AI toolchain that compiles a model to C for the Cortex-M; for heavier vision it builds the DRP-AI accelerator — a dynamically reconfigurable datapath that re-wires itself per layer for class-leading power efficiency, programmed through DRP-AI TVM."
+prerequisites: ["8.11 NXP i.MX RT & the eIQ Neutron NPU"]
+---
+
+## A Different Bet: Reconfigure, Don't Fix
+
+STM32 N6 and NXP's Neutron are **fixed** MAC arrays — the FPGA→ASIC endpoint from 8.7. Renesas makes a different bet at the higher end: instead of one fixed array, **DRP-AI** is a **D**ynamically **R**econfigurable **P**rocessor that re-wires its datapath *per layer*. It's the FPGA reconfigurability idea from the first half of this module, hardened into a dedicated AI block — you get specialization without resynthesizing a bitstream.
+
+<RenesasRaBlock caption="Renesas spans two tiers: small RA (Cortex-M) MCUs that run ML on the CPU via the e-AI toolchain, and RZ/V (Cortex-A) parts that carry the DRP-AI accelerator — a reconfigurable MAC datapath plus on-chip memory — for heavier real-time vision at very high TOPS/W." />
+
+<DrpReconfig caption="Why reconfigurable wins on efficiency: a fixed array is sized for one layer shape and wastes silicon on the others. DRP-AI changes its datapath in microseconds to match each layer — a wide mesh for a 3×3 conv, channel-parallel lanes for depthwise, compare units for pooling — so almost every cycle does useful work. That's how Renesas reaches class-leading TOPS/W on edge CNNs." />
+
+<Callout type="insight" title="The FPGA idea, without the FPGA cost">
+
+Recall the FPGA's edge: it *becomes* the exact circuit a workload needs, but you pay a 30–90-minute place-and-route every time the design changes (8.2). DRP-AI keeps the *benefit* — a datapath matched to each layer — but the reconfiguration is **built into the silicon and happens at runtime in microseconds**, with no toolchain round-trip. You get FPGA-like specialization at ASIC-like power and a software-only workflow. That's the whole pitch.
+
+</Callout>
+
+---
+
+## Two Tiers, Two Toolchains
+
+Renesas's stack splits by how much compute you need:
+
+<StatGrid items={[
+  { value: "RA (Cortex-M)", label: "e-AI toolchain", sub: "compile model → C, run on the CPU (CMSIS-NN); small always-on models" },
+  { value: "Signal / sensor", label: "Reality AI", sub: "automated feature + model gen for vibration, audio, IMU" },
+  { value: "RZ/V (Cortex-A)", label: "DRP-AI + DRP-AI TVM", sub: "reconfigurable accelerator for real-time vision" }
+]} caption="Pick the tier by workload: e-AI for tiny CPU-only models on RA MCUs, Reality AI for signal/sensor data, and the DRP-AI accelerator (via DRP-AI TVM) when you need camera-rate vision at low power." />
+
+### The small end — e-AI on RA MCUs
+
+For an RA microcontroller with no accelerator, Renesas's **e-AI** (embedded-AI) translator converts a trained model into plain C that drops into an **e² studio** project and runs on the Cortex-M with CMSIS-NN — the same CPU-only TinyML you saw in 8.9, packaged in Renesas's IDE. No NPU, so the same rule applies: INT8, keep it small.
+
+### The vision end — DRP-AI via DRP-AI TVM
+
+For the DRP-AI accelerator, Renesas extends **Apache TVM** (the open ML compiler) into **DRP-AI TVM**. TVM partitions the graph — supported ops go to DRP-AI, the rest to the Arm CPU — and compiles a deployable model directory.
+
+### Step 1 — Compile the model for DRP-AI
+
+```python
+# DRP-AI TVM — compile an INT8 ONNX model for the RZ/V DRP-AI accelerator
+import onnx
+from tvm import relay
+from drpai_tvm import compile_for_drpai   # DRP-AI TVM backend
+
+onnx_model = onnx.load("yolox_tiny_int8.onnx")
+mod, params = relay.frontend.from_onnx(onnx_model)
+
+compile_for_drpai(
+    mod, params,
+    target="rzv2h",            # the DRP-AI-equipped SoC
+    output_dir="./drpai_out",  # model dir consumed by the runtime
+    quantized=True,            # INT8 — DRP-AI runs fixed-point
+)
+```
+
+**What happens here:**
+
+1. **`from_onnx`** lifts the model into TVM's Relay IR — TVM is the compiler doing the work, with a DRP-AI backend bolted on (just as FINN/Vitis sat on Vivado for FPGAs).
+2. **`compile_for_drpai`** runs the graph **partitioning**: layers DRP-AI supports become reconfiguration schedules for the accelerator; unsupported ops are lowered to Arm CPU code. Same NPU/CPU split as Vela, ST Edge AI, and the Neutron converter — different compiler.
+3. The output is a **model directory** (`drpai_out`) holding the DRP-AI datapath configs + weights and the CPU-side code, ready for the on-device runtime.
+
+### Step 2 — Run it on the device
+
+DRP-AI ships a thin C++ runtime wrapper (built on the TVM runtime):
+
+```cpp
+#include "MeraDrpRuntimeWrapper.h"
+
+MeraDrpRuntimeWrapper runtime;
+runtime.LoadModel("drpai_out");        // the compiled model dir from Step 1
+
+// --- per frame ---
+runtime.SetInput(0, input_tensor);     // preprocessed camera frame
+runtime.Run();                         // DRP-AI runs supported layers; Arm runs the rest
+float* detections = runtime.GetOutput(0);
+```
+
+**Step by step:**
+
+1. **`LoadModel`** maps the compiled directory: it loads the per-layer **datapath configurations** for DRP-AI plus the CPU fallback code. Loading the configs is what lets the accelerator reconfigure itself at runtime.
+2. **`SetInput` → `Run` → `GetOutput`** is the same three-call inference loop as every other vendor. Inside `Run`, DRP-AI **reconfigures between layers** — wide-MAC for conv, channel-parallel for depthwise — and the Arm core handles unsupported ops and orchestration.
+3. The win shows up not in the API but in the **power meter**: matching the datapath per layer is why DRP-AI posts class-leading TOPS/W for edge vision.
+
+<Callout type="key" title="Same workflow, third time">
+
+DRP-AI's hardware is genuinely different — reconfigurable, not fixed — yet the workflow is the one you already know: **import an INT8 model → compile/partition for the accelerator → call one inference function**. ST used `ai_network_run`, NXP used TFLite Micro's `Invoke`, Renesas uses `runtime.Run`. Three SDKs, one mental model. The architecture is the interesting part; the deployment is muscle memory by now.
+
+</Callout>
+
+---
+
+## Recap
+
+- **Renesas DRP-AI** is a **dynamically reconfigurable** AI accelerator: it re-wires its datapath **per layer** at runtime, keeping FPGA-like specialization at ASIC-like power — class-leading **TOPS/W** for edge vision.
+- Renesas splits by tier: **e-AI** compiles small models to C for **RA (Cortex-M)** MCUs (CPU-only), **Reality AI** automates signal/sensor models, and **DRP-AI** (on **RZ/V** Cortex-A parts) handles real-time vision.
+- DRP-AI is programmed via **DRP-AI TVM** — an Apache TVM backend that partitions the graph (DRP-AI vs Arm) and emits a model directory; the **runtime wrapper** loads it and runs the familiar SetInput/Run/GetOutput loop.
+- Different silicon philosophy, **identical deployment shape**: import INT8 → compile for the accelerator → one inference call.
+
+Next: the rest of the field and the thread tying it together — **Coral, ESP32-S3, K210, and the TFLite-Micro deploy flow** that works everywhere.

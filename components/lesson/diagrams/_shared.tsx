@@ -38,6 +38,13 @@ export const C = {
   text: "#0f172a",
 };
 
+/* Global legibility zoom (2026-06-17): diagrams used to cap at maxWidth ~540–560
+   inside a 760px article column, so SVG text rendered small. Since an SVG with a
+   viewBox scales text proportionally with the figure, rendering each diagram a bit
+   wider enlarges every label uniformly — preserving layout and the title/label
+   hierarchy with no overflow risk. Bump SCALE to grow all diagrams at once. */
+const DIAGRAM_SCALE = 1.16;
+
 /* Shared frame: dark card + centered SVG + caption (mirrors <Figure>). */
 export function DiagramFrame({
   children,
@@ -48,6 +55,8 @@ export function DiagramFrame({
   caption?: string;
   maxWidth?: number;
 }) {
+  // Scale up for legibility, but never past the usable article column width.
+  const scaledMaxWidth = Math.min(Math.round(maxWidth * DIAGRAM_SCALE), 700);
   return (
     <figure className="not-prose my-8">
       <div
@@ -58,7 +67,7 @@ export function DiagramFrame({
           boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
         }}
       >
-        <div style={{ width: "100%", maxWidth }}>{children}</div>
+        <div style={{ width: "100%", maxWidth: scaledMaxWidth }}>{children}</div>
       </div>
       {caption && (
         <figcaption

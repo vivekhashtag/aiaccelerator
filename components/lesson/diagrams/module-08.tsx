@@ -798,3 +798,142 @@ export function StEdgeAiFlow({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   8.11 — NXP i.MX RT / eIQ Neutron NPU
+   ════════════════════════════════════════════════════════════ */
+
+export function ImxRtBlock({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <McuSoc title="NXP i.MX RT crossover MCU — MCU simplicity, MPU performance" accent={C.on}
+        cpu="Cortex-M7 @ 1 GHz (+ M4)" npu="eIQ Neutron NPU" npuSpec="scalable INT8 MAC array"
+        extras={["fast on-chip SRAM + external RAM", "+ rich I/O: camera (CSI), Ethernet, USB, audio", "“crossover”: real-time MCU determinism at near-MPU clocks"]} />
+    </DiagramFrame>
+  );
+}
+
+export function EiqFlow({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <VendorFlow accent={C.on} tool="eIQ Toolkit" toolSub="eIQ Portal + Neutron converter" />
+    </DiagramFrame>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   8.12 — Renesas RA / DRP-AI
+   ════════════════════════════════════════════════════════════ */
+
+export function RenesasRaBlock({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <McuSoc title="Renesas RA / RZ — DRP-AI accelerator" accent={C.violet}
+        cpu="Cortex-M / Cortex-A" npu="DRP-AI" npuSpec="reconfigurable MAC datapath"
+        extras={["on-chip SRAM + flash", "+ DRP: dynamically reconfigurable processor", "best-in-class AI TOPS/W via per-layer datapath reconfig"]} />
+    </DiagramFrame>
+  );
+}
+
+export function EaiFlow({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <VendorFlow accent={C.violet} tool="DRP-AI TVM" toolSub="e-AI translator + TVM" />
+    </DiagramFrame>
+  );
+}
+
+/* DRP-AI reconfigures its datapath per layer instead of a fixed array. */
+export function DrpReconfig({ caption }: { caption?: string }) {
+  const layers = [
+    { t: "Conv 3×3", cfg: "wide MAC mesh", c: C.violet },
+    { t: "Depthwise", cfg: "channel-parallel datapath", c: ORANGE },
+    { t: "Pool / act", cfg: "compare + LUT units", c: C.on },
+    { t: "FC", cfg: "long dot-product chain", c: C.blue },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 170" width="100%" role="img" aria-label="DRP-AI reconfigures its datapath per layer">
+        <text x="280" y="22" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.violet}>DRP-AI: the silicon re-wires itself for each layer (in ~microseconds)</text>
+        {layers.map((l, i) => {
+          const x = 14 + i * 137;
+          return (
+            <g key={`dr${i}`}>
+              <rect x={x} y="44" width="124" height="58" rx="7" fill={`${l.c}14`} stroke={l.c} strokeWidth="1.4" />
+              <text x={x + 62} y="66" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={l.c}>{l.t}</text>
+              <foreignObject x={x + 4} y="72" width="116" height="28">
+                <div style={{ fontFamily: mono, fontSize: "7px", color: C.muted, textAlign: "center", lineHeight: 1.2 }}>{l.cfg}</div>
+              </foreignObject>
+              {i < 3 && <text x={x + 128} y="76" fontFamily={mono} fontSize="9" fill={C.faint}>→</text>}
+            </g>
+          );
+        })}
+        <text x="280" y="124" textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.text}>a fixed array wastes silicon on layers it doesn&apos;t suit; DRP-AI matches the datapath to each op</text>
+        <text x="280" y="146" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.faint}>result: very high TOPS/W on edge CNNs — the FPGA reconfigurability idea, hardened for one job</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   8.13 — Other edge accelerators + the TFLite Micro deploy flow
+   ════════════════════════════════════════════════════════════ */
+
+/* Comparison of representative edge accelerators. */
+export function EdgeAcceleratorMatrix({ caption }: { caption?: string }) {
+  const rows = [
+    { t: "Coral Edge TPU", perf: "4 TOPS @ 2 W", note: "USB/M.2/dev-board · INT8 only · runs TFLite", c: C.on },
+    { t: "ESP32-S3", perf: "~0.1–0.5 GOPS", note: "Wi-Fi MCU · SIMD-accelerated · ESP-DL/TFLM", c: ORANGE },
+    { t: "Kendryte K210", perf: "0.25–0.5 TOPS @ <1 W", note: "RISC-V + KPU conv engine · ultra-low-cost vision", c: C.violet },
+    { t: "Vendor NPUs (8.10–8.12)", perf: "0.1–0.6+ TOPS", note: "Neural-ART · eIQ Neutron · DRP-AI", c: C.blue },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 180" width="100%" role="img" aria-label="Edge accelerator comparison">
+        <text x="280" y="20" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>the wider edge-accelerator field — all INT8, all chosen by power/cost/ecosystem</text>
+        {rows.map((r, i) => {
+          const y = 32 + i * 35;
+          return (
+            <g key={`ea${i}`}>
+              <rect x="20" y={y} width="150" height="30" rx="6" fill={`${r.c}16`} stroke={r.c} strokeWidth="1.3" />
+              <foreignObject x="24" y={y + 3} width="142" height="24"><div style={{ fontFamily: mono, fontSize: "7.6px", color: r.c, textAlign: "center", lineHeight: 1.1, fontWeight: 700, paddingTop: "3px" }}>{r.t}</div></foreignObject>
+              <text x="184" y={y + 13} fontFamily={mono} fontSize="7.8" fontWeight="700" fill={C.text}>{r.perf}</text>
+              <text x="184" y={y + 25} fontFamily={mono} fontSize="7" fill={C.muted}>{r.note}</text>
+            </g>
+          );
+        })}
+        <text x="280" y="176" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.faint}>different silicon, one workflow — quantize to INT8, convert, deploy via TFLite / TFLite Micro</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* The universal TinyML deploy flow: train → INT8 → convert → flash. */
+export function TFLiteMicroFlow({ caption }: { caption?: string }) {
+  const stages = [
+    { t: "train", s: "float model (TF/Keras)", c: C.blue },
+    { t: "INT8 quantize", s: "post-training + rep. dataset", c: ORANGE },
+    { t: "convert", s: ".tflite → C array (xxd)", c: C.violet },
+    { t: "flash + run", s: "TFLite Micro on the MCU", c: C.on },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 160" width="100%" role="img" aria-label="TFLite Micro deploy flow">
+        <text x="280" y="22" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>the universal TinyML deploy path — vendor-independent, the same on every chip above</text>
+        {stages.map((s, i) => {
+          const x = 16 + i * 138;
+          return (
+            <g key={`tf${i}`}>
+              <rect x={x} y="48" width="120" height="48" rx="7" fill={`${s.c}14`} stroke={s.c} strokeWidth="1.4" />
+              <text x={x + 60} y="70" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={s.c}>{s.t}</text>
+              <foreignObject x={x + 4} y="74" width="112" height="20"><div style={{ fontFamily: mono, fontSize: "6.8px", color: C.muted, textAlign: "center", lineHeight: 1.1 }}>{s.s}</div></foreignObject>
+              {i < 3 && <g><line x1={x + 120} y1="72" x2={x + 138} y2="72" stroke={C.faint} strokeWidth="1.2" /><polygon points={`${x + 138},72 ${x + 131},68 ${x + 131},76`} fill={C.faint} /></g>}
+            </g>
+          );
+        })}
+        <text x="280" y="124" textAnchor="middle" fontFamily={mono} fontSize="8.5" fill={C.text}>the vendor tool (Cube.AI / eIQ / DRP-AI TVM) just swaps in at &quot;convert&quot; to target the NPU</text>
+        <text x="280" y="146" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.faint}>learn this once and every edge accelerator becomes a deployment target, not a new skill</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

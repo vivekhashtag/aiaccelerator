@@ -1,0 +1,125 @@
+---
+title: "STM32 N6 & the Neural-ART Accelerator"
+module: "08"
+moduleTitle: "Hardware Acceleration: FPGA & Edge NPUs"
+lesson: "8.10"
+slug: "8-10-stm32-n6"
+summary: "STMicro's first microcontroller with a built-in NPU. The STM32N6 pairs a Helium-capable Cortex-M55 with the Neural-ART accelerator (~600 GOPS INT8) and an on-chip image pipeline — and the ST Edge AI toolchain turns a standard quantized model into NPU-scheduled C you flash. The first concrete instance of the substrate from 8.9."
+prerequisites: ["8.9 The Arm Substrate", "6.1 Quantization"]
+---
+
+## The First STM32 With an NPU
+
+Everything in 8.9 was the generic Arm substrate. The **STM32N6** is the first place we see it made concrete by a vendor: it's the first STM32 to carry a dedicated **NPU**. Until it shipped, an STM32 ran TinyML on the Cortex-M core alone (CMSIS-NN, maybe Helium). The N6 keeps that core but bolts on a much larger fixed MAC engine — ST's **Neural-ART Accelerator**.
+
+<Stm32N6Block caption="The STM32N6: a Cortex-M55 (with Helium) for control and fallback ops, the Neural-ART NPU (~600 GOPS INT8) for the heavy layers, an image signal processor for camera input, and 4.2 MB of on-chip SRAM. It's the 8.9 stack — TFLite-style model, NPU + CPU split — made into one chip." />
+
+<Callout type="key" title="Why this chip exists">
+
+A Cortex-M55 with Helium can do real ML, but a person-detection or audio model at video frame rates would drain a coin cell. The **Neural-ART** is the FPGA→ASIC endpoint from 8.7 baked into the MCU: a fixed INT8 MAC array delivering roughly **600 GOPS** — about **two orders of magnitude** more throughput-per-watt than the M55 core for convolution-heavy work. The on-chip **ISP** means a camera feeds the NPU without burning CPU cycles on pixel formatting. The result is real-time edge vision and audio in **milliwatts**.
+
+</Callout>
+
+---
+
+## The Two Halves Still Split the Work
+
+This is the same division of labour as the Zynq (PS + PL) and the Ethos-U stack — just inside one MCU:
+
+<StatGrid items={[
+  { value: "Cortex-M55", label: "orchestrates", sub: "read sensor, set up tensors, run unsupported ops via CMSIS-NN/Helium" },
+  { value: "Neural-ART", label: "computes", sub: "Conv / FC / pooling — the MAC-heavy layers, ~600 GOPS INT8" },
+  { value: "ISP", label: "feeds", sub: "camera → formatted frames, no CPU cost" },
+  { value: "4.2 MB SRAM", label: "holds", sub: "activations + weights on-chip — no slow external DRAM hop" }
+]} caption="The CPU-orchestrates / accelerator-computes pattern, one more time. If you understood the Zynq and the Ethos-U, the N6 is the same shape at a smaller scale." />
+
+---
+
+## The ST Edge AI Toolchain
+
+You never hand-write code for the Neural-ART. ST's toolchain — **ST Edge AI Core** (the `stedgeai` CLI) and **X-CUBE-AI** / **STM32Cube.AI** inside CubeMX — takes a standard quantized model and produces optimized C plus an NPU schedule.
+
+<StEdgeAiFlow caption="The vendor flow from 8.9, instantiated for ST: import a trained INT8 model (TFLite / ONNX / Keras) → ST Edge AI quantizes (if needed) and maps supported layers to the Neural-ART → it emits optimized C (weights + NPU schedule + CPU fallback) → you compile and flash. Same shape as every vendor in this chapter; only the tool name and NPU change." />
+
+### Step 1 — Analyze the model against the chip
+
+Before generating anything, check that the model fits the budget and see what maps to the NPU:
+
+```bash
+# ST Edge AI Core CLI — does this model fit the STM32N6 + Neural-ART?
+stedgeai analyze \
+    --model person_detect_int8.tflite \
+    --target stm32n6
+```
+
+**What this tells you:**
+
+1. **Per-layer placement** — which layers the Neural-ART will run and which fall back to the Cortex-M (exactly the Vela-style split from 8.9, but for ST's NPU).
+2. **Memory footprint** — flash needed for weights and SRAM needed for the activation arena, checked against the chip's budget. If it doesn't fit, you go back to Module 6 (quantize harder, prune, or shrink the model) — you cannot deploy what doesn't fit.
+3. **Estimated cycles / latency** — a first read on whether you'll hit your frame-rate target.
+
+### Step 2 — Generate the optimized C
+
+```bash
+# Emit NPU-scheduled C into ./generated, runtime named "network"
+stedgeai generate \
+    --model person_detect_int8.tflite \
+    --target stm32n6 \
+    --output ./generated \
+    --name network
+```
+
+This writes `network.c/.h` (the graph + NPU schedule) and `network_data.*` (the INT8 weights as a C array, destined for flash). These drop straight into a CubeIDE project.
+
+### Step 3 — Run it from your firmware
+
+The generated runtime exposes a small, fixed API. You initialize once, then call `run` per frame:
+
+```c
+#include "network.h"
+#include "network_data.h"
+
+static ai_handle network = AI_HANDLE_NULL;
+AI_ALIGNED(32) static ai_u8 activations[AI_NETWORK_DATA_ACTIVATIONS_SIZE];
+static ai_buffer *ai_in, *ai_out;
+
+void ai_init(void) {
+    ai_network_create(&network, AI_NETWORK_DATA_CONFIG);
+    const ai_network_params params = AI_NETWORK_PARAMS_INIT(
+        AI_NETWORK_DATA_WEIGHTS(ai_network_data_weights_get()),  // from flash
+        AI_NETWORK_DATA_ACTIVATIONS(activations));               // tensor arena in SRAM
+    ai_network_init(network, &params);
+    ai_in  = ai_network_inputs_get(network, NULL);
+    ai_out = ai_network_outputs_get(network, NULL);
+}
+
+void ai_run(const int8_t *frame, int8_t *result) {
+    ai_in[0].data  = AI_HANDLE_PTR(frame);   // INT8 image from the ISP
+    ai_out[0].data = AI_HANDLE_PTR(result);
+    ai_network_run(network, ai_in, ai_out);  // heavy layers dispatched to Neural-ART
+}
+```
+
+**Step by step:**
+
+1. **`ai_network_create` + `ai_network_init`** wire up the graph once at boot. Weights stay in **flash**; the **activation arena** lives in the SRAM buffer you supplied (`activations[]`) — the flash-weights / SRAM-activations split from 8.8, in code.
+2. **`AI_ALIGNED(32)`** aligns the arena so the NPU's DMA can stream it efficiently — alignment matters for accelerator throughput, just like the tile-alignment point in Module 6.
+3. **`ai_network_run`** is the whole inference. Under the hood it dispatches each layer to the **Neural-ART** if supported, or to **CMSIS-NN on the M55** if not — you write the same call regardless. The decode was made at *generate* time; runtime just executes the schedule.
+4. The input is **INT8** straight from the ISP and the output is **INT8** — no float anywhere on the hot path, which is what keeps it inside the power budget.
+
+<Callout type="why" title="The programming model never changed">
+
+Notice you didn't write a single line targeting the NPU. You imported an INT8 model, ran two CLI commands, and called `ai_network_run`. That's the payoff of the 8.9 substrate: the *hardware* got dramatically faster, but the *workflow* is the same import-convert-call loop you'll see again for NXP and Renesas — only the tool (`stedgeai`) and the engine (Neural-ART) carry the ST name.
+
+</Callout>
+
+---
+
+## Recap
+
+- The **STM32N6** is the first STM32 with an NPU: a **Cortex-M55 + Helium** core paired with the **Neural-ART accelerator** (~600 GOPS INT8) and an on-chip **ISP**, with 4.2 MB SRAM.
+- It runs the same **CPU-orchestrates / NPU-computes** split as the Zynq and Ethos-U — heavy Conv/FC/pool on Neural-ART, everything else on the M55 via CMSIS-NN/Helium.
+- The **ST Edge AI** toolchain (`stedgeai` CLI, X-CUBE-AI) **analyzes** a quantized model for fit and placement, then **generates** NPU-scheduled C; you call `ai_network_run` per frame.
+- Weights sit in **flash**, the activation arena in **SRAM**, the data path stays **INT8** end to end — real-time edge vision/audio at milliwatts.
+
+Next: NXP's answer — the **i.MX RT crossover MCUs and the eIQ Neutron NPU**.

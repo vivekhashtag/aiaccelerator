@@ -269,6 +269,19 @@ import {
   // 8.9 Arm substrate
   CortexMTiers,
   EthosUStack,
+  // 8.10 STM32 N6 / Neural-ART
+  Stm32N6Block,
+  StEdgeAiFlow,
+  // 8.11 NXP i.MX RT / eIQ Neutron
+  ImxRtBlock,
+  EiqFlow,
+  // 8.12 Renesas RA / DRP-AI
+  RenesasRaBlock,
+  EaiFlow,
+  DrpReconfig,
+  // 8.13 Other edge accelerators + TFLite Micro
+  EdgeAcceleratorMatrix,
+  TFLiteMicroFlow,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -485,6 +498,15 @@ const components = {
   McuMemoryBudget,
   CortexMTiers,
   EthosUStack,
+  Stm32N6Block,
+  StEdgeAiFlow,
+  ImxRtBlock,
+  EiqFlow,
+  RenesasRaBlock,
+  EaiFlow,
+  DrpReconfig,
+  EdgeAcceleratorMatrix,
+  TFLiteMicroFlow,
 };
 
 export async function renderMDX(source: string) {

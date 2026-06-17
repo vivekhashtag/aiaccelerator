@@ -1,0 +1,65 @@
+---
+title: "Fine-Tuning in Production"
+module: "10"
+moduleTitle: "End-to-End Systems, Scaling & Capstone"
+lesson: "10.7"
+slug: "10-07-fine-tuning-production"
+summary: "Fine-tuning is often proposed for problems that have cheaper, better solutions. We cover the escalation ladder to try first (prompting → RAG → caching → fine-tuning), what fine-tuning genuinely helps with versus what it can't fix, the 80/20 data-curation rule, and the difference between continued pre-training, SFT, and RLHF/DPO."
+prerequisites: ["10.4 System Design Patterns", "4.6 Fine-Tuning"]
+---
+
+## Try These Before Fine-Tuning
+
+Fine-tuning is frequently the *first* thing teams reach for and the *last* thing they should. Before adapting weights, climb this ladder — cheapest to most expensive — and stop at the first rung that works:
+
+<FineTuningLadder caption="1 Better prompting (engineer time) → 2 RAG (embedding + vector store) → 3 Prompt caching + long context (more tokens) → 4 Fine-tuning ($100–$1000+). Most 'we need to fine-tune' problems are actually formatting problems (rung 1) or knowledge problems (rung 2)." />
+
+1. **Better prompting** — system prompt + few-shot examples. Fixes most formatting/style problems for the price of engineer time. Fails when the model genuinely lacks knowledge or capability.
+2. **RAG** — inject relevant context at inference. Fixes knowledge and factual accuracy. Fails when the model needs to *behave* differently, not just *know* more.
+3. **Prompt caching + long context** — put the examples in a cached system prompt. Fixes consistent format/style needs. Fails when there are too many examples to fit in context.
+4. **Fine-tuning** — adapt the weights. Now worth it for consistent formatting, domain vocabulary, narrow task specialisation, or shrinking a long system prompt into the weights.
+
+<Callout type="key" title="What fine-tuning helps with — and what it can't fix">
+
+**Helps:** output *format* (always valid JSON in an exact schema), domain *vocabulary/tone* (medical, legal), single-task *specialisation*, and *shortening prompts* by baking instructions into the weights. **Cannot fix:** facts that change over time (use RAG), safety properties (fine-tuning often *degrades* them), fundamental reasoning capability (the base model's reasoning is what it is), or privacy (fine-tuning doesn't protect training data — see 10.8). Match the tool to the problem: fine-tuning changes *behaviour*, RAG changes *knowledge*.
+
+</Callout>
+
+---
+
+## The Data Problem
+
+The single most important factor in fine-tuning quality is not the algorithm or the hyperparameters — it's the **data**.
+
+<Callout type="insight" title="The 80/20 rule of fine-tuning">
+
+**80% of the work is data curation; 20% is the training run.** And quality beats quantity every time: **100 perfect examples ≫ 10,000 mediocre ones**. Bad data teaches bad behaviour and is extremely hard to debug after the fact — the model just gets subtly worse with no error to chase.
+
+</Callout>
+
+Rough volume guidance by goal: style/format adaptation needs ~500–2,000 examples; task specialisation ~2,000–10,000; broad instruction-following ~10,000–50,000+. But the requirements that actually determine success are **diversity** (cover the full input distribution, include edge cases, don't over-represent easy cases) and **consistency** (every example in the exact target format, no contradictions). Collection methods, best to worst: experts annotating from scratch → experts correcting LLM outputs → LLM-generated with strict human filtering → pure LLM-generated without review (high risk of learning biases).
+
+---
+
+## CPT vs SFT vs RLHF
+
+"Fine-tuning" actually names three different adaptations with very different costs and uses:
+
+<AdaptationTypes caption="Continued pre-training (CPT): more domain text, no instruction format — improves knowledge, very high cost. Supervised fine-tuning (SFT): (instruction, response) pairs — teaches behaviour, moderate cost. RLHF/DPO: preference pairs — aligns to human judgment, high cost. For most production use cases, SFT is what 'fine-tuning' means." />
+
+- **Continued Pre-Training (CPT):** further training on raw domain text (no instruction format). For when the base model *lacks domain knowledge* (clinical literature, legal corpora). Data: hundreds of GB–TB; cost: pre-training scale. Improves knowledge, not instruction-following.
+- **Supervised Fine-Tuning (SFT):** training on (instruction, response) pairs. For when the model needs a specific *behaviour/format/style*. Data: thousands–tens of thousands of pairs; cost: ~$100–$1000 on cloud GPUs. **This is what "fine-tuning" means in practice.**
+- **RLHF / DPO:** training on human *preferences* (A is better than B). For improving general output quality against human judgment. Data: preference pairs; cost: high (preference collection + training). Aligns the model to be more helpful/harmless/honest.
+
+For most production use cases, **SFT with high-quality data is sufficient**; CPT and RLHF are reserved for specialised, high-investment model development.
+
+---
+
+## Recap
+
+- **Climb the ladder first**: prompting → RAG → prompt caching + long context → fine-tuning. Most "we need fine-tuning" cases are formatting (prompting) or knowledge (RAG) problems.
+- Fine-tuning **changes behaviour** (format, vocabulary, specialisation, prompt-shortening); it **can't** fix changing facts (RAG), safety, reasoning capability, or privacy.
+- **80% of fine-tuning is data curation**, and **100 perfect examples beat 10,000 mediocre ones**; diversity and format consistency matter more than raw volume.
+- **CPT** adds knowledge, **SFT** teaches behaviour, **RLHF/DPO** aligns to preferences — and in practice production "fine-tuning" means **SFT**.
+
+Next: keeping production systems safe from adversaries — **security and safety**.

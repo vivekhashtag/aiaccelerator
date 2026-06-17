@@ -341,6 +341,15 @@ import {
   // 10.6 Observability
   ObservabilityPillars,
   AlertStack,
+  // 10.7 Fine-tuning
+  FineTuningLadder,
+  AdaptationTypes,
+  // 10.8 Security & safety
+  AttackSurface,
+  SafetyStack,
+  // 10.9 Economics
+  UnitEconomics,
+  AiCostStages,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -608,6 +617,12 @@ const components = {
   GpuProviderCompare,
   ObservabilityPillars,
   AlertStack,
+  FineTuningLadder,
+  AdaptationTypes,
+  AttackSurface,
+  SafetyStack,
+  UnitEconomics,
+  AiCostStages,
 };
 
 export async function renderMDX(source: string) {

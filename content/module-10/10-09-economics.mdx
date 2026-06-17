@@ -1,0 +1,71 @@
+---
+title: "The Economics of AI Products"
+module: "10"
+moduleTitle: "End-to-End Systems, Scaling & Capstone"
+lesson: "10.9"
+slug: "10-09-economics"
+summary: "AI product economics are fundamentally different from classic software because cost scales linearly with usage. We work the unit economics (cost per valuable action and gross margin), compare the three AI business models, and trace the four stages where AI cost grows from negligible to a business-threatening share of revenue."
+prerequisites: ["10.2 Scaling"]
+---
+
+## Unit Economics
+
+The key metric for any AI product is the **cost per valuable action** — what it costs to produce one unit of value for the user.
+
+<UnitEconomics caption="A code-review tool: ~$0.010 AI cost per PR review (LLM + vector search + overhead), priced at $0.10 → 90% gross margin. At 1,000 users × 500 reviews/mo: $50k revenue − $5k AI cost = $45k profit. But AI cost scales linearly with usage." />
+
+The arithmetic looks healthy — 90% gross margin holds even as usage grows 10×, because both revenue and AI cost scale together. But that's exactly the catch:
+
+<Callout type="key" title="AI cost scales linearly — classic SaaS doesn't">
+
+Traditional software has near-zero marginal cost: the 10,000th user costs almost nothing to serve. **AI cost scales linearly with usage** — every request burns tokens. This is why AI product economics are fundamentally different, and why the cost levers from 10.2 (routing, caching, model selection) aren't optional optimisations but the difference between a viable business and a broken one. Your margin is only as good as your cost-per-action, *forever*, not just until you reach scale.
+
+</Callout>
+
+---
+
+## The Three Business Models
+
+How you charge has to match how AI cost behaves:
+
+<StatGrid items={[
+  { value: "Per-usage", label: "pay per action", sub: "direct cost pass-through; needs very low cost/action; high-volume low-cost tasks" },
+  { value: "Subscription", label: "flat monthly fee", sub: "predictable revenue, variable cost; price above average usage; heavy users hurt you" },
+  { value: "Outcome-based", label: "pay on success", sub: "perfect incentive alignment; needs reliable AI + clear outcome metric; high-value outcomes" }
+]} caption="Per-usage passes cost straight through (fixed margin). Subscription trades cost variance for revenue predictability (and exposes you to heavy users). Outcome-based aligns incentives perfectly but demands very reliable AI and a measurable outcome." />
+
+- **Per-usage** (per generation/query/analysis): your margin is fixed because cost passes through directly. Works for high-volume, low-cost tasks (summarisation, classification, translation).
+- **Subscription** (flat fee up to a limit): predictable revenue, *variable* cost — heavy users erode margin, light users subsidise it. You must price above expected *average* usage cost. Works where usage is predictable and bounded.
+- **Outcome-based** (pay when the AI closes a deal, resolves a ticket): incentives align perfectly — you're paid only on success — but it demands very reliable AI and a clear outcome metric. Works for high-value outcomes (sales, legal, healthcare) with obvious ROI.
+
+---
+
+## When AI Cost Becomes the Business Problem
+
+At sufficient scale, the AI-cost-to-revenue ratio *becomes* the central engineering problem, and the right priority shifts by stage:
+
+<AiCostStages caption="Stage 1 (negligible vs eng cost): optimise product quality. Stage 2 (10–30% of revenue): prompt caching, smarter model selection. Stage 3 (30–50%): fine-tune small models, route, aggressive caching. Stage 4 (>50%): the business model is broken — self-host or re-architect." />
+
+**Step by step through the stages:**
+
+1. **Stage 1 — negligible.** AI cost is dwarfed by engineering salaries. Optimising it is premature (the Regime-1 lesson from 10.2); optimise product quality instead.
+2. **Stage 2 — 10–30% of revenue.** Easy wins: prompt caching and smarter model selection cut input tokens and route simple queries cheaply.
+3. **Stage 3 — 30–50%.** Serious cost engineering: fine-tune small models for specific tasks (10.7), route hard-vs-easy queries (10.2), cache aggressively.
+4. **Stage 4 — over 50%.** The business model is broken or pricing is too low. Consider self-hosting open models (10.5) and a fundamental architecture review.
+
+<Callout type="insight" title="The healthy range">
+
+Sustainable AI cost is roughly **30–40% of revenue**, with a gross-margin target of **60–80%**. Cross into Stage 4 and no amount of caching saves you — it's a pricing or product-architecture problem, not an optimisation one. This is the economic mirror of the whole module: measure the real ratio, and fix the actual constraint (pricing, model, or architecture) rather than tuning the wrong layer.
+
+</Callout>
+
+---
+
+## Recap
+
+- The core metric is **cost per valuable action**; the worked example shows a 90% gross margin that holds at scale — but only because cost is controlled.
+- **AI cost scales linearly with usage** (unlike near-zero-marginal-cost SaaS), so the cost levers from 10.2 are existential, not optional.
+- Three **business models** — per-usage (fixed margin), subscription (revenue predictability, heavy-user risk), outcome-based (perfect alignment, needs reliability) — must match how cost behaves.
+- AI cost grows through **four stages**; healthy is **30–40% of revenue / 60–80% margin**, and **Stage 4 (>50%)** signals a pricing or architecture problem no optimisation will fix.
+
+Next: assembling the entire module into one reference architecture — **the capstone**.

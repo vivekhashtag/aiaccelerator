@@ -426,3 +426,188 @@ export function AlertStack({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   10.7 — Fine-Tuning in Production
+   ════════════════════════════════════════════════════════════ */
+
+/* Try these in order, cheapest to most expensive — fine-tuning is last. */
+export function FineTuningLadder({ caption }: { caption?: string }) {
+  const rungs = [
+    { t: "1. Better prompting", d: "system prompt + few-shot", cost: "engineer time", c: C.on },
+    { t: "2. RAG", d: "inject context at inference", cost: "embed + vector store", c: C.gate },
+    { t: "3. Prompt caching + long context", d: "examples in the system prompt", cost: "higher tokens", c: C.violet },
+    { t: "4. Fine-tuning", d: "adapt the weights", cost: "$100–$1000+", c: C.hole },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 175" width="100%" role="img" aria-label="Try these before fine-tuning, in order">
+        <text x="280" y="18" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>fine-tuning is often the wrong first answer — try in order, cheapest first</text>
+        {rungs.map((r, i) => {
+          const y = 28 + i * 33;
+          return (
+            <g key={`ft${i}`}>
+              <rect x="30" y={y} width="500" height="29" rx="5" fill={`${r.c}12`} stroke={r.c} strokeWidth="1.2" />
+              <text x="42" y={y + 13} fontFamily={mono} fontSize="8.2" fontWeight="700" fill={r.c}>{r.t}</text>
+              <text x="42" y={y + 24} fontFamily={mono} fontSize="6.8" fill={C.muted}>{r.d}</text>
+              <text x="430" y={y + 19} fontFamily={mono} fontSize="7.2" fontWeight="700" fill={r.c}>{r.cost}</text>
+              {i < 3 && <text x="280" y={y + 32} textAnchor="middle" fontFamily={mono} fontSize="6.4" fill={C.faint}>↓ only if it fails</text>}
+            </g>
+          );
+        })}
+        <text x="280" y="170" textAnchor="middle" fontFamily={mono} fontSize="7.6" fill={C.faint}>fine-tune for format/style/vocab; NOT for changing facts (use RAG) or reasoning capability</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* CPT vs SFT vs RLHF/DPO. */
+export function AdaptationTypes({ caption }: { caption?: string }) {
+  const types = [
+    { t: "CPT", n: "continued pre-training", what: "more domain text, no instructions", data: "raw text, 100s GB–TB", cost: "very high", c: C.violet },
+    { t: "SFT", n: "supervised fine-tuning", what: "(instruction, response) pairs", data: "1k–50k pairs", cost: "$100–$1000", c: EMERALD },
+    { t: "RLHF / DPO", n: "preference optimisation", what: "learn from A-better-than-B", data: "preference pairs", cost: "high", c: C.hole },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 165" width="100%" role="img" aria-label="CPT versus SFT versus RLHF">
+        <text x="280" y="18" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>three ways to adapt a model — for most production cases, SFT is what &quot;fine-tuning&quot; means</text>
+        {types.map((t, i) => {
+          const x = 16 + i * 178;
+          return (
+            <g key={`at${i}`}>
+              <rect x={x} y="30" width="164" height="110" rx="8" fill={`${t.c}12`} stroke={t.c} strokeWidth={i === 1 ? 1.7 : 1.4} />
+              <text x={x + 82} y="48" textAnchor="middle" fontFamily={mono} fontSize="9.5" fontWeight="700" fill={t.c}>{t.t}</text>
+              <text x={x + 82} y="61" textAnchor="middle" fontFamily={mono} fontSize="6.6" fill={C.muted}>{t.n}</text>
+              <foreignObject x={x + 8} y="68" width="148" height="30"><div style={{ fontFamily: mono, fontSize: "7px", color: C.text, textAlign: "center", lineHeight: 1.25 }}>{t.what}</div></foreignObject>
+              <text x={x + 82} y="114" textAnchor="middle" fontFamily={mono} fontSize="6.8" fill={C.muted}>{t.data}</text>
+              <text x={x + 82} y="128" textAnchor="middle" fontFamily={mono} fontSize="7" fontWeight="700" fill={t.c}>cost: {t.cost}</text>
+            </g>
+          );
+        })}
+        <text x="280" y="158" textAnchor="middle" fontFamily={mono} fontSize="7.6" fill={C.faint}>80/20 rule: 80% of fine-tuning work is data curation — 100 perfect examples ≫ 10k mediocre</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   10.8 — Security & Safety
+   ════════════════════════════════════════════════════════════ */
+
+/* The AI-specific attack surface. */
+export function AttackSurface({ caption }: { caption?: string }) {
+  const attacks = [
+    { t: "Prompt injection", d: "instructions hidden in processed content hijack the agent", fix: "role separation · output classifiers · tool allow-lists", c: C.hole },
+    { t: "Data exfiltration", d: "agent tricked into revealing sensitive data it can access", fix: "least-privilege data access · PII detection · audit logs", c: C.gate },
+    { t: "Model inversion", d: "fine-tuned model leaks memorised training data", fix: "don't FT on PII · differential privacy · memorisation tests", c: C.violet },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 175" width="100%" role="img" aria-label="The AI-specific attack surface">
+        <text x="280" y="18" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>AI adds new attack vectors on top of all the usual web-app ones</text>
+        {attacks.map((a, i) => {
+          const y = 28 + i * 44;
+          return (
+            <g key={`ak${i}`}>
+              <rect x="30" y={y} width="500" height="38" rx="6" fill={`${a.c}10`} stroke={a.c} strokeWidth="1.2" />
+              <text x="42" y={y + 15} fontFamily={mono} fontSize="8.4" fontWeight="700" fill={a.c}>{a.t}</text>
+              <text x="42" y={y + 29} fontFamily={mono} fontSize="6.9" fill={C.muted}>{a.d}</text>
+              <text x="42" y={y + 38} fontFamily={mono} fontSize="6.6" fontWeight="700" fill={a.c} opacity="0" >.</text>
+              <text x="300" y={y + 15} fontFamily={mono} fontSize="6.6" fontWeight="700" fill={C.on}>mitigate:</text>
+              <foreignObject x="300" y={y + 18} width="222" height="18"><div style={{ fontFamily: mono, fontSize: "6.4px", color: C.text, lineHeight: 1.1 }}>{a.fix}</div></foreignObject>
+            </g>
+          );
+        })}
+        <text x="280" y="170" textAnchor="middle" fontFamily={mono} fontSize="7.6" fill={C.faint}>the LLM can&apos;t reliably tell instructions from content — that&apos;s the root of injection</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* The five-layer safety stack (defence in depth). */
+export function SafetyStack({ caption }: { caption?: string }) {
+  const layers = [
+    { t: "1. Model-level safety", d: "base-model training — obvious harmful requests", c: C.on },
+    { t: "2. System-prompt safety", d: "scope boundaries — off-topic, scope creep", c: C.gate },
+    { t: "3. Input classification", d: "before the LLM call — Llama Guard, custom", c: C.violet },
+    { t: "4. Output classification", d: "after the response — catch tricked outputs", c: C.indigo },
+    { t: "5. Human review", d: "high-stakes outputs — medical, legal, financial", c: C.hole },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 185" width="100%" role="img" aria-label="The five-layer safety stack">
+        <text x="280" y="18" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>safety is a stack — no single layer is sufficient (defence in depth)</text>
+        {layers.map((l, i) => {
+          const y = 28 + i * 29;
+          const w = 320 + i * 32;
+          return (
+            <g key={`ss${i}`}>
+              <rect x={(560 - w) / 2} y={y} width={w} height="24" rx="5" fill={`${l.c}14`} stroke={l.c} strokeWidth="1.2" />
+              <text x="280" y={y + 11} textAnchor="middle" fontFamily={mono} fontSize="7.8" fontWeight="700" fill={l.c}>{l.t}</text>
+              <text x="280" y={y + 20} textAnchor="middle" fontFamily={mono} fontSize="6.6" fill={C.muted}>{l.d}</text>
+            </g>
+          );
+        })}
+        <text x="280" y="180" textAnchor="middle" fontFamily={mono} fontSize="7.6" fill={C.faint}>an attacker must bypass every independent layer to succeed</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   10.9 — The Economics of AI Products
+   ════════════════════════════════════════════════════════════ */
+
+/* Unit economics worked example (code-review tool). */
+export function UnitEconomics({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 165" width="100%" role="img" aria-label="Unit economics of an AI product">
+        <text x="270" y="18" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>cost per valuable action — e.g. one PR review</text>
+        {/* cost bar vs price bar */}
+        <text x="40" y="48" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.hole}>AI cost</text>
+        <rect x="120" y="38" width="36" height="18" rx="3" fill={`${C.hole}30`} stroke={C.hole} strokeWidth="1.1" />
+        <text x="164" y="51" fontFamily={mono} fontSize="7.4" fill={C.text}>$0.010 (LLM + search + overhead)</text>
+        <text x="40" y="80" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.on}>price</text>
+        <rect x="120" y="70" width="360" height="18" rx="3" fill={`${C.on}26`} stroke={C.on} strokeWidth="1.1" />
+        <text x="124" y="83" fontFamily={mono} fontSize="7.4" fontWeight="700" fill={C.on}>$0.10 per review  →  90% gross margin</text>
+        {/* scale */}
+        <rect x="40" y="104" width="460" height="40" rx="7" fill={`${EMERALD}10`} stroke={EMERALD} strokeWidth="1.2" />
+        <text x="270" y="120" textAnchor="middle" fontFamily={mono} fontSize="7.6" fontWeight="700" fill={EMERALD}>1,000 users × 500 reviews/mo: $50k revenue − $5k AI = $45k profit</text>
+        <text x="270" y="135" textAnchor="middle" fontFamily={mono} fontSize="7.2" fill={C.muted}>but AI cost scales LINEARLY with usage — unlike near-zero-marginal-cost SaaS</text>
+        <text x="270" y="158" textAnchor="middle" fontFamily={mono} fontSize="7.6" fill={C.faint}>this is why AI product economics differ fundamentally from classic software</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* The four cost-vs-revenue stages. */
+export function AiCostStages({ caption }: { caption?: string }) {
+  const stages = [
+    { t: "Stage 1", r: "negligible vs eng cost", a: "optimise product quality, not cost", c: C.on },
+    { t: "Stage 2", r: "10–30% of revenue", a: "prompt caching, smarter model selection", c: C.gate },
+    { t: "Stage 3", r: "30–50% of revenue", a: "fine-tune small models, route, cache hard", c: C.violet },
+    { t: "Stage 4", r: "> 50% of revenue", a: "business model broken — self-host / re-architect", c: C.hole },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 170" width="100%" role="img" aria-label="The four AI cost-to-revenue stages">
+        <text x="280" y="18" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>as AI cost rises against revenue, the engineering priority changes</text>
+        {stages.map((s, i) => {
+          const y = 28 + i * 32;
+          return (
+            <g key={`cs${i}`}>
+              <rect x="30" y={y} width="120" height="26" rx="5" fill={`${s.c}16`} stroke={s.c} strokeWidth="1.2" />
+              <text x="44" y={y + 12} fontFamily={mono} fontSize="7.8" fontWeight="700" fill={s.c}>{s.t}</text>
+              <text x="44" y={y + 22} fontFamily={mono} fontSize="6.6" fill={C.muted}>{s.r}</text>
+              <rect x="158" y={y} width="372" height="26" rx="5" fill={`${s.c}0c`} stroke={s.c} strokeWidth="0.9" />
+              <text x="170" y={y + 17} fontFamily={mono} fontSize="7.4" fill={C.text}>{s.a}</text>
+            </g>
+          );
+        })}
+        <text x="280" y="164" textAnchor="middle" fontFamily={mono} fontSize="7.6" fill={C.faint}>sustainable AI cost is ~30–40% of revenue; gross margin target 60–80%</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

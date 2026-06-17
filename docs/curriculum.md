@@ -169,17 +169,30 @@ Goal: implement neural nets from scratch in NumPy, reproduce them in PyTorch, th
 
 ---
 
-## Module 8 — FPGA & Hardware Acceleration for AI
+## Module 8 — Hardware Acceleration: FPGA + Edge NPUs
 *4 weeks · PYNQ-Z2 FPGA + Laptop*
 
-**Topics**
-8.1 FPGA vs CPU vs GPU (when to choose FPGA)
-8.2 HLS concepts (C++ to hardware, Vivado HLS)
-8.3 Loop optimisation (unrolling, pipelining, tiling, array partitioning)
-8.4 Mapping neural networks to FPGA (dataflow, BRAM weight storage)
-8.5 Vitis AI and FINN (quantized inference, Brevitas)
-8.6 Quantized inference on FPGA (fixed-point, resource reports)
-8.7 Hardware cost engineering ★ — FPGA vs GPU vs CPU TCO, latency SLA, break-even, power cost
+> **Expanded (built 2026-06-17): 13 lessons.** The original FPGA topics became the FPGA half
+> (8.1–8.7), and a second **edge-MCU / NPU half** (8.8–8.13) was added — TinyML and the vendor
+> AI-microcontroller landscape (authored from domain knowledge, no PDF). Filenames are zero-padded
+> `8-01`…`8-13`. Orange accent.
+
+**Topics — FPGA half**
+8.1 FPGA architecture (LUT/FF/DSP/BRAM, Zynq PS+PL, PYNQ)
+8.2 HLS to bitstream (C++ → RTL, PIPELINE/UNROLL/ARRAY_PARTITION, dataflow)
+8.3 Quantization for FPGA (DSP constraint, BNN/XNOR-popcount, FINN, Brevitas)
+8.4 FPGA vs GPU vs CPU (determinism, power efficiency, decision matrix)
+8.5 Mapping NNs onto PYNQ-Z2 (what fits, MNIST flow, streaming conv)
+8.6 Vitis AI & the DPU (FINN vs Vitis, the systolic DPU overlay)
+8.7 FPGA in practice (streaming pipeline, energy/inference, FPGA→ASIC)
+
+**Topics — Edge MCU / NPU half**
+8.8 Edge AI microcontrollers & TinyML (mW & KB, flash/SRAM budget, micro-NPU wave)
+8.9 The Arm substrate (Cortex-M tiers, Helium, CMSIS-NN, Ethos-U + Vela)
+8.10 STM32 N6 & the Neural-ART accelerator (ST Edge AI / X-CUBE-AI)
+8.11 NXP i.MX RT & the eIQ Neutron NPU (crossover MCU, eIQ + TFLite Micro)
+8.12 Renesas RA, e-AI & the reconfigurable DRP-AI (DRP-AI TVM)
+8.13 The wider field & the universal deploy flow ★ — Coral / ESP32-S3 / K210, train→INT8→convert→flash (capstone)
 
 **Labs**
 - 8-A Matrix multiply in Vivado HLS (unrolled vs pipelined)

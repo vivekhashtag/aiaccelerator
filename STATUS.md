@@ -1,17 +1,12 @@
 # Project Status
 
-**Last updated:** 2026-06-16 — **Module 8 IN PROGRESS** (expanded "Hardware Acceleration: FPGA + Edge NPUs", 13 lessons planned). **9 of 13 lessons live & pushed** (8.1–8.9); **4 remaining** (8.10–8.13). 67 routes, `next build` green. Earlier same day: Modules 4 (expanded→13), 5, 6, 7 all completed. **⏸️ PAUSED for a break here.**
+**Last updated:** 2026-06-17 — **Module 8 COMPLETE** (expanded "Hardware Acceleration: FPGA + Edge NPUs", **13/13 lessons live**). 8.10–8.13 built this session (STM32 N6, NXP i.MX RT, Renesas RA, others+TFLite-Micro). **71 routes, `next build` green. 68 lessons total.** Earlier: Modules 4 (expanded→13), 5, 6, 7. **▶ NEXT: Module 9 — Agentic AI Systems & Orchestration.**
 
-## ▶ RESUME HERE — Module 8 remaining lessons (8.10–8.13)
+## ▶ RESUME HERE — Module 9 (Agentic AI Systems & Orchestration)
 
-Module 8 = **13 lessons**, zero-padded filenames `8-01`…`8-13` (so `8-10` sorts after `8-09`; JS `.sort()`). Orange accent. FPGA half (8.1–8.7) done; MCU/edge half started (8.8–8.9 done). **Still to build:**
+Module 8 is done. Next module per `docs/curriculum.md`: **Module 9 — Agentic AI Systems & Orchestration** (7 topics 9.1–9.7: agent architectures, tool calling, memory/retrieval, multi-step reasoning, planning/execution loops, LLM backend integration, agent eval & reliability ★). Follow the established recipe (see memory `module-build-pattern`): MDX lessons + SVG diagrams in a new `diagrams/module-09.tsx` + register in `index.ts` barrel **and** `lib/mdx.ts` (import list + `components` map) + pick a new accent in `lib/colors.ts`. **Module 9 is code-heavy** (agentic AI) — use the `CodeBlock`/`Pre` fenced-code infra with numbered step explanations, like Modules 7–8. Build-verify with `NEXT_DIST_DIR=.next-verify npx next build`. After 9: **Module 10 — End-to-End Systems & Capstone.**
 
-- **8.10 STM32 N6 / Neural-ART** — ⚠️ **diagrams already written & committed** (`Stm32N6Block`, `StEdgeAiFlow`, + reusable `McuSoc`/`VendorFlow` helpers in `module-08.tsx`) but **NOT yet registered in `lib/mdx.ts` and the lesson MDX is NOT written.** Finish: register the 2 diagrams (import + components map), write `content/module-08/8-10-stm32-n6.mdx`.
-- **8.11 NXP i.MX RT / eIQ Neutron NPU** (eIQ toolkit). Reuse `McuSoc`/`VendorFlow` helpers.
-- **8.12 Renesas RA / DRP-AI / e-AI**. Reuse the helpers.
-- **8.13 Other edge accelerators** (Coral Edge TPU, ESP32-S3, Kendryte K210) **+ the TFLite-Micro deploy flow** (train → INT8 → convert → flash) — the module capstone.
-
-MCU content is **authored from domain knowledge** (no PDF — it's the user's expansion). Each: inline code + numbered step explanations, 2–3 diagrams, build-verify with `NEXT_DIST_DIR=.next-verify`, one commit/push per lesson. After 8.13: update STATUS/CLAUDE/curriculum, home-page M8 title already updated.
+> **Module 8 build notes (done 2026-06-17):** 8.10 reused the pre-written `Stm32N6Block`/`StEdgeAiFlow`; 8.11–8.13 added new diagrams (all reuse the `McuSoc`/`VendorFlow` helpers in `module-08.tsx`) — `ImxRtBlock`/`EiqFlow`, `RenesasRaBlock`/`EaiFlow`/`DrpReconfig`, `EdgeAcceleratorMatrix`/`TFLiteMicroFlow`. Each lesson: inline code + numbered steps, distinct vendor toolchain (ST Edge AI generated-C / eIQ+TFLite-Micro / DRP-AI TVM), 8.13 generalizes the train→INT8→convert→flash flow and closes the module. MCU content authored from domain knowledge (no PDF).
 
 ---
 
@@ -45,7 +40,10 @@ MCU content is **authored from domain knowledge** (no PDF — it's the user's ex
 - ✅ `8-07-fpga-in-practice` — streaming pipeline, resource calculator, energy/inference, FPGA→ASIC, PYNQ setup. *(FPGA half = 7 lessons done)*
 - ✅ `8-08-tinyml-landscape` — TinyML, flash+SRAM budget, what fits, micro-NPU wave.
 - ✅ `8-09-arm-substrate` — Cortex-M tiers, Helium, CMSIS-NN, Ethos-U + Vela op-splitting.
-- ⏳ `8-10`–`8-13` REMAINING (see "RESUME HERE" at top): STM32 N6, NXP i.MX RT, Renesas RA, others+TFLite-Micro.
+- ✅ `8-10-stm32-n6` — first STM32 with an NPU; Cortex-M55+Helium + Neural-ART (~600 GOPS), ISP; ST Edge AI (`stedgeai` analyze/generate) + X-CUBE-AI `ai_network_run`.
+- ✅ `8-11-nxp-imx-rt` — "crossover" MCU (M7 @ ~1 GHz), eIQ Neutron NPU; eIQ Toolkit convert + TFLite Micro op-resolver (NPU kernels).
+- ✅ `8-12-renesas-ra` — reconfigurable DRP-AI (re-wires datapath per layer), e-AI for RA MCUs, Reality AI; DRP-AI TVM compile + `MeraDrpRuntimeWrapper`.
+- ✅ `8-13-edge-accelerators-tflite-micro` — Coral Edge TPU / ESP32-S3 / K210; the universal train→INT8(calib)→convert→flash flow, vendor tool swaps in at "convert"; **module capstone** (synthesis + through-line). *(MCU/edge half = 6 lessons done — Module 8 COMPLETE, 13/13.)*
 
 ---
 
@@ -263,7 +261,8 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 - [x] Module 4 expansion — +4 lessons (diffusion, MoE, decoding, multimodal) inserted in place ✓ 2026-06-16 (now 13 lessons)
 - [x] Module 6 — Model Optimization & Efficient Inference (6 lessons, 20 SVG diagrams) ✓ built & pushed 2026-06-16
 - [x] Module 7 — Inference Frameworks & LLM Runtimes (8 lessons, ~17 diagrams, **inline code + step explanations**) ✓ built & pushed 2026-06-16
-- [~] **▶ IN PROGRESS:** **Module 8 — Hardware Acceleration: FPGA + Edge NPUs** (13 lessons; expanded from `module-08.pdf` + new edge-MCU content). **9/13 done (8.1–8.9)**; remaining **8.10–8.13** = STM32 N6, NXP i.MX RT, Renesas RA, others+TFLite-Micro (see RESUME HERE at top of file). Paused for a break.
+- [x] **Module 8 — Hardware Acceleration: FPGA + Edge NPUs** (13 lessons; expanded from `module-08.pdf` + new edge-MCU content). FPGA half 8.1–8.7, MCU/edge half 8.8–8.13. ✓ **complete 2026-06-17** (8.10–8.13 = STM32 N6, NXP i.MX RT, Renesas RA, others+TFLite-Micro).
+- [ ] **▶ NEXT:** Module 9 — Agentic AI Systems & Orchestration (then Module 10 — End-to-End/Capstone).
 
 > The old "Module 1 interactive backlog" (CMOS NAND, live truth tables, bit-flipper, MAC
 > animation, systolic array, etc.) is **shelved** as of the 2026-06-11 direction change. Each is
@@ -279,7 +278,7 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 | Route | `app/modules/[module]/[lesson]/page.tsx` |
 | Lesson shell | `components/lesson/LessonLayout.tsx` |
 | Sidebar | `components/lesson/LessonSidebar.tsx` |
-| **SVG diagrams** | `components/lesson/diagrams/` (~220 figures — 29 M1 + 22 M2 + 30 M3 + 38 M4 + 20 M5 + 20 M6 + ~17 M7 + ~24 M8 so far — the course "images"). Split per module: `_shared.tsx` (palette `C`, light-theme + `DiagramFrame`), `module-01…08.tsx`, `index.ts` barrel. M8 has reusable `McuSoc`/`VendorFlow` helpers for vendor lessons. |
+| **SVG diagrams** | `components/lesson/diagrams/` (~228 figures — 29 M1 + 22 M2 + 30 M3 + 38 M4 + 20 M5 + 20 M6 + ~17 M7 + ~26 M8 — the course "images"). Split per module: `_shared.tsx` (palette `C`, light-theme + `DiagramFrame`), `module-01…08.tsx`, `index.ts` barrel. M8 has reusable `McuSoc`/`VendorFlow` helpers for vendor lessons. |
 | **Code blocks (M7+)** | `CodeBlock` + `Pre` in `components/lesson/LessonBlocks.tsx`; fenced ```lang blocks render with editor chrome (registered as `pre` in `lib/mdx.ts`). |
 | MDX content blocks | `components/lesson/LessonBlocks.tsx` (Callout / Formula / Figure / StatGrid) |
 | Prev/next nav | `components/lesson/LessonNav.tsx` |

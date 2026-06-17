@@ -196,11 +196,13 @@ In rough teaching order:
   **Module 7 — Inference Frameworks & LLM Runtimes** (8 lessons: serving-problem → vLLM → llama.cpp →
   Ollama → TGI → optimization-in-practice → framework-selection → raspberry-pi, ~17 SVG diagrams in
   `diagrams/module-07.tsx`, **Sky** accent) built & pushed 2026-06-16. **Module 8 — Hardware
-  Acceleration: FPGA + Edge NPUs** (expanded module, **13 lessons planned**, **Orange** accent,
-  zero-padded filenames `8-01`…`8-13`) is **IN PROGRESS — 9/13 done (8.1–8.9): the FPGA half (8.1–8.7,
-  from `module-08.pdf`) + TinyML landscape + Arm substrate. Remaining 8.10–8.13 = STM32 N6, NXP i.MX RT,
-  Renesas RA, others+TFLite-Micro (edge-MCU content authored from domain knowledge, no PDF). See
-  STATUS.md "RESUME HERE".** **64 lessons total so far.**
+  Acceleration: FPGA + Edge NPUs** (expanded module, **13 lessons**, **Orange** accent,
+  zero-padded filenames `8-01`…`8-13`, ~26 SVG diagrams in `diagrams/module-08.tsx`) is **COMPLETE
+  (13/13) as of 2026-06-17**: the FPGA half (8.1–8.7, from `module-08.pdf`) + the MCU/edge half
+  (8.8 TinyML landscape, 8.9 Arm substrate, 8.10 STM32 N6/Neural-ART, 8.11 NXP i.MX RT/eIQ Neutron,
+  8.12 Renesas RA/DRP-AI, 8.13 others+TFLite-Micro capstone — edge-MCU content authored from domain
+  knowledge, no PDF; reusable `McuSoc`/`VendorFlow` diagram helpers for the vendor lessons).
+  **68 lessons total.**
   - **DECISION (2026-06-16) — hands-on modules include inline code.** From **Module 7** on, lessons
     embed **code snippets with step-by-step explanations** (not diagrams-only — that still holds for
     the conceptual modules 1–6). New `CodeBlock`/`Pre` in `LessonBlocks.tsx` styles fenced ```lang
@@ -218,8 +220,8 @@ In rough teaching order:
   `styles/tokens.css` + the palette in `diagrams/_shared.tsx`. Lessons are also fully **mobile
   responsive** (overlay sidebar, hamburger). To revert to dark, restore the prior token/palette
   values (noted in-file).
-- Next concrete steps: **finish Module 8** (lessons 8.10–8.13: STM32 N6, NXP i.MX RT, Renesas RA,
-  others+TFLite-Micro — see STATUS.md "RESUME HERE"), then **Modules 9–10** (9 = Agentic AI, 10 =
-  End-to-End/Capstone). PDFs on disk are parsed with `pdftotext -layout` (poppler) — the built-in PDF
+- Next concrete steps: **Module 9 — Agentic AI Systems & Orchestration** (then Module 10 =
+  End-to-End/Capstone) — Module 8 is complete. Module 9 is code-heavy (use the `CodeBlock`/`Pre`
+  fenced-code infra + numbered steps). PDFs on disk are parsed with `pdftotext -layout` (poppler) — the built-in PDF
   reader needs `pdftoppm`. Verify builds with `NEXT_DIST_DIR=.next-verify npx next build`; in **prose**
   escape bare `<`/`{` (`&lt;`/`&#123;`), but inside fenced ```code``` blocks they're fine.

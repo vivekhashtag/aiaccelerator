@@ -1,0 +1,152 @@
+---
+title: "The Wider Field & the Universal Deploy Flow"
+module: "08"
+moduleTitle: "Hardware Acceleration: FPGA & Edge NPUs"
+lesson: "8.13"
+slug: "8-13-edge-accelerators-tflite-micro"
+summary: "The module capstone. Beyond the three flagship vendors there's a whole field — Google's Coral Edge TPU, Espressif's ESP32-S3, Canaan's Kendryte K210 — and one workflow ties them all together: train → INT8 → convert → flash, with TensorFlow Lite for Microcontrollers as the common runtime. Learn the flow once and every edge accelerator becomes a deployment target."
+prerequisites: ["8.12 Renesas RA, e-AI & the Reconfigurable DRP-AI"]
+---
+
+## The Rest of the Field
+
+STM32, NXP, and Renesas are the integrated-NPU flagships, but the edge-accelerator world is wider. Three more you'll meet constantly:
+
+<EdgeAcceleratorMatrix caption="A representative slice of the wider field. Google's Coral Edge TPU is a standalone INT8 ASIC (USB/M.2/board); the ESP32-S3 is a cheap Wi-Fi MCU with SIMD-accelerated inference; the Kendryte K210 is a RISC-V chip with a convolution engine for ultra-low-cost vision. Different silicon, but the same INT8 deploy workflow as the vendor NPUs." />
+
+- **Coral Edge TPU (Google)** — a dedicated INT8 ASIC, ~4 TOPS at ~2 W, sold as a USB stick, M.2 module, or dev board. Not an MCU; it's a *co-processor* you bolt onto a host (a Pi, a PC) for fast, efficient CNN inference. INT8 only; runs TFLite models compiled for it.
+- **ESP32-S3 (Espressif)** — a ~\$2–3 Wi-Fi/Bluetooth MCU with vector (SIMD) instructions that accelerate INT8 inference (via ESP-DL / ESP-NN). No NPU, but cheap and connected — the workhorse of hobby and high-volume connected TinyML.
+- **Kendryte K210 (Canaan)** — a dual-core RISC-V chip with a **KPU** convolution accelerator (~0.25–0.5 TOPS, &lt;1 W), on \$5–15 Sipeed boards. The budget vision option; models are compiled to a `.kmodel`.
+
+<Callout type="insight" title="Co-processor vs integrated NPU">
+
+Two shapes recur. The **integrated NPU** (STM32 N6, NXP, Renesas, K210) puts the accelerator *on the same die* as the CPU — lowest power, fully embedded. The **co-processor** (Coral) is a *separate chip* a host offloads to over USB/PCIe — more power, but you can add it to an existing system without redesigning the board. Same role (run the INT8 MACs), different packaging — and it maps right back to the Zynq's on-die PS+PL versus a discrete GPU.
+
+</Callout>
+
+---
+
+## One Flow to Deploy Them All
+
+Here's the thread through the entire MCU half of this module. Every chip above — and every vendor NPU in 8.10–8.12 — is fed by the **same four-step pipeline**. Learn it once and the per-chip differences shrink to "which tool runs at the convert step."
+
+<TFLiteMicroFlow caption="The universal TinyML deploy path: train a float model, quantize to INT8 with a representative dataset, convert it to a deployable artifact, then flash and run it with TFLite Micro. The only vendor-specific box is 'convert' — that's where Cube.AI, eIQ, DRP-AI TVM, the Edge TPU compiler, or nncase swaps in to target a specific accelerator." />
+
+### Step 1 — Train, then quantize to INT8
+
+The first two steps are pure TensorFlow and identical no matter the target. INT8 is mandatory (the Module 6 entry ticket), and it needs a representative dataset to set activation ranges:
+
+```python
+import tensorflow as tf
+
+# A handful of real samples so the converter can calibrate activation ranges.
+def representative_dataset():
+    for sample in calibration_samples[:200]:
+        yield [sample.astype("float32")[None, ...]]
+
+converter = tf.lite.TFLiteConverter.from_keras_model(model)
+converter.optimizations = [tf.lite.Optimize.DEFAULT]
+converter.representative_dataset = representative_dataset
+
+# Force FULL INT8 — weights AND activations AND the I/O tensors.
+converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
+converter.inference_input_type  = tf.int8
+converter.inference_output_type = tf.int8
+
+tflite_int8 = converter.convert()
+open("model_int8.tflite", "wb").write(tflite_int8)
+```
+
+**Step by step:**
+
+1. **`representative_dataset`** feeds ~100–200 real inputs through the model so the converter can observe activation ranges and pick INT8 scales — the **calibration** step from 6.1. Skip it and post-training quantization can't choose good scales; accuracy falls off a cliff.
+2. **`Optimize.DEFAULT` + `supported_ops = [..._INT8]`** force *full-integer* quantization — not just INT8 weights but INT8 activations too. MCUs and NPUs have no fast float path, so a partially-quantized model won't run on the accelerator.
+3. **`inference_input_type/output_type = tf.int8`** makes even the model's I/O INT8, so a camera or microphone feeds bytes straight in with no float conversion on the hot path.
+
+### Step 2 — Convert to a flashable artifact
+
+A microcontroller has no filesystem, so the `.tflite` becomes a **C array** compiled into the firmware:
+
+```bash
+# Turn the INT8 model into a C source array the firmware links in.
+xxd -i model_int8.tflite > model_data.cc
+```
+
+This emits `unsigned char model_int8_tflite[] = { 0x... }` plus its length — the weights, now living in **flash** (the flash-weights / SRAM-activations split from 8.8).
+
+### Step 3 — The vendor tool swaps in *here*
+
+For a plain Cortex-M, the `.tflite` above is already deployable with TFLite Micro. To target a specific accelerator, you insert one extra compile at the convert step — the *only* place the workflow forks:
+
+```bash
+# Google Coral Edge TPU — recompile the INT8 model for the TPU
+edgetpu_compiler model_int8.tflite          # → model_int8_edgetpu.tflite
+
+# Kendryte K210 — compile to a .kmodel with the nncase compiler
+ncc compile model_int8.tflite model.kmodel -t k210 -i tflite
+
+# STM32 N6 / NXP / Renesas — the vendor tools from 8.10–8.12:
+#   stedgeai generate ... --target stm32n6      (Neural-ART)
+#   eiq-converter   ... --target neutron        (eIQ Neutron)
+#   DRP-AI TVM compile_for_drpai(...)           (DRP-AI)
+```
+
+**The pattern:** each tool consumes the *same* INT8 `.tflite` and re-targets it to one accelerator — partitioning the graph into NPU-supported ops and CPU fallback. That's the identical graph-split you saw under every vendor: Vela, ST Edge AI, eIQ Neutron, DRP-AI TVM, the Edge TPU compiler, nncase. One input, many backends.
+
+### Step 4 — Flash and run with TFLite Micro
+
+On the device, **TensorFlow Lite for Microcontrollers** is the common runtime (8.11 showed the full C++). The minimal loop:
+
+```cpp
+// model_data.cc from Step 2 provides g_model + length
+const tflite::Model* model = tflite::GetModel(g_model);
+static tflite::MicroMutableOpResolver<8> resolver;   // register only ops used
+// ... resolver.AddConv2D(); etc. — NPU kernels register here when present
+
+alignas(16) static uint8_t arena[96 * 1024];         // tensor arena in SRAM
+tflite::MicroInterpreter interpreter(model, resolver, arena, sizeof(arena));
+interpreter.AllocateTensors();
+
+memcpy(interpreter.input(0)->data.int8, sensor, kInBytes);
+interpreter.Invoke();                                 // CPU or NPU, decided at convert time
+int8_t* result = interpreter.output(0)->data.int8;
+```
+
+The same `Invoke()` runs on a bare Cortex-M (CMSIS-NN kernels) or dispatches to an NPU (Neural-ART, Neutron, …) — **your firmware doesn't change**, only the artifact you flashed and the kernels that registered.
+
+<Callout type="key" title="The one transferable skill">
+
+You learned five vendor SDKs in this half of the module, but they were variations on a single pipeline: **train → INT8 (with calibration) → convert (vendor tool swaps in) → flash + run with TFLite Micro**. Master this loop and a new edge chip is never a new skill — just a new flag at the convert step. That is the entire point of the shared Arm + TFLite substrate from 8.9.
+
+</Callout>
+
+---
+
+## Module 8 in One Picture
+
+This module crossed the full custom-silicon landscape:
+
+<StatGrid items={[
+  { value: "FPGA (8.1–8.7)", label: "reconfigurable fabric", sub: "LUT/DSP/BRAM, HLS, FINN/Vitis, deterministic low-power streaming" },
+  { value: "TinyML + Arm (8.8–8.9)", label: "the MCU substrate", sub: "mW & KB, INT8 mandatory, Cortex-M / Helium / CMSIS-NN / Ethos-U" },
+  { value: "Vendor NPUs (8.10–8.12)", label: "integrated MAC engines", sub: "Neural-ART, eIQ Neutron, DRP-AI — fixed and reconfigurable" },
+  { value: "The field + flow (8.13)", label: "deploy anywhere", sub: "Coral, ESP32-S3, K210 — one INT8 → convert → TFLite Micro pipeline" }
+]} caption="From a blank FPGA fabric you configure into a circuit, down to a coin-cell MCU running INT8 in kilobytes — every accelerator splits work the same way (CPU orchestrates, accelerator computes) and deploys through the same quantize-convert-run flow." />
+
+<Callout type="why" title="The through-line of the whole module">
+
+Two ideas recur at every scale. **First: specialization beats generality for inference** — a fixed (or reconfigurable) MAC array crushes a general CPU on throughput-per-watt, whether it's a DPU on FPGA fabric or a Neural-ART on an MCU. **Second: the accelerator computes, the host orchestrates** — Zynq PS+PL, Ethos-U + Cortex-M, every vendor NPU + its CPU. Carry those two ideas forward; they're how all AI hardware is organized, right up to a datacenter GPU.
+
+</Callout>
+
+---
+
+## Recap
+
+- Beyond the flagships: **Coral Edge TPU** (INT8 co-processor ASIC, ~4 TOPS/2 W), **ESP32-S3** (cheap SIMD-accelerated Wi-Fi MCU), **Kendryte K210** (RISC-V + KPU, budget vision).
+- Accelerators come in two packagings — **integrated NPU** (on-die, lowest power) and **co-processor** (separate chip, add-on) — same role, different board impact.
+- One universal pipeline deploys to all of them: **train → INT8 quantize (with a representative dataset) → convert → flash + run with TFLite Micro**.
+- The **convert** step is the only fork: `edgetpu_compiler`, `nncase`, ST Edge AI, eIQ, or DRP-AI TVM each re-target the *same* INT8 model to one accelerator — the universal graph-split.
+- **Module through-line:** specialization wins for inference, and the accelerator computes while the host orchestrates — at every scale from FPGA to coin-cell MCU.
+
+Next: we leave hardware behind and move up the stack to **Module 9 — Agentic AI Systems & Orchestration**.

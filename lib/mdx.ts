@@ -315,6 +315,12 @@ import {
   EvalTaxonomy,
   LLMAsJudge,
   CircuitBreaker,
+  // 9.10 Production architectures
+  ProductionStack,
+  TraceTree,
+  // 9.11 Capstone
+  DocumentAgentGraph,
+  AgenticStackSummary,
 } from "@/components/lesson/diagrams";
 
 const components = {
@@ -564,6 +570,10 @@ const components = {
   EvalTaxonomy,
   LLMAsJudge,
   CircuitBreaker,
+  ProductionStack,
+  TraceTree,
+  DocumentAgentGraph,
+  AgenticStackSummary,
 };
 
 export async function renderMDX(source: string) {

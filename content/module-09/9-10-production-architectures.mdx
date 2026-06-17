@@ -1,0 +1,93 @@
+---
+title: "Production Agent Architectures"
+module: "09"
+moduleTitle: "Agentic AI Systems & Orchestration"
+lesson: "9.10"
+slug: "9-10-production-architectures"
+summary: "The layered stack that turns an agent from a script into a service: a gateway for auth, rate limiting, and cost enforcement; an orchestration layer; the agent and tool layers; and an observability layer spanning all of them. Plus the operational glue — LangSmith tracing and versioned prompt management."
+prerequisites: ["9.9 Agent Evaluation & Reliability"]
+---
+
+## The Production Agent Stack
+
+A notebook agent is one function. A *production* agent is a layered system where each layer has exactly one job — and the layer that makes it safe to expose to real users is the **gateway**, not the agent itself.
+
+<ProductionStack caption="Top to bottom: UI (Slack/web/API) → Gateway (auth, rate limit, cost enforcement, logging) → Orchestration (LangGraph/n8n, state, checkpoints, HITL) → Agents (supervisor, workers, memory) → Tools (search, sandboxed code, DBs, LLMs). Observability spans every layer." />
+
+Reading the layers as a request descends:
+
+- **Gateway** — authentication (API keys, OAuth), **rate limiting** (N req/min/user), **cost enforcement** (per-user/per-session budget from 9.9), request logging. This is where you stop abuse and runaway spend *before* it reaches an LLM.
+- **Orchestration** — LangGraph or n8n: workflow state, checkpointing, human-in-the-loop gates, error recovery (9.3).
+- **Agents** — supervisor + specialised workers + the memory manager (9.4, 9.6).
+- **Tools** — web search (Tavily/Brave), **sandboxed** code execution (e.g. E2B), read-only DB replicas, internal APIs, LLM calls. Note "sandboxed" and "read-only" — the tool layer is a primary attack surface.
+
+<Callout type="key" title="The gateway is the agent's seatbelt">
+
+Everything in 9.9 about budgets and circuit breakers lives or dies at the gateway. An agent without a gateway is one malicious or buggy client away from a cost explosion or a data leak. In production, you build the gateway *first* — the clever agent behind it is worthless if anyone can hammer it for free or without auth.
+
+</Callout>
+
+---
+
+## Observability: You Can't Debug What You Can't See
+
+Agent runs are non-deterministic and multi-step — when one misbehaves, you need the full execution tree, not a stack trace. **LangSmith** (and Weave from 9.9) auto-trace every LLM and tool call:
+
+<TraceTree caption="A traced run as a nested tree: the pipeline calls the supervisor, which routes to research_agent, which calls web_search then an LLM summarise, then write_agent — each node showing latency, tokens, and cost. This is how you find the slow node, the wrong tool call, or the cost spike." />
+
+```python
+import os
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_API_KEY"]    = "ls_..."
+os.environ["LANGCHAIN_PROJECT"]    = "prod-agent"
+
+# With those set, every LangChain/LangGraph call is traced automatically.
+from langsmith import traceable
+
+@traceable(name="research_pipeline", tags=["production", "v2"])
+def research_pipeline(query: str) -> dict:
+    ...   # the full tree (LLM calls, tool calls, sub-agents) shows in LangSmith
+```
+
+**Step by step:**
+
+1. **Three env vars turn tracing on** — no code changes to your agent. Every LLM call (input/output/tokens/cost), every tool call (args/results), and the full multi-agent tree appears in the LangSmith UI, with latency and failures at each step.
+2. **`@traceable`** adds custom spans and metadata (`tags`) for your own functions, so business-level steps show up alongside the framework's.
+3. **This is the runtime complement to evaluation:** Weave (9.9) tells you the agent is good *on average*; tracing shows you exactly what happened on *this* run when it wasn't.
+
+---
+
+## Prompt Management
+
+Prompts are production assets — they change behaviour as much as code, so they need versioning, testing, and rollback, not hard-coded strings buried in source:
+
+```python
+from langchain import hub
+
+research_prompt  = hub.pull("my-org/research-agent:v2.1")   # versioned, pinned
+summarise_prompt = hub.pull("my-org/summarise:v1.0")
+```
+
+**Step by step:**
+
+1. **Pull prompts by version** from a hub (LangChain Hub or self-hosted). Pinning a version (`:v2.1`) means a prompt edit can't silently change production behaviour — you bump the pin deliberately.
+2. **Versioned prompts are testable and rollback-able**: run your 9.9 eval suite against `v2.2` before promoting it, and revert the pin instantly if scores regress — old traces stay attributable to the prompt version that produced them.
+
+<Callout type="why" title="Treat the agent like any other service">
+
+Strip away the LLM and this is ordinary production engineering: a gateway, an orchestration layer, observability, versioned config, and a regression suite. That's the point — agentic systems don't get a pass on the disciplines every other service follows. The LLM makes the *decisions* non-deterministic; the *operations* around it must be more rigorous, not less.
+
+</Callout>
+
+---
+
+## Recap
+
+- A production agent is a **layered stack**: UI → **gateway** (auth, rate limit, cost enforcement, logging) → orchestration → agents → tools, with **observability spanning all layers**.
+- The **gateway is what makes an agent safe to expose** — it enforces the budgets and limits from 9.9 before any request reaches an LLM; build it first.
+- The **tool layer is an attack surface**: sandbox code execution, use read-only DB replicas, scope internal APIs.
+- **Tracing** (LangSmith/Weave) is mandatory — three env vars surface the full execution tree (tokens, cost, latency per node); it's how you debug non-deterministic, multi-step runs.
+- **Prompts are versioned assets** — pinned, eval-tested before promotion, instantly rollback-able.
+- An agentic system is **ordinary production engineering around a non-deterministic core** — the same disciplines, applied more rigorously.
+
+Next: putting it all together — the **Document Intelligence Agent** capstone.

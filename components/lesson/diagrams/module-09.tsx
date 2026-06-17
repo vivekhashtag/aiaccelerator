@@ -770,3 +770,143 @@ export function CircuitBreaker({ caption }: { caption?: string }) {
     </DiagramFrame>
   );
 }
+
+/* ════════════════════════════════════════════════════════════
+   9.10 — Production Agent Architectures
+   ════════════════════════════════════════════════════════════ */
+
+/* The layered production agent stack with observability alongside. */
+export function ProductionStack({ caption }: { caption?: string }) {
+  const layers = [
+    { t: "User Interface", d: "Slack · web app · API · n8n webhook", c: C.off },
+    { t: "Gateway", d: "auth · rate limit · cost enforcement · request log", c: C.gate },
+    { t: "Orchestration", d: "LangGraph / n8n · state · checkpoints · HITL gates", c: INDIGO },
+    { t: "Agents", d: "supervisor · workers · memory manager", c: C.violet },
+    { t: "Tools", d: "web search · sandboxed code · DB · internal APIs · LLMs", c: C.on },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 210" width="100%" role="img" aria-label="The production agent stack">
+        <text x="210" y="18" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>requests flow top → down; each layer has one job</text>
+        {layers.map((l, i) => {
+          const y = 28 + i * 34;
+          return (
+            <g key={`ps${i}`}>
+              <rect x="24" y={y} width="380" height="28" rx="6" fill={`${l.c}14`} stroke={l.c} strokeWidth="1.3" />
+              <text x="36" y={y + 18} fontFamily={mono} fontSize="8.2" fontWeight="700" fill={l.c}>{l.t}</text>
+              <text x="180" y={y + 18} fontFamily={mono} fontSize="6.9" fill={C.muted}>{l.d}</text>
+              {i < 4 && <text x="214" y={y + 32} textAnchor="middle" fontFamily={mono} fontSize="8" fill={C.faint}>↓</text>}
+            </g>
+          );
+        })}
+        {/* observability rail */}
+        <rect x="420" y="28" width="116" height="170" rx="8" fill={`${C.hole}0e`} stroke={C.hole} strokeWidth="1.3" strokeDasharray="5 3" />
+        <text x="478" y="48" textAnchor="middle" fontFamily={mono} fontSize="8" fontWeight="700" fill={C.hole}>Observability</text>
+        <text x="478" y="62" textAnchor="middle" fontFamily={mono} fontSize="6.6" fill={C.muted}>(spans all layers)</text>
+        {["Weave / LangSmith", "Prometheus", "structured logs", "traces", "cost & latency"].map((o, i) => (
+          <text key={`ob${i}`} x="478" y={84 + i * 20} textAnchor="middle" fontFamily={mono} fontSize="7" fill={C.text}>{o}</text>
+        ))}
+        <text x="280" y="206" textAnchor="middle" fontFamily={mono} fontSize="7.6" fill={C.faint}>the gateway (auth, rate limit, budget) is what makes an agent safe to expose to real users</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* A nested execution trace (LangSmith-style). */
+export function TraceTree({ caption }: { caption?: string }) {
+  const rows = [
+    { d: 0, t: "research_pipeline", m: "1.8s · $0.04", c: INDIGO },
+    { d: 1, t: "supervisor (LLM)", m: "0.4s · 1.2K tok", c: C.violet },
+    { d: 1, t: "research_agent", m: "1.1s", c: C.on },
+    { d: 2, t: "web_search (tool)", m: "0.3s", c: C.gate },
+    { d: 2, t: "LLM summarise", m: "0.6s · 2.1K tok", c: C.violet },
+    { d: 1, t: "write_agent (LLM)", m: "0.3s · 0.9K tok", c: C.violet },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={540}>
+      <svg viewBox="0 0 540 180" width="100%" role="img" aria-label="A nested execution trace">
+        <text x="270" y="20" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>one traced run — every call, with tokens, cost, and latency</text>
+        {rows.map((r, i) => {
+          const y = 34 + i * 23;
+          const x = 30 + r.d * 28;
+          return (
+            <g key={`tt${i}`}>
+              {r.d > 0 && <line x1={x - 14} y1={y + 9} x2={x - 2} y2={y + 9} stroke={C.faint} strokeWidth="1" />}
+              <rect x={x} y={y} width={300 - r.d * 28} height="18" rx="3" fill={`${r.c}14`} stroke={r.c} strokeWidth="1" />
+              <text x={x + 8} y={y + 13} fontFamily={mono} fontSize="7.4" fontWeight="700" fill={r.c}>{r.t}</text>
+              <text x="500" y={y + 13} textAnchor="end" fontFamily={mono} fontSize="7" fill={C.muted}>{r.m}</text>
+            </g>
+          );
+        })}
+        <text x="270" y="174" textAnchor="middle" fontFamily={mono} fontSize="7.6" fill={C.faint}>tracing (Weave / LangSmith) is non-negotiable — you can&apos;t debug an agent you can&apos;t see</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════
+   9.11 — Capstone: Document Intelligence Agent
+   ════════════════════════════════════════════════════════════ */
+
+/* The capstone graph: retrieve → generate → verify → (loop) → final. */
+export function DocumentAgentGraph({ caption }: { caption?: string }) {
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 180" width="100%" role="img" aria-label="Document intelligence agent graph">
+        <text x="280" y="20" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>the capstone graph — retrieval + self-verification + memory write-back</text>
+        {[
+          { t: "retrieve", s: "vector memory", c: C.gate },
+          { t: "generate", s: "answer from context", c: INDIGO },
+          { t: "verify", s: "self-check", c: C.violet },
+          { t: "final", s: "save to memory", c: C.on },
+        ].map((n, i) => {
+          const x = 24 + i * 134;
+          return (
+            <g key={`da${i}`}>
+              <rect x={x} y="64" width="110" height="42" rx="7" fill={`${n.c}16`} stroke={n.c} strokeWidth="1.4" />
+              <text x={x + 55} y="84" textAnchor="middle" fontFamily={mono} fontSize="8.5" fontWeight="700" fill={n.c}>{n.t}</text>
+              <text x={x + 55} y="97" textAnchor="middle" fontFamily={mono} fontSize="6.4" fill={C.muted}>{n.s}</text>
+              {i < 3 && <g><line x1={x + 110} y1="85" x2={x + 134} y2="85" stroke={C.faint} strokeWidth="1.2" /><polygon points={`${x + 134},85 ${x + 127},81 ${x + 127},89`} fill={C.faint} /></g>}
+            </g>
+          );
+        })}
+        {/* verify -> retrieve loop (needs_more) */}
+        <path d="M347 106 Q347 140 134 140 Q79 140 79 108" stroke={C.hole} strokeWidth="1.2" fill="none" strokeDasharray="4 3" />
+        <polygon points="79,108 75,116 84,113" fill={C.hole} />
+        <text x="230" y="136" textAnchor="middle" fontFamily={mono} fontSize="7.2" fontWeight="700" fill={C.hole}>needs_more → retrieve again (bounded)</text>
+        <text x="280" y="168" textAnchor="middle" fontFamily={mono} fontSize="7.6" fill={C.faint}>wrapped by a cost tracker, circuit breaker, memory manager, and checkpointing</text>
+      </svg>
+    </DiagramFrame>
+  );
+}
+
+/* The full agentic AI stack, bottom to top. */
+export function AgenticStackSummary({ caption }: { caption?: string }) {
+  const layers = [
+    { t: "Foundation models", s: "Modules 3-4 — the LLMs in every node", c: C.off },
+    { t: "Inference serving", s: "Modules 5-7 — vLLM / Ollama at low latency", c: C.sky },
+    { t: "Agent patterns", s: "9.1-9.2 — ReAct, tool calling", c: INDIGO },
+    { t: "Workflow frameworks", s: "9.3, 9.5 — LangGraph (code), n8n (visual)", c: C.violet },
+    { t: "Multi-agent", s: "9.4 — supervisor, handoff, critic", c: C.gate },
+    { t: "Memory + structured + RAG", s: "9.6-9.8 — tiers, schemas, agentic retrieval", c: C.on },
+    { t: "Eval + production", s: "9.9-9.10 — judge, breakers, tracing", c: C.hole },
+  ];
+  return (
+    <DiagramFrame caption={caption} maxWidth={560}>
+      <svg viewBox="0 0 560 215" width="100%" role="img" aria-label="The full agentic AI stack">
+        <text x="280" y="16" textAnchor="middle" fontFamily={mono} fontSize="9" fontWeight="700" fill={C.muted}>the agentic AI stack — each layer built on the ones below</text>
+        {layers.map((l, i) => {
+          const y = 184 - i * 25;            // bottom-to-top
+          const w = 300 + i * 22;
+          return (
+            <g key={`ss${i}`}>
+              <rect x={(560 - w) / 2} y={y} width={w} height="21" rx="4" fill={`${l.c}16`} stroke={l.c} strokeWidth="1.2" />
+              <text x="280" y={y + 14} textAnchor="middle" fontFamily={mono} fontSize="7.6" fontWeight="700" fill={l.c}>{l.t} — <tspan fontWeight="400" fill={C.muted}>{l.s}</tspan></text>
+            </g>
+          );
+        })}
+        <text x="280" y="208" textAnchor="middle" fontFamily={mono} fontSize="7.4" fill={C.faint}>this module = the top five layers; Modules 3-7 are the foundation they stand on</text>
+      </svg>
+    </DiagramFrame>
+  );
+}

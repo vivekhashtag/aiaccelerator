@@ -203,16 +203,24 @@ Goal: implement neural nets from scratch in NumPy, reproduce them in PyTorch, th
 ---
 
 ## Module 9 — Agentic AI Systems & Orchestration
-*2 weeks · Laptop + cloud LLM API*
+*3 weeks · Laptop + API key (Anthropic/OpenAI or local Ollama)*
 
-**Topics**
-9.1 Agent architectures (ReAct, Plan-Execute, Reflexion, AutoGen, LangGraph)
-9.2 Tool calling and API integration (function calling, error handling, rate limits)
-9.3 Memory and retrieval (short-term context, long-term vector DB, episodic)
-9.4 Multi-step reasoning (CoT, ToT, verification)
-9.5 Planning and execution loops (task decomposition, failure recovery, HITL)
-9.6 LLM backend integration (Ollama, vLLM, Claude API, structured outputs)
-9.7 Agent Evaluation & Reliability ★ — benchmarking (GAIA/SWE-bench/ToolBench), failure taxonomy, guardrails, HITL, audit logging, reliability engineering
+> **Built (2026-06-17): 11 lessons.** Authored from the richer source
+> `09 Agentic AI and Orchestration/module-09-lesson.md` (11 topics vs the 7 below). Indigo accent,
+> code-heavy. The lesson list is the source of truth for what's shipped.
+
+**Topics (as built — 11 lessons `9-01`…`9-11`)**
+9.1 The agent mental model (LLM-as-decision-maker, the agent loop, six failure modes)
+9.2 ReAct — the foundation pattern (Thought/Action/Observation, from-scratch on the tool-use API, tool design)
+9.3 LangGraph — stateful workflows (nodes/edges/state, conditional graphs, human-in-the-loop, checkpointing)
+9.4 Multi-agent systems (supervisor, peer-to-peer handoff, critic)
+9.5 n8n — visual workflow automation (Docker, Code node, AI Agent node, n8n-vs-LangGraph)
+9.6 Memory systems (four tiers, long-term vector memory, context compression)
+9.7 Structured outputs & tool schemas (Pydantic, forced tool_choice, Pydantic AI)
+9.8 Agentic RAG (retrieve-check-reformulate loop, contextual compression)
+9.9 Agent evaluation & reliability ★ (5-level taxonomy, LLM-as-judge + Weave, circuit breaker/cost/retry)
+9.10 Production agent architectures (gateway/orchestration/agents/tools/observability, LangSmith, prompt mgmt)
+9.11 Capstone — the Document Intelligence Agent (full LangGraph doc-QA agent; the agentic stack; reliability rules)
 
 **Labs**
 - 9-A ReAct agent from scratch (no LangChain)

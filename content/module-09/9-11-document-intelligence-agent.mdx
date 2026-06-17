@@ -1,0 +1,148 @@
+---
+title: "Capstone: The Document Intelligence Agent"
+module: "09"
+moduleTitle: "Agentic AI Systems & Orchestration"
+lesson: "9.11"
+slug: "9-11-document-intelligence-agent"
+summary: "Everything in this module, assembled into one production-shaped agent: a LangGraph that retrieves, generates, self-verifies, loops if the answer is weak, and writes results back to long-term memory — all wrapped in a cost tracker, circuit breaker, and checkpointing. Then the full agentic stack, the seven reliability rules, and the numbers to budget by."
+prerequisites: ["9.10 Production Agent Architectures"]
+---
+
+## Bringing It All Together
+
+The capstone is a **Document Q&A agent** that combines the whole module: long-term memory (9.6), an agentic retrieve-verify loop (9.8), structured control flow on LangGraph (9.3), and the reliability wrappers from 9.9–9.10.
+
+<DocumentAgentGraph caption="The graph: retrieve from vector memory → generate an answer from context → verify it actually answers the question → if not, loop back to retrieve (bounded); otherwise finalise and save the result to memory. Wrapped by a cost tracker, circuit breaker, memory manager, and checkpointing." />
+
+```python
+from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import MemorySaver
+from langchain_anthropic import ChatAnthropic
+from typing import TypedDict, Annotated
+import operator
+
+class DocumentAgent:
+    def __init__(self, budget_usd: float = 5.0):
+        self.llm     = ChatAnthropic(model="claude-opus-4-8")
+        self.cost    = CostTracker(budget_usd)      # 9.9 — hard budget
+        self.breaker = CircuitBreaker()             # 9.9 — fail fast
+        self.memory  = MemoryManager()              # 9.6 — long-term memory
+        self.graph   = self._build()
+
+    def _build(self):
+        class State(TypedDict):
+            question:   str
+            documents:  list[str]
+            answer:     str
+            needs_more: bool
+            messages:   Annotated[list, operator.add]
+
+        b = StateGraph(State)
+        b.add_node("retrieve", self._retrieve)
+        b.add_node("generate", self._generate)
+        b.add_node("verify",   self._verify)
+        b.add_node("final",    self._final)
+
+        b.add_edge(START, "retrieve")
+        b.add_edge("retrieve", "generate")
+        b.add_edge("generate", "verify")
+        b.add_conditional_edges(                    # 9.8 — retrieve-verify loop
+            "verify", lambda s: "retrieve" if s["needs_more"] else "final")
+        b.add_edge("final", END)
+        return b.compile(checkpointer=MemorySaver())  # 9.3 — resumable
+
+    def _retrieve(self, s):
+        return {"documents": self.memory.retrieve(s["question"], k=5)}
+
+    def _generate(self, s):
+        ctx = "\n\n".join(s["documents"])
+        r = self.llm.invoke(f"Context:\n{ctx}\n\nQuestion: {s['question']}")
+        return {"answer": r.content, "messages": [r]}
+
+    def _verify(self, s):                           # 9.4 — critic-style self-check
+        chk = self.llm.invoke(
+            f"Does this answer the question? Q: {s['question']} "
+            f"A: {s['answer'][:200]}  Reply only YES or NO.")
+        return {"needs_more": "NO" in chk.content.upper()}
+
+    def _final(self, s):
+        self.memory.save(s["question"], s["answer"])   # write-back to memory
+        return {"answer": s["answer"]}
+
+    def ask(self, question: str, thread_id: str = "default") -> str:
+        cfg = {"configurable": {"thread_id": thread_id}}
+        return self.graph.invoke({"question": question, "messages": []}, cfg)["answer"]
+```
+
+**Step by step:**
+
+1. **`__init__` wires the reliability primitives together** — a `CostTracker` (hard budget), a `CircuitBreaker`, and a `MemoryManager` — before any graph runs. Reliability is built in from construction, not bolted on.
+2. **`_build` is the LangGraph from 9.3**: four nodes, a conditional edge on `verify`, compiled with a checkpointer so runs are resumable and thread-isolated.
+3. **`_retrieve` → `_generate`** is RAG; **`_verify`** adds the self-check from the critic pattern (9.4) — turning one-shot RAG into the agentic retrieve-verify loop (9.8). The conditional edge sends weak answers back to `retrieve`.
+4. **`_final` writes the answer back to long-term memory** (9.6), so the agent accumulates knowledge across questions.
+5. **`ask` is the whole public API** — `thread_id` namespaces each conversation's checkpoints, exactly as in 9.3, so one instance safely serves many users.
+
+<Callout type="insight" title="Every lesson is in these ~50 lines">
+
+Trace the imports back: `ChatAnthropic` (the model loop, 9.2), `StateGraph` + conditional edges + checkpointer (9.3), the verify node (critic, 9.4), `MemoryManager` (9.6), the retrieve-verify loop (9.8), `CostTracker` + `CircuitBreaker` (9.9). The capstone isn't new material — it's proof that the pieces compose into something production-shaped.
+
+</Callout>
+
+---
+
+## The Agentic AI Stack
+
+Step back and the whole module is a stack, each layer resting on the ones below:
+
+<AgenticStackSummary caption="Foundation models (Modules 3-4) → inference serving (5-7) → agent patterns (9.1-9.2) → workflow frameworks (9.3, 9.5) → multi-agent (9.4) → memory + structured + RAG (9.6-9.8) → evaluation + production (9.9-9.10). This module is the top five layers; the earlier modules are the foundation they stand on." />
+
+---
+
+## The Reliability Rules
+
+The module reduces to seven rules — each the antidote to a failure mode from 9.1:
+
+<StatGrid items={[
+  { value: "1", label: "Validate with schemas", sub: "tool outputs structured & checked (9.7)" },
+  { value: "2", label: "Bound everything", sub: "max_steps + budget limits (9.1, 9.9)" },
+  { value: "3", label: "Errors as results", sub: "never raise into the loop (9.2)" },
+  { value: "4", label: "Log every call", sub: "trace LLM + tool invocations (9.10)" },
+  { value: "5", label: "Test adversarially", sub: "edge cases before production (9.9)" },
+  { value: "6", label: "Human for irreversible", sub: "HITL gates on side effects (9.3)" },
+  { value: "7", label: "Checkpoint long runs", sub: "resume after crashes (9.3)" }
+]} caption="The seven reliability rules. If you remember nothing else from this module, remember that capability is the easy half and these seven are the hard half." />
+
+---
+
+## Numbers to Budget By
+
+Rough planning figures (verify pricing at anthropic.com/pricing; treat costs as order-of-magnitude):
+
+<StatGrid items={[
+  { value: "15-25", label: "max_steps", sub: "sensible cap for most tasks" },
+  { value: "~128K", label: "context limit", sub: "compress beyond this (9.6)" },
+  { value: "~$0.01-0.05", label: "simple Q&A run", sub: "~5 steps" },
+  { value: "~$0.20-0.50", label: "research run", sub: "~20 steps" },
+  { value: "$1-5", label: "complex multi-agent", sub: "~50 steps" },
+  { value: "2×", label: "budget alert", sub: "set at 2× expected cost" }
+]} caption="Order-of-magnitude planning numbers. The pattern that matters: cost scales with steps, so step bounds (rule 2) are also cost controls." />
+
+Eval thresholds worth alerting on: LLM-judge score below ~3.5/5 (agent needs work), tool-call correctness below ~80% (redesign the tool schemas), steps-to-completion above ~20 (likely looping), cost-per-task above ~3× median (trip the circuit breaker).
+
+<Callout type="key" title="The one sentence to take away">
+
+**Getting an agent to work once is a demo; getting it to work 99% of the time is engineering** — and that engineering is schemas, bounds, evaluation, observability, and human oversight, not a cleverer prompt. That's the whole module.
+
+</Callout>
+
+---
+
+## Recap
+
+- The **Document Intelligence Agent** composes the entire module in ~50 lines: a LangGraph (retrieve → generate → verify → loop/final) with long-term memory write-back, wrapped in a cost tracker, circuit breaker, and checkpointing.
+- The **agentic stack** runs foundation models → serving → agent patterns → frameworks → multi-agent → memory/structured/RAG → evaluation/production; this module is the top five layers.
+- The **seven reliability rules** (validate, bound, errors-as-results, log, test adversarially, human-gate irreversible actions, checkpoint) each counter a 9.1 failure mode.
+- **Cost scales with steps**, so step bounds double as cost controls; alert on judge score, tool-call correctness, step count, and per-task cost.
+- The thesis, one last time: **capability is the easy half — reliability is the engineering.**
+
+Next: **Module 10 — End-to-End Systems, Scaling & Capstone**, where these agents join the full production stack across CPU, GPU, and FPGA.

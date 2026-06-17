@@ -1,12 +1,32 @@
 # Project Status
 
-**Last updated:** 2026-06-17 — **Module 8 COMPLETE** (expanded "Hardware Acceleration: FPGA + Edge NPUs", **13/13 lessons live**). 8.10–8.13 built this session (STM32 N6, NXP i.MX RT, Renesas RA, others+TFLite-Micro). **71 routes, `next build` green. 68 lessons total.** Earlier: Modules 4 (expanded→13), 5, 6, 7. **▶ NEXT: Module 9 — Agentic AI Systems & Orchestration.**
+**Last updated:** 2026-06-17 — **Module 9 COMPLETE** (Agentic AI Systems & Orchestration, **11/11 lessons live**). Built this session from `09 Agentic AI and Orchestration/module-09-lesson.md` (11 topics, richer than curriculum.md's 7). **82 routes, `next build` green. 79 lessons total.** Indigo accent; **+30 diagrams** in `diagrams/module-09.tsx`. Earlier this session: Module 8 finished (8.10–8.13) + global diagram font-size bump (DIAGRAM_SCALE 1.16). **▶ NEXT: Module 10 — End-to-End Systems, Scaling & Capstone.**
 
-## ▶ RESUME HERE — Module 9 (Agentic AI Systems & Orchestration)
+## ▶ RESUME HERE — Module 10 (End-to-End Systems, Scaling & Capstone)
 
-Module 8 is done. Next module per `docs/curriculum.md`: **Module 9 — Agentic AI Systems & Orchestration** (7 topics 9.1–9.7: agent architectures, tool calling, memory/retrieval, multi-step reasoning, planning/execution loops, LLM backend integration, agent eval & reliability ★). Follow the established recipe (see memory `module-build-pattern`): MDX lessons + SVG diagrams in a new `diagrams/module-09.tsx` + register in `index.ts` barrel **and** `lib/mdx.ts` (import list + `components` map) + pick a new accent in `lib/colors.ts`. **Module 9 is code-heavy** (agentic AI) — use the `CodeBlock`/`Pre` fenced-code infra with numbered step explanations, like Modules 7–8. Build-verify with `NEXT_DIST_DIR=.next-verify npx next build`. After 9: **Module 10 — End-to-End Systems & Capstone.**
+Module 9 is done. Final module per `docs/curriculum.md`: **Module 10 — End-to-End Systems, Scaling & Capstone** (topics 10.1–10.8: API inference systems/FastAPI, microservices/Docker, load balancing/queuing, distributed inference/Ray/K8s, monitoring/Prometheus+Grafana, HW-SW integration CPU+GPU+FPGA, production cost engineering ★, production agent reliability ★ + capstone projects). **Check for a richer source first**: `10 End to End System Scaling/module-10-lesson.md(.pdf)` exists on disk — read it (it may have more topics than curriculum.md, as Module 9's did). Follow the recipe (memory `module-build-pattern`): MDX + `diagrams/module-10.tsx` + register in `index.ts` barrel **and** `lib/mdx.ts` (imports + `components` map). Accent **Emerald** is already in `lib/colors.ts` ("10"); add `C.emerald` to `_shared.tsx` if diagrams need it. **Code-heavy** — use `CodeBlock`/`Pre` + numbered steps. Build-verify with `NEXT_DIST_DIR=.next-verify npx next build`. This is the **final module** — after it, do a course-wide wrap-up pass.
 
-> **Module 8 build notes (done 2026-06-17):** 8.10 reused the pre-written `Stm32N6Block`/`StEdgeAiFlow`; 8.11–8.13 added new diagrams (all reuse the `McuSoc`/`VendorFlow` helpers in `module-08.tsx`) — `ImxRtBlock`/`EiqFlow`, `RenesasRaBlock`/`EaiFlow`/`DrpReconfig`, `EdgeAcceleratorMatrix`/`TFLiteMicroFlow`. Each lesson: inline code + numbered steps, distinct vendor toolchain (ST Edge AI generated-C / eIQ+TFLite-Micro / DRP-AI TVM), 8.13 generalizes the train→INT8→convert→flash flow and closes the module. MCU content authored from domain knowledge (no PDF).
+> **Module 9 build notes (done 2026-06-17):** 11 lessons `9-01`…`9-11`, source had 11 topics (capstone = Document Intelligence Agent). Indigo accent (`C.indigo` added to `_shared.tsx`; "09" already in `lib/colors.ts`). 30 new diagrams. Code uses the current **`claude-opus-4-8`** model id (source's `claude-opus-4-5` was outdated); corrected the source's non-existent `AnthropicEmbeddings` → **Voyage AI** (Anthropic's recommended embeddings partner) in 9.6. Recurring theme threaded through every lesson: the six failure modes (9.1) → seven reliability rules (9.11).
+
+---
+
+## 🤖 Module 9 built (2026-06-17): Agentic AI Systems & Orchestration
+
+**11 lessons** under `content/module-09/`, from `09 Agentic AI and Orchestration/module-09-lesson.md` (11 topics — richer than curriculum.md's 7). **Indigo** accent (`C.indigo`). Code-heavy (Python + the Claude tool-use API) with numbered step walkthroughs. **+30 SVG diagrams** in `diagrams/module-09.tsx`. `next build` green — **79 lessons total**, 82 routes.
+
+- `9-01-agent-mental-model` — LLM as decision-maker, the universal agent loop (15-line sketch), the six failure modes.
+- `9-02-react-pattern` — Thought/Action/Observation, ReAct vs CoT, full ReAct agent from scratch on `messages.create(tools=…)`, tool-design principles.
+- `9-03-langgraph` — nodes/edges/typed state, the conditional agent graph, `interrupt_before` (human-in-the-loop), `SqliteSaver` checkpointing.
+- `9-04-multi-agent` — supervisor / peer-to-peer / critic patterns (LangGraph), bounded critic loop.
+- `9-05-n8n` — visual workflow automation, Docker setup, Code node (JS), the AI Agent node, n8n-vs-LangGraph decision.
+- `9-06-memory` — four memory tiers, long-term vector memory (Voyage AI embeddings), context-window compression.
+- `9-07-structured-outputs` — Pydantic schemas, forced `tool_choice` for guaranteed JSON, validate-and-retry, Pydantic AI.
+- `9-08-agentic-rag` — basic vs agentic RAG (retrieve-check-reformulate loop), contextual compression.
+- `9-09-evaluation-reliability` ★ — 5-level eval taxonomy, LLM-as-judge (+ calibration) + Weave, circuit breaker / cost tracker / retry-with-backoff.
+- `9-10-production-architectures` — the layered stack (gateway/orchestration/agents/tools/observability), LangSmith tracing, versioned prompts.
+- `9-11-document-intelligence-agent` — **capstone**: full LangGraph doc-QA agent (retrieve→generate→verify→loop→memory) + the agentic stack, seven reliability rules, budgeting numbers.
+
+> **Accuracy fixes vs the source markdown:** used the current `claude-opus-4-8` model id throughout (source had `claude-opus-4-5`); replaced the non-existent `AnthropicEmbeddings` with **Voyage AI** (Anthropic's recommended embeddings partner) in 9.6; kept all pricing hedged ("verify at anthropic.com/pricing").
 
 ---
 
@@ -262,7 +282,8 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 - [x] Module 6 — Model Optimization & Efficient Inference (6 lessons, 20 SVG diagrams) ✓ built & pushed 2026-06-16
 - [x] Module 7 — Inference Frameworks & LLM Runtimes (8 lessons, ~17 diagrams, **inline code + step explanations**) ✓ built & pushed 2026-06-16
 - [x] **Module 8 — Hardware Acceleration: FPGA + Edge NPUs** (13 lessons; expanded from `module-08.pdf` + new edge-MCU content). FPGA half 8.1–8.7, MCU/edge half 8.8–8.13. ✓ **complete 2026-06-17** (8.10–8.13 = STM32 N6, NXP i.MX RT, Renesas RA, others+TFLite-Micro).
-- [ ] **▶ NEXT:** Module 9 — Agentic AI Systems & Orchestration (then Module 10 — End-to-End/Capstone).
+- [x] **Module 9 — Agentic AI Systems & Orchestration** (11 lessons, 30 diagrams, **inline code + step explanations**, Indigo accent) ✓ built 2026-06-17 (from the richer 11-topic source markdown).
+- [ ] **▶ NEXT:** Module 10 — End-to-End Systems, Scaling & Capstone (the final module).
 
 > The old "Module 1 interactive backlog" (CMOS NAND, live truth tables, bit-flipper, MAC
 > animation, systolic array, etc.) is **shelved** as of the 2026-06-11 direction change. Each is
@@ -278,7 +299,7 @@ Prerequisite chain links 1.1 → 1.7. Curriculum-topic parity reached; no intera
 | Route | `app/modules/[module]/[lesson]/page.tsx` |
 | Lesson shell | `components/lesson/LessonLayout.tsx` |
 | Sidebar | `components/lesson/LessonSidebar.tsx` |
-| **SVG diagrams** | `components/lesson/diagrams/` (~228 figures — 29 M1 + 22 M2 + 30 M3 + 38 M4 + 20 M5 + 20 M6 + ~17 M7 + ~26 M8 — the course "images"). Split per module: `_shared.tsx` (palette `C`, light-theme + `DiagramFrame`), `module-01…08.tsx`, `index.ts` barrel. M8 has reusable `McuSoc`/`VendorFlow` helpers for vendor lessons. |
+| **SVG diagrams** | `components/lesson/diagrams/` (~258 figures — 29 M1 + 22 M2 + 30 M3 + 38 M4 + 20 M5 + 20 M6 + ~17 M7 + ~26 M8 + 30 M9 — the course "images"). Split per module: `_shared.tsx` (palette `C`, light-theme + `DiagramFrame` w/ `DIAGRAM_SCALE` zoom), `module-01…09.tsx`, `index.ts` barrel. M8 has reusable `McuSoc`/`VendorFlow` helpers. |
 | **Code blocks (M7+)** | `CodeBlock` + `Pre` in `components/lesson/LessonBlocks.tsx`; fenced ```lang blocks render with editor chrome (registered as `pre` in `lib/mdx.ts`). |
 | MDX content blocks | `components/lesson/LessonBlocks.tsx` (Callout / Formula / Figure / StatGrid) |
 | Prev/next nav | `components/lesson/LessonNav.tsx` |

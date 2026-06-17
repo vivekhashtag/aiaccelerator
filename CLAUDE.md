@@ -202,7 +202,13 @@ In rough teaching order:
   (8.8 TinyML landscape, 8.9 Arm substrate, 8.10 STM32 N6/Neural-ART, 8.11 NXP i.MX RT/eIQ Neutron,
   8.12 Renesas RA/DRP-AI, 8.13 others+TFLite-Micro capstone — edge-MCU content authored from domain
   knowledge, no PDF; reusable `McuSoc`/`VendorFlow` diagram helpers for the vendor lessons).
-  **68 lessons total.**
+  **Module 9 — Agentic AI Systems & Orchestration** (**11 lessons** `9-01`…`9-11`, **Indigo** accent,
+  +30 SVG diagrams in `diagrams/module-09.tsx`) **COMPLETE 2026-06-17**, built from the richer 11-topic
+  source `09 Agentic AI and Orchestration/module-09-lesson.md` (agent mental model → ReAct → LangGraph →
+  multi-agent → n8n → memory → structured outputs → agentic RAG → eval & reliability ★ → production →
+  Document Intelligence Agent capstone). Code-heavy (Claude tool-use API); used current `claude-opus-4-8`
+  model id and Voyage AI embeddings (source had outdated `claude-opus-4-5` / non-existent
+  `AnthropicEmbeddings`). **79 lessons total.**
   - **DECISION (2026-06-16) — hands-on modules include inline code.** From **Module 7** on, lessons
     embed **code snippets with step-by-step explanations** (not diagrams-only — that still holds for
     the conceptual modules 1–6). New `CodeBlock`/`Pre` in `LessonBlocks.tsx` styles fenced ```lang
@@ -220,8 +226,9 @@ In rough teaching order:
   `styles/tokens.css` + the palette in `diagrams/_shared.tsx`. Lessons are also fully **mobile
   responsive** (overlay sidebar, hamburger). To revert to dark, restore the prior token/palette
   values (noted in-file).
-- Next concrete steps: **Module 9 — Agentic AI Systems & Orchestration** (then Module 10 =
-  End-to-End/Capstone) — Module 8 is complete. Module 9 is code-heavy (use the `CodeBlock`/`Pre`
+- Next concrete steps: **Module 10 — End-to-End Systems, Scaling & Capstone** (the final module) —
+  Modules 8 and 9 are complete. Check `10 End to End System Scaling/module-10-lesson.md` for a richer
+  source first (Module 9's md had 11 topics vs curriculum's 7). Code-heavy (use the `CodeBlock`/`Pre`
   fenced-code infra + numbered steps). PDFs on disk are parsed with `pdftotext -layout` (poppler) — the built-in PDF
   reader needs `pdftoppm`. Verify builds with `NEXT_DIST_DIR=.next-verify npx next build`; in **prose**
   escape bare `<`/`{` (`&lt;`/`&#123;`), but inside fenced ```code``` blocks they're fine.

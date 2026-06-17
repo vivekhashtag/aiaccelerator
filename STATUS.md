@@ -4,14 +4,17 @@
 
 ## ▶ RESUME HERE — Phase 2 content is complete; what's left is polish & deferred phases
 
-All ten curriculum modules are built and pushed (89 lessons). No module remains. Candidate next work, in rough priority:
+All ten curriculum modules are built and pushed (89 lessons), and **full-text search has shipped** (⌘K — see below). No module remains. Candidate next work, in rough priority:
 
-1. **Course-wide QA pass** — click through on Vercel, check cross-module "Next:" links, sidebar order, any diagram overflow at the 1.16 scale, mobile.
-2. **Phase 1 (deferred): Supabase auth + per-user progress** — see CLAUDE.md §4. This was intentionally deferred to scale content first; content is now done, so this is the natural next phase if the user wants accounts/progress.
-3. **Phase 3 polish** — in-browser Python labs (Pyodide), the per-module lab notebooks already on disk (`NN …/lab-*.ipynb`, e.g. Module 10 has 10-A…10-D), certificates, search, dark/light toggle.
-4. **Hands-on labs track** — every module's PDF/folder ships labs (Logisim, Python, notebooks) that aren't yet in the app.
+1. **Course-wide QA pass** — click through on Vercel, check cross-module "Next:" links, sidebar order, any diagram overflow at the 1.16 scale, mobile, and the new ⌘K search.
+2. **Phase 1 (deferred): Supabase auth + per-user progress** — see CLAUDE.md §4. Discussed 2026-06-17 (registration gate + sign-up count, track later) and **deferred again** (user chose search first). The natural next phase when the user wants accounts/progress.
+3. **AI course tutor** — a RAG chat assistant grounded in the 89 lessons (uses Modules 4 + 9). Flagged as the standout next feature; not started.
+4. **Phase 3 polish** — in-browser Python labs (Pyodide), the per-module lab notebooks already on disk (`NN …/lab-*.ipynb`, e.g. Module 10 has 10-A…10-D), certificates, dark/light toggle.
+5. **Hands-on labs track** — every module's PDF/folder ships labs (Logisim, Python, notebooks) that aren't yet in the app.
 
-> Confirm direction with the user before starting — content phase is done, so the next move is a phase decision (auth vs labs vs polish), which is the user's call.
+> **DECISION (2026-06-17) — no animation/interactives.** We explored a flagship animated "process-flow" interactive (reviving the original §1 vision); the **user decided against it** — static hand-authored SVG diagrams remain the approach (reaffirms 2026-06-11). Don't build canvas/animations unless the user revisits this.
+
+> Confirm direction with the user before starting — content phase is done, so the next move is a phase/feature decision (auth vs tutor vs labs vs QA), which is the user's call.
 
 > **Module 10 build notes (done 2026-06-17):** 10 lessons `10-01`…`10-10`, from the PDF (no `.md`; parsed via `pdftotext -layout`). Synthesis module — diagram-heavy (25 figures) with some code (cost calc, k8s HPA, JSON logs, router, allow-list). Emerald accent (`C.emerald` added to `_shared.tsx`; "10" already in `lib/colors.ts`). Capstone 10.10 has a `CourseArc` diagram summarising all 10 modules. Used `claude-opus-4-8`, hedged pricing. **MDX gotcha hit twice:** bare `<` before a **digit/`$`** in prose (e.g. `<5%`, `<$2/task`) also breaks the build — escape as `&lt;` (attribute strings like `caption="…<5%…"` are safe).
 

@@ -232,10 +232,25 @@ In rough teaching order:
   `styles/tokens.css` + the palette in `diagrams/_shared.tsx`. Lessons are also fully **mobile
   responsive** (overlay sidebar, hamburger). To revert to dark, restore the prior token/palette
   values (noted in-file).
-- Next concrete steps: **content is complete (all 10 modules).** The next move is a **phase decision the
-  user must make** — Phase 1 (Supabase auth + per-user progress, long deferred) or Phase 3 (Pyodide
-  in-browser labs, the per-module `lab-*.ipynb` notebooks on disk, certificates/search/theme polish), plus a
-  course-wide QA pass. Do not start a new phase without explicit direction. PDFs on disk are parsed with
+- **FEATURE (2026-06-17) — client-side full-text search.** Course-wide search over all 89 lessons,
+  opened with **⌘K / Ctrl-K** (or `/`, or the Search button in the lesson sidebar + home nav). Fully
+  static / no backend / no new deps: `lib/search.ts` builds an index from the MDX at build time →
+  `app/api/search-index/route.ts` (`force-static`) serves it as one ~288 KB static JSON →
+  `components/search/SearchOverlay.tsx` (mounted globally in `app/layout.tsx`) lazy-fetches it once and
+  ranks with a hand-rolled weighted scorer; `SearchTrigger.tsx` buttons fire a `window` `open-search`
+  event. The index auto-rebuilds every `next build`. Full write-up in STATUS.md ("🔎 Full-text search").
+- **DECISION (2026-06-17) — animation/interactives stay OFF.** We explored reviving the original
+  animated-interactive vision (a flagship animated "process flow" capstone), and the **user decided NOT
+  to** — the static hand-authored SVG diagrams remain the approach (reaffirms the 2026-06-11 decision).
+  Do not build canvas/animation interactives unless the user explicitly revisits this.
+- **DECISION (2026-06-17) — login still deferred.** Supabase auth + a registration gate was discussed
+  (capture sign-up count, later progress tracking) and **deferred again** — the user chose to ship search
+  first. Auth remains the natural next step when the user wants it; Pyodide labs remain skipped for now.
+- Next concrete steps: **content is complete (all 10 modules) and search shipped.** The next move is a
+  **phase decision the user must make** — Phase 1 (Supabase auth + per-user progress) or Phase 3 (Pyodide
+  in-browser labs, the per-module `lab-*.ipynb` notebooks on disk, certificates/theme polish), an **AI
+  course tutor** (RAG chat over the 89 lessons), or a course-wide QA pass. Do not start a new phase without
+  explicit direction. PDFs on disk are parsed with
   `pdftotext -layout` (poppler) — the built-in PDF
   reader needs `pdftoppm`. Verify builds with `NEXT_DIST_DIR=.next-verify npx next build`; in **prose**
   escape bare `<`/`{` (`&lt;`/`&#123;`), but inside fenced ```code``` blocks they're fine.
